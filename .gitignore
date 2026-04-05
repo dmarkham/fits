@@ -7,3 +7,7 @@
 /coverage.html
 /dist/
 .DS_Store
+# C reference harness build artifact. Source is checked in at
+# compress/testdata/cref/cref.c; the binary is rebuilt locally via
+# `make -C compress/testdata/cref` when regenerating goldens.
+/compress/testdata/cref/cref

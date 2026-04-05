@@ -103,10 +103,10 @@ var allProjectionCodes = map[string]bool{
 // latAxis argument is the 1-based latitude axis index; most callers pass
 // 2 (the common convention where CRVAL2 is declination).
 //
-// Returns ErrUnknownProjection for codes not in the FITS standard list,
-// or ErrUnsupportedProjection for codes recognized by the standard but
-// not yet implemented by this package (currently none — v1.1 covers the
-// full set).
+// Returns ErrUnknownProjection for codes not in the FITS standard list.
+// All 27 standard projections plus HPX/XPH are implemented, so
+// ErrUnsupportedProjection is currently unreachable in normal use and
+// exists only as a forward-compatibility sentinel.
 func Select(code string, pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
 	switch code {
 	// Zenithal (§5.1)

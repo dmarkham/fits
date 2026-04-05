@@ -150,9 +150,14 @@ func decompressAllTiles(h *CompressedImageHDU, meta *compressedMetadata) ([]byte
 		}
 		tileBytes := make([]byte, tileNpix*int64(elemSize))
 
-		// Select which payload and decoder to use.
+		// Select which payload and decoder to use. The "fallback"
+		// flag marks tiles that used the GZIP_COMPRESSED_DATA
+		// raw-float escape hatch for float images — those payloads
+		// are already FP bytes in big-endian and must NOT be
+		// dequantized through the ZSCALE/ZZERO path.
 		var payload []byte
 		var dec compress.Decoder
+		fallback := false
 		if uncompPayloads != nil && len(uncompPayloads[t]) > 0 {
 			payload = uncompPayloads[t]
 			dec, _ = compress.Select(compress.NoCompress, nil)
@@ -162,6 +167,7 @@ func decompressAllTiles(h *CompressedImageHDU, meta *compressedMetadata) ([]byte
 		} else if gzipPayloads != nil && len(gzipPayloads[t]) > 0 {
 			payload = gzipPayloads[t]
 			dec = gzipDecoder
+			fallback = true
 		} else {
 			return nil, fmt.Errorf("fits: CompressedImageHDU: tile %d has no payload", t)
 		}
@@ -170,13 +176,9 @@ func decompressAllTiles(h *CompressedImageHDU, meta *compressedMetadata) ([]byte
 			return nil, fmt.Errorf("fits: CompressedImageHDU: tile %d: %w", t, err)
 		}
 
-		// For float BITPIX: apply per-tile ZSCALE/ZZERO dequantization.
-		// The integer bytes in tileBytes become float bytes at the same
-		// elemSize: ZBITPIX=-32 with BYTEPIX=4 means the underlying
-		// decompressor produces int32 values which we reinterpret as
-		// quantized integers, multiply by ZSCALE, add ZZERO, and write
-		// back as float32 big-endian.
-		if bp := meta.Bitpix; bp.IsFloat() {
+		// For float BITPIX quantized tiles: apply per-tile ZSCALE/ZZERO.
+		// Fallback tiles are already raw floats — skip the dequantize step.
+		if bp := meta.Bitpix; bp.IsFloat() && !fallback {
 			var zscale, zzero float64
 			if zscaleVals != nil && int(t) < len(zscaleVals) {
 				zscale = zscaleVals[t]

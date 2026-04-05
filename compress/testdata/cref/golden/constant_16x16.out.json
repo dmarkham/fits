@@ -1,0 +1,28 @@
+{
+  "name": "constant_16x16",
+  "nx": 16,
+  "ny": 16,
+  "nullcheck": 0,
+  "nullvalue": 0,
+  "qlevel": 4,
+  "dither_method": 0,
+  "row": 0,
+  "stats": {
+    "ngood": 256,
+    "min": 42.5,
+    "max": 42.5,
+    "mean": 42.5,
+    "sigma": 0,
+    "noise1": 0,
+    "noise2": 0,
+    "noise3": 0,
+    "noise5": 0
+  },
+  "quantize": {
+    "return": 0,
+    "bscale": 0,
+    "bzero": 0,
+    "iminval": 0,
+    "imaxval": 0
+  }
+}

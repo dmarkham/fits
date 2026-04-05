@@ -137,9 +137,11 @@ type Decoder interface {
 
 // Sentinel errors.
 var (
-	// ErrUnsupportedCompression is returned when the algorithm is known
-	// but not yet implemented by this package. The v1.1 build implements
-	// all algorithms except HCOMPRESS_1.
+	// ErrUnsupportedCompression is returned when the algorithm is
+	// recognized but not implemented. Kept as a forward-compatibility
+	// sentinel — every algorithm in the Pence et al. 2010 convention
+	// (RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, NOCOMPRESS) is now
+	// fully supported for both read and write.
 	ErrUnsupportedCompression = errors.New("fits/compress: unsupported compression algorithm")
 
 	// ErrUnknownCompression is returned when the algorithm string does

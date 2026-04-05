@@ -2,8 +2,6 @@
 
 Pure-Go port of the CFITSIO library for reading and writing FITS files.
 
-**Status:** in development. See `plan.md` for the design and scope.
-
 ## Guiding principle
 
 This library is 100% scientific fidelity. It returns the bytes, values, and
@@ -46,10 +44,15 @@ module — never in the root `fits` package.
   RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, and NOCOMPRESS. Read-side
   cross-validated byte-exact against astropy-generated fixtures; write-
   side cross-validated by having astropy read back Go-written files
-  (all 6 algorithms pass). Float quantization supports NO_DITHER,
-  SUBTRACTIVE_DITHER_1, and SUBTRACTIVE_DITHER_2 via the IRAF Park-
-  Miller PRNG. Covers JWST, HST, Gaia, Planck, WMAP, and every other
-  mission using tile-compressed FITS.
+  (all 6 algorithms pass).
+- **Float tile compression** with per-tile quantization (RICE_1, GZIP_1,
+  GZIP_2) via the cfitsio `fits_quantize_float` algorithm ported
+  bit-exactly to Go and validated against live libcfitsio on 11 golden
+  fixtures. Supports NO_DITHER, SUBTRACTIVE_DITHER_1, and
+  SUBTRACTIVE_DITHER_2 via the IRAF Park-Miller PRNG. NaN handling
+  (ZBLANK) and GZIP_COMPRESSED_DATA fallback for constant tiles both
+  cross-validated against astropy. Covers JWST, HST, Gaia, Planck,
+  WMAP, and every other mission using tile-compressed FITS.
 
 ## Requirements
 
@@ -61,6 +64,23 @@ module — never in the root `fits` package.
 `*File` is **not safe for concurrent use by multiple goroutines.** Callers
 that want parallelism must coordinate externally (one `*File` per goroutine,
 or an external mutex).
+
+## Cross-validation
+
+The library is validated against two independent reference implementations:
+
+- **cfitsio** (C, HEASARC). Byte-for-byte round-trip against every fixture
+  in cfitsio's own test suite. Float quantization ported with a C reference
+  harness (`compress/testdata/cref/`) that links libcfitsio and diffs
+  results against the Go port; 11/11 fixtures agree bit-exactly on noise
+  estimation, quantized int32 output, and bscale/bzero.
+- **astropy / wcslib** (Python). Every one of the 27 WCS projections and
+  all 6 sky frames round-trip within numerical tolerance against live
+  astropy.wcs. All 6 tile compression algorithms survive a Go → astropy
+  round trip, including float quantization with SUBTRACTIVE_DITHER_2
+  exact-zero preservation and the GZIP_COMPRESSED_DATA fallback column.
+
+See `plan.md` for the full design and scope.
 
 ## License
 
