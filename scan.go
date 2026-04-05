@@ -271,11 +271,10 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 			return nil, &ErrMissingRequiredKeyword{HDU: hduIdx, Keyword: fmt.Sprintf("NAXIS%d", i)}
 		}
 	}
-	// Determine kind.
+	// Determine kind. Tile-compressed binary tables get reclassified
+	// as kindCompressed by classifyKind so makeHDU returns a
+	// CompressedImageHDU wrapper.
 	rec.kind = classifyKind(rec)
-	if rec.kind == kindCompressed {
-		// Still record the HDU — caller will see ErrCompressed on access.
-	}
 	return rec, nil
 }
 

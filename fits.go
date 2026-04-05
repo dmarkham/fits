@@ -96,8 +96,8 @@ const (
 	kindImageExt
 	kindBinTable
 	kindASCIITable
-	kindRandomGroups // not supported in v1
-	kindCompressed   // detected tile-compressed, not supported in v1
+	kindRandomGroups // legacy radio-interferometry format — not supported
+	kindCompressed   // tile-compressed image, routed to CompressedImageHDU
 	kindUnknown
 )
 

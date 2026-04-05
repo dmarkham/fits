@@ -92,8 +92,8 @@ func VerifyChecksum(h HDU) error {
 // header contains the correct cards. The computed values are returned for
 // inspection.
 //
-// v1 does NOT automatically compute checksums on Close — callers must opt
-// in via WriteChecksum per HDU. This keeps the "strict fidelity" promise:
+// Checksums are not computed automatically on Close — callers must opt
+// in via WriteChecksum per HDU. This keeps the strict-fidelity promise:
 // users get byte-exact round-trip unless they explicitly ask for mutation.
 func WriteChecksum(h HDU) (dataSum, checkSum uint32, err error) {
 	rec := hduRecordOf(h)

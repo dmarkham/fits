@@ -3,7 +3,6 @@ package fits
 import (
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 
 	"github.com/dmarkham/fits/header"
@@ -311,7 +310,3 @@ func isMandatoryImageKey(key string) bool {
 	return false
 }
 
-// pickBitpixByValue is an unused placeholder to silence the compiler when
-// a future code path needs a runtime BITPIX inference from a sample value.
-// Keeping the symbol out of the public API.
-var _ = math.Pi // keep math import for future scaling paths

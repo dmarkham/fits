@@ -12,7 +12,7 @@ import (
 // coordinates for a 2-D celestial WCS.
 //
 // Higher-dimensional WCS with more than one celestial axis pair (rare in
-// practice) is not supported in v1.
+// practice) is not supported.
 //
 // Pixel coordinates are 0-BASED to match Go slice indexing: pixel (0, 0)
 // is the center of the first image cell on disk, which corresponds to
@@ -80,7 +80,7 @@ func New(h *wcs.Header) (*Transform, error) {
 	// Build the pixel-offset-to-radians linear matrix from either CD or
 	// PC+CDELT, assuming CUNIT is "deg" or empty (treated as "deg"). CUNIT
 	// of "rad" would skip the deg→rad scaling; other units (e.g. "arcsec")
-	// are rare for celestial axes and not supported in v1.
+	// are rare for celestial axes and not supported.
 	if err := t.buildLinear(h); err != nil {
 		return nil, err
 	}

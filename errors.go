@@ -44,13 +44,9 @@ var (
 	// shape-preserving call receives data of the wrong length or dimension.
 	ErrShapeMismatch = errors.New("fits: shape mismatch")
 
-	// ErrCompressed is returned when the library encounters a tile-compressed
-	// image or binary table. v1 detects and rejects compression; full
-	// support ships later as fits/compress.
-	ErrCompressed = errors.New("fits: compressed HDU not supported in v1")
-
-	// ErrRandomGroups is returned for random-groups (§6) HDUs, which v1
-	// does not support.
+	// ErrRandomGroups is returned for random-groups (§6) HDUs, which
+	// this library does not support by design — random groups are a
+	// legacy radio-interferometry format superseded by binary tables.
 	ErrRandomGroups = errors.New("fits: random-groups HDUs not supported")
 )
 

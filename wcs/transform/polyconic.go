@@ -81,19 +81,34 @@ func (p bonProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
 
 // PCO — polyconic (Paper II §5.5.2).
 //
-// For theta = 0:
+// Forward map:
 //
-//	x = phi
-//	y = 0
+//	theta == 0:  x = phi,  y = 0
+//	otherwise:   E = phi * sin(theta)
+//	             x = cot(theta) * sin(E)
+//	             y = theta + cot(theta) * (1 - cos(E))
 //
-// For theta != 0:
+// Inverse map: there is no closed form. We solve for theta via weighted
+// false-position bracketing (regula falsi with clamped lambda), matching
+// wcslib's pcox2s algorithm in prj.c:6395. This approach is preferred over
+// Newton iteration because:
 //
-//	E = phi * sin(theta)
-//	x = cot(theta) * sin(E)
-//	y = theta + cot(theta) * (1 - cos(E))
+//   - It is guaranteed to converge (the solution is always bracketed).
+//   - It needs no Jacobian — only the sign of the residue function.
+//   - A closed-form Taylor branch handles the cot(theta) singularity at
+//     theta = 0 without the general solver ever touching it.
 //
-// Inverse requires iteratively solving for theta given (x, y). The
-// Paper II iteration converges in ~5 steps for reasonable inputs.
+// The residue we drive to zero is derived from the forward map:
+//
+//	f(theta) = x^2 + (y-theta) * ((y-theta) - 2*cot(theta))
+//
+// Equivalent to 0 iff (phi, theta) is the correct inverse. (Derivation:
+// square x, add (y-theta)^2, use the identity sin^2 E + (1-cos E)^2 =
+// 2*(1-cos E), then substitute cot(theta)*(1-cos E) = y-theta.)
+//
+// The library's coordinates are in radians throughout, so wcslib's
+// scaling constants w[0]..w[3] collapse to w[0]=1, w[2]=2, w[3]=0.5 in
+// our unit system.
 type pcoProjection struct{}
 
 func (pcoProjection) Code() string    { return "PCO" }
@@ -116,80 +131,84 @@ func (pcoProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 }
 
 func (pcoProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
+	// Exact-equator fast path.
 	if y == 0 {
 		return x, 0, true
 	}
-	// Paper II §5.5.2 gives the inverse via Newton iteration on theta. At
-	// each step, given the current theta, we can compute E (the argument
-	// of the inner sin/cos) from (x, y):
-	//
-	//   sin(E) = x * tan(theta)
-	//   cos(E) = 1 - (y - theta) * tan(theta)
-	//
-	// Then the residual is yc(theta) = theta + cot(theta)*(1 - cos(E)),
-	// which must equal y. Newton's method on theta with the derivative
-	// of yc. A clean formulation: iterate until (x, y) - Forward(phi,theta)
-	// is small enough, where phi = E / sin(theta) at each step.
-	theta = y
-	for i := 0; i < 100; i++ {
-		sinT, cosT := math.Sincos(theta)
-		if sinT == 0 {
-			// At equator, Forward gives (phi, 0). Return x directly.
-			return x, 0, true
-		}
-		tanT := sinT / cosT
-		sinE := x * tanT
-		cosE := 1 - (y-theta)*tanT
-		// Clamp sinE to valid range — rounding can push it slightly outside.
-		mag := math.Hypot(sinE, cosE)
-		if mag == 0 {
-			return 0, theta, true
-		}
-		sinE /= mag
-		cosE /= mag
-		E := math.Atan2(sinE, cosE)
-		phiEst := E / sinT
-
-		// Check residual via the forward formula.
-		xc, yc, _ := pcoProjection{}.Forward(phiEst, theta)
-		dx := x - xc
-		dy := y - yc
-		if math.Abs(dx) < 1e-13 && math.Abs(dy) < 1e-13 {
-			return phiEst, theta, true
-		}
-
-		// Newton step: d(yc)/d(theta) at fixed phi includes both the
-		// direct theta term and the E = phi*sin(theta) coupling. The
-		// simplest stable update is the "residual in y" step:
-		//   theta_new = theta - dy / dyDtheta
-		// with dyDtheta = 1 - cosE*tanT*phiEst*cosT + ... (messy).
-		//
-		// A more robust approach: damped fixed-point toward theta such
-		// that yc(theta_new) = y.
-		dyDtheta := 1 + (cosT/sinT)*cosE*0 + // placeholder
-			(cosT*cosT/(sinT*sinT))*(1-cosE) +
-			phiEst*cosT*sinE
-		if dyDtheta == 0 {
-			dyDtheta = 1
-		}
-		newTheta := theta - (yc-y)/dyDtheta
-		if math.Abs(newTheta-theta) < 1e-14 {
-			return phiEst, theta, true
-		}
-		// Clamp theta to (-pi/2, pi/2).
-		if newTheta > math.Pi/2-1e-9 {
-			newTheta = math.Pi/2 - 1e-9
-		}
-		if newTheta < -math.Pi/2+1e-9 {
-			newTheta = -math.Pi/2 + 1e-9
-		}
-		theta = newTheta
+	// Pole: |y| == pi/2 exactly. wcslib does this check in degrees with
+	// tol = 1e-12; in radians the equivalent threshold is ~1.7e-14.
+	const tol = 1e-12
+	const nearPoleTol = 1.7e-14
+	w := math.Abs(y)
+	if math.Abs(w-math.Pi/2) < nearPoleTol {
+		return 0, math.Copysign(math.Pi/2, y), true
 	}
-	// Return best effort.
-	sinT := math.Sin(theta)
-	if sinT == 0 {
-		return x, theta, true
+
+	xx := x * x
+	var ymthe, tanthe float64
+
+	if w < 1.0e-6 {
+		// Closed-form Taylor branch for small |theta|. Avoids the
+		// cot(theta) singularity in the general solver. Derivation:
+		// for small theta, y ~ theta * (1 + 0.5*x^2), so
+		//    theta ~ y / (1 + 0.5*x^2)
+		// matches wcslib's w[0] + w[3]*xj*xj in radian-space.
+		theta = y / (1 + 0.5*xx)
+		ymthe = y - theta
+		tanthe = math.Tan(theta)
+	} else {
+		// Weighted false-position bracketing. Bracket:
+		//    thepos = y       (upper bound: polyconic correction >= 0 so theta <= y)
+		//    theneg = 0
+		// Seed fneg = -fpos = -xx so the first iteration is a pure
+		// midpoint split (lambda = 0.5). This avoids ever evaluating
+		// the residue at theta = 0, where cot(theta) is undefined.
+		thepos := y
+		theneg := 0.0
+		fpos := xx
+		fneg := -xx
+
+		for k := 0; k < 64; k++ {
+			// Regula falsi weight, clamped to [0.1, 0.9] to avoid
+			// degenerate cases where one endpoint dominates and the
+			// iteration stalls near a non-root.
+			lambda := fpos / (fpos - fneg)
+			if lambda < 0.1 {
+				lambda = 0.1
+			} else if lambda > 0.9 {
+				lambda = 0.9
+			}
+			theta = thepos - lambda*(thepos-theneg)
+			ymthe = y - theta
+			tanthe = math.Tan(theta)
+			// Residue f(theta) = x^2 + (y-theta)*((y-theta) - 2*cot(theta))
+			f := xx + ymthe*(ymthe-2.0/tanthe)
+			if math.Abs(f) < tol {
+				break
+			}
+			if math.Abs(thepos-theneg) < tol {
+				break
+			}
+			if f > 0 {
+				thepos = theta
+				fpos = f
+			} else {
+				theneg = theta
+				fneg = f
+			}
+		}
 	}
-	phi = math.Atan2(x*sinT/math.Cos(theta), 1-(y-theta)*sinT/math.Cos(theta)) / sinT
+
+	// Back out phi from the forward-map identities:
+	//    x1 = r0 - (y-theta)*tan(theta)   [with r0 = 1 in radian units]
+	//    y1 = x*tan(theta)
+	//    phi = atan2(y1, x1) / sin(theta)
+	x1 := 1.0 - ymthe*tanthe
+	y1 := x * tanthe
+	if x1 == 0 && y1 == 0 {
+		phi = 0
+	} else {
+		phi = math.Atan2(y1, x1) / math.Sin(theta)
+	}
 	return phi, theta, true
 }
