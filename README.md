@@ -41,11 +41,12 @@ module — never in the root `fits` package.
   projections from Paper II + HEALPix, SIP/TPV/TNX distortion, sky-frame
   conversions (ICRS/FK5/FK4/galactic/ecliptic/supergalactic),
   cross-validated against wcslib/astropy.
-- **Tile compression** (`fits/compress`): read-side decoders for RICE_1,
-  GZIP_1, GZIP_2, and NOCOMPRESS algorithms — covers JWST, HST, and most
-  modern mission data products. HCOMPRESS_1 and PLIO_1 are recognized
-  but return `ErrUnsupportedCompression` until their decoders are wired
-  in a follow-up pass.
+- **Tile compression** (`fits/compress`): read-side decoders for every
+  algorithm in the Pence et al. 2010 FITS tile compression convention —
+  RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, and NOCOMPRESS — cross-
+  validated byte-exact against astropy-generated fixtures across int16,
+  int32, and float32 with quantization. Covers JWST, HST, Gaia, Planck,
+  WMAP, and every other mission using tile-compressed FITS.
 
 ## Requirements
 

@@ -111,11 +111,13 @@ func TestSelectUnknown(t *testing.T) {
 	}
 }
 
-// TestSelectHCompressStub verifies HCOMPRESS_1 returns
-// ErrUnsupportedCompression (we deferred its implementation).
-func TestSelectHCompressStub(t *testing.T) {
-	_, err := Select(HCOMPRESS1, nil)
-	if !errors.Is(err, ErrUnsupportedCompression) {
-		t.Fatalf("expected ErrUnsupportedCompression, got %v", err)
+// TestSelectHCompress verifies HCOMPRESS_1 now constructs successfully.
+func TestSelectHCompress(t *testing.T) {
+	d, err := Select(HCOMPRESS1, nil)
+	if err != nil {
+		t.Fatalf("Select(HCOMPRESS1) returned error: %v", err)
+	}
+	if d == nil {
+		t.Fatal("Select(HCOMPRESS1) returned nil decoder")
 	}
 }

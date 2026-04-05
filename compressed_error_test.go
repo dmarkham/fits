@@ -1,19 +1,15 @@
 package fits
 
 import (
-	"errors"
 	"path/filepath"
 	"testing"
-
-	"github.com/dmarkham/fits/compress"
 )
 
-// TestCompressedHDUHCompressStub verifies that opening the HCOMPRESS
-// fixture succeeds at the file level but fails with
-// ErrUnsupportedCompression when the user tries to decompress pixels.
-// The stub is in place so users can inspect the metadata even when the
-// decoder is not yet implemented.
-func TestCompressedHDUHCompressStub(t *testing.T) {
+// TestCompressedHDUHCompressMetadata verifies that the HCOMPRESS metadata
+// is accessible through the normal HDU surface (algorithm name, BITPIX,
+// shape). Actual pixel round-trip correctness is verified by
+// TestCompressedFixtures/HCOMPRESS_1_*.
+func TestCompressedHDUHCompressMetadata(t *testing.T) {
 	f, err := Open(filepath.Join("testdata", "comp_hcompress_i16.fits"))
 	if err != nil {
 		t.Fatal(err)
@@ -27,17 +23,11 @@ func TestCompressedHDUHCompressStub(t *testing.T) {
 	if !ok {
 		t.Fatalf("HDU(1) is %T, want *CompressedImageHDU", h)
 	}
-	// Metadata access works.
 	if cimg.CompressionType() != "HCOMPRESS_1" {
 		t.Fatalf("algorithm: %q", cimg.CompressionType())
 	}
 	if cimg.BITPIX() != 16 {
 		t.Fatalf("BITPIX: %d", cimg.BITPIX())
-	}
-	// But reading pixels fails cleanly.
-	_, err = ReadPixelsCompressed[int16](cimg)
-	if !errors.Is(err, compress.ErrUnsupportedCompression) {
-		t.Fatalf("expected ErrUnsupportedCompression, got %v", err)
 	}
 }
 

@@ -168,7 +168,7 @@ func Select(algo Algorithm, params Params) (Decoder, error) {
 	case PLIO1:
 		return newPLIO1(), nil
 	case HCOMPRESS1:
-		return nil, fmt.Errorf("%w: HCOMPRESS_1 (implementation pending)", ErrUnsupportedCompression)
+		return newHCOMPRESS1(params), nil
 	case Unknown:
 		return nil, ErrUnknownCompression
 	}

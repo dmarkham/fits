@@ -34,6 +34,8 @@ func TestCompressedFixtures(t *testing.T) {
 		{"GZIP_2 int32", "comp_gzip2_i32.fits", "comp_raw_gzip2_i32.fits", "GZIP_2", true, 0, "int32"},
 		{"NOCOMPRESS int16", "comp_nocompress_i16.fits", "comp_raw_nocompress_i16.fits", "NOCOMPRESS", true, 0, "int16"},
 		{"PLIO_1 mask", "comp_plio_mask.fits", "comp_raw_plio_mask.fits", "PLIO_1", true, 0, "int16"},
+		{"HCOMPRESS_1 int16", "comp_hcompress_i16.fits", "comp_raw_hcompress_i16.fits", "HCOMPRESS_1", true, 0, "int16"},
+		{"HCOMPRESS_1 float32", "comp_hcompress_f32.fits", "comp_raw_hcompress_f32.fits", "HCOMPRESS_1", false, 1.0, "float32"},
 		// Float RICE with quantization: lossy to ~ZSCALE precision.
 		{"RICE_1 float32 nodither", "comp_rice_f32_nodither.fits", "comp_raw_rice_f32_nodither.fits", "RICE_1", false, 0.1, "float32"},
 		{"RICE_1 float32 dither", "comp_rice_f32_dither.fits", "comp_raw_rice_f32_dither.fits", "RICE_1", false, 0.1, "float32"},
