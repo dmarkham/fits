@@ -1,0 +1,9 @@
+/fits
+/cmd/fitsdump/fitsdump
+/cmd/fitscopy/fitscopy
+*.test
+*.out
+*.prof
+/coverage.html
+/dist/
+.DS_Store
