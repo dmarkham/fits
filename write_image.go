@@ -31,13 +31,18 @@ func WriteImage[T Numeric](dst WriteTarget, hdr *header.Header, shape []int64, d
 		var zero T
 		return nil, fmt.Errorf("fits: WriteImage: unsupported Go type %T", zero)
 	}
-	// Validate shape × data.
-	var npix int64 = 1
-	for _, n := range shape {
-		if n <= 0 {
-			return nil, fmt.Errorf("fits: WriteImage: non-positive NAXIS %d", n)
+	// Validate shape × data. NAXIS=0 means zero-pixel primary placeholder.
+	var npix int64
+	if len(shape) == 0 {
+		npix = 0
+	} else {
+		npix = 1
+		for _, n := range shape {
+			if n <= 0 {
+				return nil, fmt.Errorf("fits: WriteImage: non-positive NAXIS %d", n)
+			}
+			npix *= n
 		}
-		npix *= n
 	}
 	if int64(len(data)) != npix {
 		return nil, fmt.Errorf("fits: WriteImage: data length %d != product of shape %d", len(data), npix)
