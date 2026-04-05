@@ -21,7 +21,9 @@ type ColumnData struct {
 	TForm   string // optional override; if empty, inferred from Data*
 	Dim     []int64
 
-	// One of the following (mutually exclusive).
+	// One of the following (mutually exclusive). Fixed-width columns take a
+	// flat slice; variable-length array (VLA) columns take a slice of
+	// slices, one row per outer element.
 	DataUint8   []uint8
 	DataInt16   []int16
 	DataInt32   []int32
@@ -30,6 +32,16 @@ type ColumnData struct {
 	DataFloat64 []float64
 	DataString  []string // for Char columns; all entries must be the same length
 	DataBool    []bool
+
+	// Variable-length arrays (§7.3.5). Each outer element is one row; the
+	// inner slice length may differ per row. The writer emits a 1P<type>
+	// descriptor column and appends payloads to the heap area.
+	DataVarUint8   [][]uint8
+	DataVarInt16   [][]int16
+	DataVarInt32   [][]int32
+	DataVarInt64   [][]int64
+	DataVarFloat32 [][]float32
+	DataVarFloat64 [][]float64
 }
 
 // AppendBinaryTable appends a new BINTABLE HDU to the file. All columns must
@@ -46,6 +58,14 @@ func AppendBinaryTable(f *File, hdr *header.Header, cols []ColumnData) (*BinaryT
 	if err != nil {
 		return nil, err
 	}
+	// Pre-compute the VLA heap and per-column row descriptors. For tables
+	// with no variable-length columns this returns a nil heap and empty
+	// descriptor map, so the non-VLA path pays no cost.
+	heap, vlaDescs, err := buildVLAHeap(cols, colInfos, nrows)
+	if err != nil {
+		return nil, err
+	}
+	pcount := int64(len(heap))
 	// Seek to EOF.
 	if f.mode == ModeEdit && len(f.hdus) > 0 {
 		last := f.hdus[len(f.hdus)-1]
@@ -65,7 +85,7 @@ func AppendBinaryTable(f *File, hdr *header.Header, cols []ColumnData) (*BinaryT
 	h.Set(header.KeyNaxis, int64(2), "")
 	h.Set("NAXIS1", int64(rowBytes), "width of table row in bytes")
 	h.Set("NAXIS2", int64(nrows), "number of rows")
-	h.Set(header.KeyPcount, int64(0), "no heap in v1 writer")
+	h.Set(header.KeyPcount, pcount, "size of heap area in bytes")
 	h.Set(header.KeyGcount, int64(1), "")
 	h.Set(header.KeyTfields, int64(len(cols)), "number of columns")
 	for i, ci := range colInfos {
@@ -106,9 +126,17 @@ func AppendBinaryTable(f *File, hdr *header.Header, cols []ColumnData) (*BinaryT
 	}
 	dataStart := f.bw.Pos()
 
-	// Emit row bytes.
-	if err := emitBinaryRows(f.bw, cols, colInfos, nrows, rowBytes); err != nil {
+	// Emit row bytes (with embedded VLA descriptors where applicable).
+	if err := emitBinaryRows(f.bw, cols, colInfos, vlaDescs, nrows, rowBytes); err != nil {
 		return nil, err
+	}
+	// Emit the heap area immediately after the fixed rows. THEAP is omitted
+	// from the header; the reader's heapStart() defaults to NAXIS1*NAXIS2
+	// which matches this layout exactly.
+	if len(heap) > 0 {
+		if err := f.bw.WriteRange(heap); err != nil {
+			return nil, err
+		}
 	}
 	dataEnd := f.bw.Pos()
 	if err := f.bw.PadToBlock(0); err != nil {
@@ -208,6 +236,24 @@ func describeOneColumn(c ColumnData) (int64, string, tform.BinaryForm, int64, in
 	case c.DataBool != nil:
 		n = int64(len(c.DataBool))
 		tf = "1L"
+	case c.DataVarUint8 != nil:
+		n = int64(len(c.DataVarUint8))
+		tf = fmt.Sprintf("1PB(%d)", maxVarLen(c.DataVarUint8))
+	case c.DataVarInt16 != nil:
+		n = int64(len(c.DataVarInt16))
+		tf = fmt.Sprintf("1PI(%d)", maxVarLen(c.DataVarInt16))
+	case c.DataVarInt32 != nil:
+		n = int64(len(c.DataVarInt32))
+		tf = fmt.Sprintf("1PJ(%d)", maxVarLen(c.DataVarInt32))
+	case c.DataVarInt64 != nil:
+		n = int64(len(c.DataVarInt64))
+		tf = fmt.Sprintf("1PK(%d)", maxVarLen(c.DataVarInt64))
+	case c.DataVarFloat32 != nil:
+		n = int64(len(c.DataVarFloat32))
+		tf = fmt.Sprintf("1PE(%d)", maxVarLen(c.DataVarFloat32))
+	case c.DataVarFloat64 != nil:
+		n = int64(len(c.DataVarFloat64))
+		tf = fmt.Sprintf("1PD(%d)", maxVarLen(c.DataVarFloat64))
 	default:
 		return 0, "", tform.BinaryForm{}, 0, 0, fmt.Errorf("no data set")
 	}
@@ -230,14 +276,112 @@ func describeOneColumn(c ColumnData) (int64, string, tform.BinaryForm, int64, in
 	return n, tf, bf, colBytes, bf.Repeat, nil
 }
 
+// maxVarLen returns the length of the longest inner slice in rows. Used to
+// populate the "(n)" hint on a P/Q TFORM string.
+func maxVarLen[T any](rows [][]T) int {
+	m := 0
+	for _, r := range rows {
+		if len(r) > m {
+			m = len(r)
+		}
+	}
+	return m
+}
+
+// vlaDesc is one row's descriptor for a variable-length column: the number
+// of elements in this row plus the byte offset of the payload inside the
+// heap.
+type vlaDesc struct {
+	nelem  int64
+	offset int64
+}
+
+// buildVLAHeap serializes every VLA column's payloads into one contiguous
+// heap byte slice and returns it along with a per-column per-row descriptor
+// table.
+//
+// Layout matches the reader's expectation in ReadVarColumn: each row's
+// payload is emitted in row order; descriptors reference byte offsets into
+// the heap starting at 0; element values are big-endian.
+func buildVLAHeap(cols []ColumnData, info []binColInfo, nrows int64) ([]byte, map[int][]vlaDesc, error) {
+	descs := make(map[int][]vlaDesc)
+	var heap []byte
+	for i := range cols {
+		bin := info[i].bin
+		if bin.Type != tform.BinPArrayDesc32 && bin.Type != tform.BinQArrayDesc64 {
+			continue
+		}
+		rowDescs := make([]vlaDesc, nrows)
+		for r := int64(0); r < nrows; r++ {
+			var (
+				payload []byte
+				nelem   int64
+			)
+			switch bin.VarType {
+			case tform.BinUint8:
+				row := cols[i].DataVarUint8[r]
+				nelem = int64(len(row))
+				payload = row
+			case tform.BinInt16:
+				row := cols[i].DataVarInt16[r]
+				nelem = int64(len(row))
+				payload = make([]byte, nelem*2)
+				for k, v := range row {
+					bigendian.PutInt16(payload[k*2:], v)
+				}
+			case tform.BinInt32:
+				row := cols[i].DataVarInt32[r]
+				nelem = int64(len(row))
+				payload = make([]byte, nelem*4)
+				for k, v := range row {
+					bigendian.PutInt32(payload[k*4:], v)
+				}
+			case tform.BinInt64:
+				row := cols[i].DataVarInt64[r]
+				nelem = int64(len(row))
+				payload = make([]byte, nelem*8)
+				for k, v := range row {
+					bigendian.PutInt64(payload[k*8:], v)
+				}
+			case tform.BinFloat32:
+				row := cols[i].DataVarFloat32[r]
+				nelem = int64(len(row))
+				payload = make([]byte, nelem*4)
+				for k, v := range row {
+					bigendian.PutFloat32(payload[k*4:], v)
+				}
+			case tform.BinFloat64:
+				row := cols[i].DataVarFloat64[r]
+				nelem = int64(len(row))
+				payload = make([]byte, nelem*8)
+				for k, v := range row {
+					bigendian.PutFloat64(payload[k*8:], v)
+				}
+			default:
+				return nil, nil, fmt.Errorf("column %d: unsupported VLA element type %c", i+1, bin.VarType)
+			}
+			rowDescs[r] = vlaDesc{nelem: nelem, offset: int64(len(heap))}
+			heap = append(heap, payload...)
+		}
+		descs[i] = rowDescs
+	}
+	return heap, descs, nil
+}
+
 // emitBinaryRows writes nrows rows of data to bw, with each row packed in
-// the declared column order.
-func emitBinaryRows(bw *block.Writer, cols []ColumnData, info []binColInfo, nrows, rowBytes int64) error {
+// the declared column order. For VLA columns, the descriptor (nelem, offset)
+// pair is pulled from vlaDescs[col][row] and written into the row's cell
+// instead of reading from the DataXxx fields.
+func emitBinaryRows(bw *block.Writer, cols []ColumnData, info []binColInfo, vlaDescs map[int][]vlaDesc, nrows, rowBytes int64) error {
 	row := make([]byte, rowBytes)
 	for r := int64(0); r < nrows; r++ {
 		var off int
 		for i, ci := range info {
-			fillCell(row[off:off+int(ci.size)], cols[i], ci, r)
+			var d *vlaDesc
+			if descs, ok := vlaDescs[i]; ok {
+				d = &descs[r]
+			}
+			fillCell(row[off:off+int(ci.size)], cols[i], ci, d, r)
 			off += int(ci.size)
 		}
 		if _, err := bw.Write(row); err != nil {
@@ -248,8 +392,21 @@ func emitBinaryRows(bw *block.Writer, cols []ColumnData, info []binColInfo, nrow
 }
 
 // fillCell serializes the r-th row of one column into cell (exactly ci.size
-// bytes).
-func fillCell(cell []byte, col ColumnData, ci binColInfo, r int64) {
+// bytes). For VLA columns desc is non-nil and carries the pre-computed
+// descriptor; the cell is written as a P or Q descriptor pair rather than
+// the column's raw value.
+func fillCell(cell []byte, col ColumnData, ci binColInfo, desc *vlaDesc, r int64) {
+	if desc != nil {
+		switch ci.bin.Type {
+		case tform.BinPArrayDesc32:
+			bigendian.PutInt32(cell, int32(desc.nelem))
+			bigendian.PutInt32(cell[4:], int32(desc.offset))
+		case tform.BinQArrayDesc64:
+			bigendian.PutInt64(cell, desc.nelem)
+			bigendian.PutInt64(cell[8:], desc.offset)
+		}
+		return
+	}
 	switch ci.bin.Type {
 	case tform.BinUint8:
 		cell[0] = col.DataUint8[r]
