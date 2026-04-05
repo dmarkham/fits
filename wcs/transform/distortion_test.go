@@ -31,6 +31,44 @@ func TestTPVRoundTrip(t *testing.T) {
 	}
 }
 
+// TestTPVRadialTerms exercises the radial coefficients (slots 3, 11, 23,
+// 39 — r, r³, r⁵, r⁷), which a previous bug in rPow initialization had
+// silently zeroed. SCAMP-generated TPV headers for wide-field optical
+// surveys routinely use r³ for the dominant radial distortion.
+func TestTPVRadialTerms(t *testing.T) {
+	tpv := &TPV{Lon: 1, Lat: 2}
+	// Identity linear baseline + small r and r³ radial distortion.
+	tpv.Axis1[1] = 1.0  // xi
+	tpv.Axis2[2] = 1.0  // eta
+	tpv.Axis1[3] = 1e-3 // r in the x output
+	tpv.Axis2[3] = 1e-3 // r in the y output
+	tpv.Axis1[11] = 1e-5 // r³ in the x output
+	tpv.Axis2[11] = 1e-5 // r³ in the y output
+
+	// Pick a mid-field point where r ~ 0.3°.
+	xi, eta := 0.2, 0.225
+	r := math.Hypot(xi, eta)
+
+	xiP, etaP := tpv.Forward(xi, eta)
+	// xiP should = xi + 1e-3·r + 1e-5·r³. Verify the radial
+	// contribution is nonzero (catches the old rPow bug):
+	expectedXiP := xi + 1e-3*r + 1e-5*r*r*r
+	if math.Abs(xiP-expectedXiP) > 1e-12 {
+		t.Fatalf("TPV radial forward: xiP=%.15g want %.15g (diff %g) — r, r³ probably zeroed",
+			xiP, expectedXiP, xiP-expectedXiP)
+	}
+
+	// Round-trip.
+	xi2, eta2, ok := tpv.Inverse(xiP, etaP)
+	if !ok {
+		t.Fatal("Inverse !ok")
+	}
+	if math.Abs(xi2-xi) > 1e-11 || math.Abs(eta2-eta) > 1e-11 {
+		t.Fatalf("TPV radial round-trip: (%v,%v) → (%v,%v) → (%v,%v)",
+			xi, eta, xiP, etaP, xi2, eta2)
+	}
+}
+
 // TestParseTPV reads TPV coefficients from a *wcs.Header and verifies the
 // coefficient map was populated correctly.
 func TestParseTPV(t *testing.T) {
@@ -90,6 +128,45 @@ func TestTNXParse(t *testing.T) {
 	}
 	if tnx.Lon.XMin != -1 || tnx.Lon.XMax != 1 {
 		t.Fatalf("x domain: [%v, %v]", tnx.Lon.XMin, tnx.Lon.XMax)
+	}
+}
+
+// TestTNXRoundTrip builds a TNX surface with non-trivial quadratic
+// coefficients across all three surface types (simple / Chebyshev /
+// Legendre) and verifies Forward then Inverse recovers the original
+// intermediate coordinates via the analytic Jacobian path.
+func TestTNXRoundTrip(t *testing.T) {
+	for _, surfType := range []int{1, 2, 3} {
+		name := map[int]string{1: "chebyshev", 2: "legendre", 3: "simple"}[surfType]
+		t.Run(name, func(t *testing.T) {
+			tnx := &TNX{
+				Lon: tnxSurface{
+					Type: surfType, XOrder: 3, YOrder: 3, Cross: 1,
+					XMin: -0.5, XMax: 0.5, YMin: -0.5, YMax: 0.5,
+					// Row-major coefficient list: (i, j) pairs.
+					// We use small non-trivial values so the Jacobian
+					// is non-identity.
+					Coeffs:  []float64{0.0, 0.001, -0.0005, 0.001, 0.0002, 0, -0.0005, 0, 0},
+					present: true,
+				},
+				Lat: tnxSurface{
+					Type: surfType, XOrder: 3, YOrder: 3, Cross: 1,
+					XMin: -0.5, XMax: 0.5, YMin: -0.5, YMax: 0.5,
+					Coeffs:  []float64{0.0, -0.0003, 0.0008, 0.0007, -0.0001, 0, 0.0004, 0, 0},
+					present: true,
+				},
+			}
+			xi, eta := 0.1, 0.12
+			xiP, etaP := tnx.Forward(xi, eta)
+			xi2, eta2, ok := tnx.Inverse(xiP, etaP)
+			if !ok {
+				t.Fatal("Inverse !ok")
+			}
+			if math.Abs(xi2-xi) > 1e-11 || math.Abs(eta2-eta) > 1e-11 {
+				t.Errorf("round-trip: (%v,%v) → (%v,%v) → (%v,%v)",
+					xi, eta, xiP, etaP, xi2, eta2)
+			}
+		})
 	}
 }
 

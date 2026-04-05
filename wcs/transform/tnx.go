@@ -165,40 +165,43 @@ func parseIntFloat(tok string) (int, error) {
 	return strconv.Atoi(tok)
 }
 
-// eval computes the polynomial value at (x, y), applying the surface
-// function type and normalization to the axis-domain [XMin, XMax].
+// tnxTermAllowed reports whether the (i, j) term is present in the
+// coefficient list given the surface's Cross flag. The three options
+// mirror the IRAF convention: 0 = no cross terms, 1 = full cross, 2 =
+// half cross (total degree < max(XOrder, YOrder)).
+func (s tnxSurface) tnxTermAllowed(i, j int) bool {
+	switch s.Cross {
+	case 0:
+		return !(i > 0 && j > 0)
+	case 2:
+		maxOrder := s.XOrder
+		if s.YOrder > maxOrder {
+			maxOrder = s.YOrder
+		}
+		return i+j < maxOrder
+	}
+	return true // Cross == 1: full
+}
+
+// eval computes the polynomial value at (x, y).
 func (s tnxSurface) eval(x, y float64) float64 {
 	if !s.present {
 		return 0
 	}
 	xn := 2*(x-s.XMin)/(s.XMax-s.XMin) - 1
 	yn := 2*(y-s.YMin)/(s.YMax-s.YMin) - 1
-	// Build basis values for x and y via the chosen surface type.
-	xBasis := tnxBasis(s.Type, xn, s.XOrder)
-	yBasis := tnxBasis(s.Type, yn, s.YOrder)
-	// Sum coefficient * xBasis[i] * yBasis[j] over allowed (i, j) pairs
-	// according to the Cross flag.
+	xBasis, _ := tnxBasisWithDeriv(s.Type, xn, s.XOrder)
+	yBasis, _ := tnxBasisWithDeriv(s.Type, yn, s.YOrder)
+
 	var sum float64
 	k := 0
 	for j := 0; j < s.YOrder; j++ {
 		for i := 0; i < s.XOrder; i++ {
-			allowed := true
-			switch s.Cross {
-			case 0: // no cross terms
-				if i > 0 && j > 0 {
-					allowed = false
-				}
-			case 2: // half cross: i + j < max(xorder, yorder)
-				maxOrder := s.XOrder
-				if s.YOrder > maxOrder {
-					maxOrder = s.YOrder
-				}
-				if i+j >= maxOrder {
-					allowed = false
-				}
-			}
-			if !allowed || k >= len(s.Coeffs) {
+			if !s.tnxTermAllowed(i, j) {
 				continue
+			}
+			if k >= len(s.Coeffs) {
+				return sum
 			}
 			sum += s.Coeffs[k] * xBasis[i] * yBasis[j]
 			k++
@@ -207,33 +210,85 @@ func (s tnxSurface) eval(x, y float64) float64 {
 	return sum
 }
 
-// tnxBasis returns the basis values [b0, b1, ..., b_{order-1}] for the
-// normalized coordinate xn on the given surface function type.
-func tnxBasis(surfaceType int, xn float64, order int) []float64 {
-	b := make([]float64, order)
+// evalWithDeriv computes the polynomial value and its partial
+// derivatives ∂/∂x and ∂/∂y at (x, y). Uses the chain rule through the
+// domain normalization: if xn = 2(x-XMin)/(XMax-XMin) - 1, then
+// dxn/dx = 2/(XMax-XMin), so ∂P/∂x = ∂P/∂xn · 2/(XMax-XMin). The basis
+// derivatives ∂b_i/∂xn are computed alongside b_i by differentiating the
+// recurrence relation — see tnxBasisWithDeriv.
+func (s tnxSurface) evalWithDeriv(x, y float64) (val, dvdx, dvdy float64) {
+	if !s.present {
+		return 0, 0, 0
+	}
+	scaleX := 2 / (s.XMax - s.XMin)
+	scaleY := 2 / (s.YMax - s.YMin)
+	xn := (x-s.XMin)*scaleX - 1
+	yn := (y-s.YMin)*scaleY - 1
+
+	xBasis, xBasisPrime := tnxBasisWithDeriv(s.Type, xn, s.XOrder)
+	yBasis, yBasisPrime := tnxBasisWithDeriv(s.Type, yn, s.YOrder)
+
+	k := 0
+	for j := 0; j < s.YOrder; j++ {
+		for i := 0; i < s.XOrder; i++ {
+			if !s.tnxTermAllowed(i, j) {
+				continue
+			}
+			if k >= len(s.Coeffs) {
+				return val, dvdx * scaleX, dvdy * scaleY
+			}
+			c := s.Coeffs[k]
+			val += c * xBasis[i] * yBasis[j]
+			dvdx += c * xBasisPrime[i] * yBasis[j]
+			dvdy += c * xBasis[i] * yBasisPrime[j]
+			k++
+		}
+	}
+	// Chain-rule back from normalized to raw coordinates.
+	return val, dvdx * scaleX, dvdy * scaleY
+}
+
+// tnxBasisWithDeriv returns the basis values [b_0, ..., b_{order-1}]
+// and their derivatives [b'_0, ..., b'_{order-1}] for the normalized
+// coordinate xn under the given surface function type. Computed in a
+// single forward pass by differentiating the basis recurrence.
+func tnxBasisWithDeriv(surfaceType int, xn float64, order int) (b, bp []float64) {
+	b = make([]float64, order)
+	bp = make([]float64, order)
 	if order == 0 {
-		return b
+		return
 	}
 	b[0] = 1
+	bp[0] = 0
 	if order > 1 {
 		b[1] = xn
+		bp[1] = 1
 	}
 	switch surfaceType {
-	case 1: // Chebyshev first-kind: T_n(x) = 2*x*T_{n-1}(x) - T_{n-2}(x)
+	case 1:
+		// Chebyshev T_n(x) = 2x·T_{n-1} - T_{n-2}.
+		// Differentiating: T_n'(x) = 2·T_{n-1} + 2x·T_{n-1}' - T_{n-2}'.
 		for n := 2; n < order; n++ {
 			b[n] = 2*xn*b[n-1] - b[n-2]
+			bp[n] = 2*b[n-1] + 2*xn*bp[n-1] - bp[n-2]
 		}
-	case 2: // Legendre: (n+1)*P_{n+1} = (2n+1)*x*P_n - n*P_{n-1}
+	case 2:
+		// Legendre: n·P_n = (2n-1)·x·P_{n-1} - (n-1)·P_{n-2}.
+		// Differentiating: n·P_n' = (2n-1)·P_{n-1} + (2n-1)·x·P_{n-1}'
+		//                          - (n-1)·P_{n-2}'.
 		for n := 2; n < order; n++ {
 			f := float64(n)
 			b[n] = ((2*f-1)*xn*b[n-1] - (f-1)*b[n-2]) / f
+			bp[n] = ((2*f-1)*b[n-1] + (2*f-1)*xn*bp[n-1] - (f-1)*bp[n-2]) / f
 		}
-	case 3: // Simple polynomial: x^n
+	case 3:
+		// Simple power series: x^n. b_n'(x) = n·x^(n-1).
 		for n := 2; n < order; n++ {
 			b[n] = xn * b[n-1]
+			bp[n] = float64(n) * b[n-1] // n * x^(n-1)
 		}
 	}
-	return b
+	return
 }
 
 // Forward applies the TNX correction at intermediate-world coordinates
@@ -244,24 +299,30 @@ func (t *TNX) Forward(xi, eta float64) (xiOut, etaOut float64) {
 	return xi + dxi, eta + deta
 }
 
-// Inverse iterates Newton's method against Forward. Returns (xi, eta)
-// such that Forward(xi, eta) ≈ (xiPrime, etaPrime).
+// Inverse iterates Newton's method against Forward, using the analytic
+// Jacobian computed via evalWithDeriv. The forward map is
+// F(xi, eta) = (xi + Lon(xi, eta), eta + Lat(xi, eta)), so the
+// Jacobian is
+//
+//	J = I + [∂Lon/∂xi  ∂Lon/∂eta]
+//	        [∂Lat/∂xi  ∂Lat/∂eta]
 func (t *TNX) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 	xi, eta = xiPrime, etaPrime
 	for range 50 {
-		fx, fy := t.Forward(xi, eta)
+		lonVal, dLonDxi, dLonDeta := t.Lon.evalWithDeriv(xi, eta)
+		latVal, dLatDxi, dLatDeta := t.Lat.evalWithDeriv(xi, eta)
+		fx := xi + lonVal
+		fy := eta + latVal
 		rx := xiPrime - fx
 		ry := etaPrime - fy
 		if absFloat(rx) < 1e-13 && absFloat(ry) < 1e-13 {
 			return xi, eta, true
 		}
-		const h = 1e-7
-		fx1, fy1 := t.Forward(xi+h, eta)
-		fx2, fy2 := t.Forward(xi, eta+h)
-		j11 := (fx1 - fx) / h
-		j12 := (fx2 - fx) / h
-		j21 := (fy1 - fy) / h
-		j22 := (fy2 - fy) / h
+		// J = I + [dLonDxi dLonDeta; dLatDxi dLatDeta]
+		j11 := 1 + dLonDxi
+		j12 := dLonDeta
+		j21 := dLatDxi
+		j22 := 1 + dLatDeta
 		det := j11*j22 - j12*j21
 		if det == 0 {
 			return 0, 0, false

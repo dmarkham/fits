@@ -11,3 +11,7 @@
 # compress/testdata/cref/cref.c; the binary is rebuilt locally via
 # `make -C compress/testdata/cref` when regenerating goldens.
 /compress/testdata/cref/cref
+# wcslib reference harness build artifact. Source is checked in at
+# wcs/transform/testdata/wref/wref.c; rebuild locally via
+# `make -C wcs/transform/testdata/wref` when regenerating goldens.
+/wcs/transform/testdata/wref/wref

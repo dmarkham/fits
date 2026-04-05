@@ -62,8 +62,23 @@ type SIPPoly struct {
 
 // eval returns the polynomial value at (u, v).
 func (p *SIPPoly) eval(u, v float64) float64 {
-	var sum float64
-	// Powers of u and v up to Order.
+	val, _, _ := p.evalWithDeriv(u, v)
+	return val
+}
+
+// evalWithDeriv returns the polynomial value and its partial derivatives
+// ∂/∂u and ∂/∂v at (u, v). For a monomial c·u^i·v^j:
+//
+//	∂/∂u = c·i·u^(i-1)·v^j      (zero if i=0)
+//	∂/∂v = c·u^i·j·v^(j-1)      (zero if j=0)
+//
+// Both derivatives are computed in the same walk as the value for
+// no extra allocation cost.
+func (p *SIPPoly) evalWithDeriv(u, v float64) (val, dvdu, dvdv float64) {
+	if p == nil || p.Order < 0 {
+		return 0, 0, 0
+	}
+	// Power tables; uPow[k] = u^k, vPow[k] = v^k.
 	uPow := make([]float64, p.Order+1)
 	vPow := make([]float64, p.Order+1)
 	uPow[0] = 1
@@ -75,12 +90,19 @@ func (p *SIPPoly) eval(u, v float64) float64 {
 	for i := 0; i <= p.Order; i++ {
 		for j := 0; j+i <= p.Order; j++ {
 			c := p.Coeffs[i][j]
-			if c != 0 {
-				sum += c * uPow[i] * vPow[j]
+			if c == 0 {
+				continue
+			}
+			val += c * uPow[i] * vPow[j]
+			if i >= 1 {
+				dvdu += c * float64(i) * uPow[i-1] * vPow[j]
+			}
+			if j >= 1 {
+				dvdv += c * uPow[i] * float64(j) * vPow[j-1]
 			}
 		}
 	}
-	return sum
+	return
 }
 
 // SIP holds a parsed SIP distortion: forward (A, B) and optional inverse
@@ -168,30 +190,39 @@ func (s *SIP) Forward(u, v float64) (uOut, vOut float64) {
 
 // Inverse applies the SIP inverse correction. If AP/BP are present, it
 // evaluates them directly. Otherwise it iterates Newton's method against
-// the forward polynomial until convergence.
+// the forward polynomial using the analytic Jacobian.
+//
+// The forward map is F(u, v) = (u + A(u, v), v + B(u, v)), so the
+// Jacobian is
+//
+//	J = I + [∂A/∂u  ∂A/∂v]
+//	        [∂B/∂u  ∂B/∂v]
+//
+// Both partial derivatives are computed in a single walk over the
+// A/B coefficient tables, making each iteration cost the same as a
+// forward evaluation (vs. 3× cost for the old numerical version).
 func (s *SIP) Inverse(uPrime, vPrime float64) (u, v float64, ok bool) {
 	if s.AP != nil && s.BP != nil {
 		du := s.AP.eval(uPrime, vPrime)
 		dv := s.BP.eval(uPrime, vPrime)
 		return uPrime + du, vPrime + dv, true
 	}
-	// Newton iteration. Initial guess: pass-through.
+	// Newton iteration with analytic Jacobian.
 	u, v = uPrime, vPrime
 	for range 50 {
-		fu, fv := s.Forward(u, v)
+		aVal, dAdu, dAdv := s.A.evalWithDeriv(u, v)
+		bVal, dBdu, dBdv := s.B.evalWithDeriv(u, v)
+		fu := u + aVal
+		fv := v + bVal
 		ru := uPrime - fu
 		rv := vPrime - fv
 		if math.Abs(ru) < 1e-13 && math.Abs(rv) < 1e-13 {
 			return u, v, true
 		}
-		// Numerical Jacobian.
-		const h = 1e-6
-		fu1, fv1 := s.Forward(u+h, v)
-		fu2, fv2 := s.Forward(u, v+h)
-		j11 := (fu1 - fu) / h
-		j12 := (fu2 - fu) / h
-		j21 := (fv1 - fv) / h
-		j22 := (fv2 - fv) / h
+		j11 := 1 + dAdu
+		j12 := dAdv
+		j21 := dBdu
+		j22 := 1 + dBdv
 		det := j11*j22 - j12*j21
 		if det == 0 {
 			return 0, 0, false

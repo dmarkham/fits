@@ -166,78 +166,132 @@ func (p szpProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 }
 
 func (p szpProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	// The closed-form inverse of SZP requires solving a quadratic in
-	// sin(theta). We implement it via Newton iteration against Forward,
-	// which is robust and reuses the forward math verbatim. Initial
-	// guess: assume the source is at infinity (like TAN) for a first
-	// approximation of theta and phi.
-	r := math.Hypot(x, y)
-	phi0 := math.Atan2(x, -y)
-	theta0 := math.Atan2(1, r)
-
-	// Use two-variable Newton by reducing to 1D via fixed-point: given
-	// the current (phi, theta), project via Forward to get (x', y'), then
-	// adjust theta so that |(x, y) - (x', y')| shrinks. A simpler robust
-	// strategy: solve a 2x2 Newton system. For SZP the system is well-
-	// conditioned away from the source point.
-	phi, theta = phi0, theta0
-	for i := 0; i < 50; i++ {
-		xc, yc, fok := p.Forward(phi, theta)
-		if !fok {
-			return 0, 0, false
-		}
-		dx := x - xc
-		dy := y - yc
-		if math.Hypot(dx, dy) < 1e-13 {
-			return phi, theta, true
-		}
-		// Numerical Jacobian.
-		const h = 1e-8
-		x1, y1, _ := p.Forward(phi+h, theta)
-		x2, y2, _ := p.Forward(phi, theta+h)
-		j11 := (x1 - xc) / h
-		j12 := (x2 - xc) / h
-		j21 := (y1 - yc) / h
-		j22 := (y2 - yc) / h
-		det := j11*j22 - j12*j21
-		if det == 0 {
-			return 0, 0, false
-		}
-		dphi := (j22*dx - j12*dy) / det
-		dtheta := (-j21*dx + j11*dy) / det
-		phi += dphi
-		theta += dtheta
-		// Clamp theta to valid range.
-		if theta > math.Pi/2 {
-			theta = math.Pi / 2
-		}
-		if theta < -math.Pi/2 {
-			theta = -math.Pi / 2
-		}
+	// Closed-form quadratic inverse. Port of wcslib's szpx2s
+	// (reference/cfitsio not applicable; see Siril subprojects/wcslib/
+	// prj.c:955). The SZP inverse solves a quadratic in sin(theta):
+	//
+	//	a * sin²(θ) + 2b * sin(θ) + c = 0
+	//
+	// with coefficients derived from the direction cosines of the
+	// projection source relative to the reference point. In wcslib's
+	// default unit system r0 = 180/π, giving w[0] = π/180 (the
+	// deg→rad factor). Our library is already radian-native, so we
+	// set r0 = 1 which collapses w[0] = 1 and the degree-scale
+	// constants w[4..6] to their unscaled counterparts w[1..3].
+	//
+	// The three SZP-specific constants (direction cosines of the
+	// projection source on the unit sphere) are:
+	//
+	//	w1 = -μ * cos(θc) * sin(φc)   (= -Xp in Paper II eq. 24)
+	//	w2 =  μ * cos(θc) * cos(φc)   (= -Yp)
+	//	w3 =  μ * sin(θc) + 1         (=  Zp)
+	sinPhiC, cosPhiC := math.Sincos(p.phiC)
+	sinThC, cosThC := math.Sincos(p.thetaC)
+	w1 := -p.mu * cosThC * sinPhiC
+	w2 := p.mu * cosThC * cosPhiC
+	w3 := p.mu*sinThC + 1
+	if w3 == 0 {
+		return 0, 0, false
 	}
-	return 0, 0, false
+
+	xr, yr := x, y
+	r2 := xr*xr + yr*yr
+
+	x1 := (xr - w1) / w3
+	y1 := (yr - w2) / w3
+	xy := xr*x1 + yr*y1
+
+	const tol = 1e-13
+	var z, sinthe float64
+	if r2 < 1e-10 {
+		// Small-angle formula near the pole: avoids the
+		// 1-sinthe cancellation by computing z = r²/2 directly
+		// (exact leading term of the Taylor expansion). Matches
+		// wcslib's "Use small angle formula" branch.
+		theta = math.Pi/2 - math.Sqrt(r2/(1+xy))
+		sinthe = math.Sin(theta)
+		z = r2 / 2
+	} else {
+		// Full quadratic.
+		t := x1*x1 + y1*y1
+		a := t + 1
+		b := xy - t
+		c := r2 - 2*xy + t - 1
+		d := b*b - a*c
+		if d < 0 {
+			return 0, 0, false
+		}
+		d = math.Sqrt(d)
+
+		// Two candidate solutions. wcslib picks the one closest
+		// to the pole (larger sin(θ)).
+		sinth1 := (-b + d) / a
+		sinth2 := (-b - d) / a
+		if sinth1 > sinth2 {
+			sinthe = sinth1
+		} else {
+			sinthe = sinth2
+		}
+		if sinthe > 1 {
+			if sinthe-1 < tol {
+				sinthe = 1
+			} else {
+				// Numerical overshoot above 1: try the other root.
+				if sinth1 < sinth2 {
+					sinthe = sinth1
+				} else {
+					sinthe = sinth2
+				}
+			}
+		}
+		if sinthe < -1 {
+			if sinthe+1 > -tol {
+				sinthe = -1
+			}
+		}
+		if sinthe > 1 || sinthe < -1 {
+			return 0, 0, false
+		}
+		theta = math.Asin(sinthe)
+		z = 1 - sinthe
+	}
+
+	phi = atan2Safe(xr-x1*z, -(yr - y1*z))
+	return phi, theta, true
 }
 
 // ZPN — zenithal polynomial projection (Paper II §5.1.8).
 //
-// R_theta is a user-defined polynomial in (pi/2 - theta):
+// R_theta is a user-defined polynomial in zeta = π/2 - theta:
 //
-//	R_theta = PV2_0 + PV2_1 * zeta + PV2_2 * zeta² + ... + PV2_N * zeta^N
+//	R(ζ) = pv[0] + pv[1]·ζ + pv[2]·ζ² + ... + pv[n]·ζⁿ
 //
-// where zeta = pi/2 - theta (in radians; Paper II uses degrees but we
-// convert). Up to N = 20 coefficients.
+// with up to 30 coefficients. The polynomial is monotonic in ζ from
+// ζ=0 (pole) out to an inflection point where the derivative first
+// becomes non-positive; beyond that the inverse is undefined.
 //
-// Forward is trivial polynomial evaluation. Inverse requires finding the
-// real root of the polynomial in [0, pi] that matches R. We use
-// solveNewton with the polynomial derivative.
+// Forward is straight polynomial evaluation. Inverse is a port of
+// wcslib's zpnx2s / zpnset (reference implementation, prj.c:2241 and
+// prj.c:2342): three-case dispatch on degree with closed-form
+// solutions for k=1 and k=2, and weighted false-position bracketing
+// for k≥3. The bracketing range is established by zpnset, which walks
+// the polynomial's derivative outward from ζ=0 to find the first
+// inflection point and caches it as the valid upper bound.
 type zpnProjection struct {
-	coeffs [21]float64 // PV2_0 .. PV2_20
-	degree int         // highest non-zero index
+	coeffs [30]float64 // pv[0..29]
+	degree int         // highest non-zero index (n in the math above)
+
+	// Inflection-point constants cached by setup (wcslib w[0], w[1]).
+	// zdMax is the ζ at the inflection (upper bracket for the inverse
+	// search); rMax is R(zdMax), the upper R bound. For degree < 2
+	// there is no inflection and zdMax is π (the whole hemisphere).
+	zdMax float64
+	rMax  float64
 }
 
 func newZPN(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
 	p := zpnProjection{}
-	for i := 0; i <= 20; i++ {
+	for i := 0; i < 30; i++ {
 		p.coeffs[i] = pvFloat(pv, latAxis, i, 0)
 		if p.coeffs[i] != 0 {
 			p.degree = i
@@ -246,29 +300,92 @@ func newZPN(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
 	if p.degree == 0 && p.coeffs[0] == 0 {
 		return nil, fmt.Errorf("wcs/transform: ZPN requires at least one non-zero PV%d_i coefficient", latAxis)
 	}
+	if err := p.setup(); err != nil {
+		return nil, err
+	}
 	return p, nil
+}
+
+// setup mirrors wcslib's zpnset (prj.c:2241). For degree < 2 there's no
+// inflection, so the whole ζ ∈ [0, π] range is valid. For degree ≥ 2
+// we walk the derivative outward from ζ=0 in 1° steps until it first
+// goes non-positive, then refine the inflection with secant iteration,
+// then cache (zdMax, R(zdMax)) as the upper bound for the inverse
+// bracket.
+func (p *zpnProjection) setup() error {
+	k := p.degree
+	if k < 2 {
+		p.zdMax = math.Pi
+		return nil
+	}
+	if p.coeffs[1] <= 0 {
+		return fmt.Errorf("wcs/transform: ZPN pv[1] must be > 0 (got %g)", p.coeffs[1])
+	}
+
+	// Walk in 1° steps looking for the first derivative sign change.
+	var zd1, d1 float64
+	var zd2, d2 float64
+	d1 = p.coeffs[1]
+	zd1 = 0
+	found := false
+	for j := 0; j < 180; j++ {
+		zd2 = float64(j) * math.Pi / 180
+		d2 = 0
+		for m := k; m > 0; m-- {
+			d2 = d2*zd2 + float64(m)*p.coeffs[m]
+		}
+		if d2 <= 0 {
+			found = true
+			break
+		}
+		zd1 = zd2
+		d1 = d2
+	}
+
+	var zd, r float64
+	if !found {
+		// Derivative never went negative within [0, π] — whole
+		// hemisphere is valid.
+		zd = math.Pi
+	} else {
+		// Refine the zero-of-derivative by secant iteration.
+		const tol = 1e-13
+		for j := 1; j <= 10; j++ {
+			zd = zd1 - d1*(zd2-zd1)/(d2-d1)
+			d := 0.0
+			for m := k; m > 0; m-- {
+				d = d*zd + float64(m)*p.coeffs[m]
+			}
+			if math.Abs(d) < tol {
+				break
+			}
+			if d < 0 {
+				zd2 = zd
+				d2 = d
+			} else {
+				zd1 = zd
+				d1 = d
+			}
+		}
+	}
+	// R at the inflection (upper R bound for inverse).
+	r = 0
+	for m := k; m >= 0; m-- {
+		r = r*zd + p.coeffs[m]
+	}
+	p.zdMax = zd
+	p.rMax = r
+	return nil
 }
 
 func (zpnProjection) Code() string    { return "ZPN" }
 func (zpnProjection) Theta0() float64 { return math.Pi / 2 }
 
-// polyEval evaluates the ZPN polynomial at zeta.
+// polyEval evaluates the ZPN polynomial R(ζ) via Horner's rule.
 func (p zpnProjection) polyEval(zeta float64) float64 {
-	// Horner form.
 	v := p.coeffs[p.degree]
 	for i := p.degree - 1; i >= 0; i-- {
 		v = v*zeta + p.coeffs[i]
-	}
-	return v
-}
-
-func (p zpnProjection) polyDeriv(zeta float64) float64 {
-	if p.degree == 0 {
-		return 0
-	}
-	v := float64(p.degree) * p.coeffs[p.degree]
-	for i := p.degree - 1; i >= 1; i-- {
-		v = v*zeta + float64(i)*p.coeffs[i]
 	}
 	return v
 }
@@ -282,31 +399,116 @@ func (p zpnProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 func (p zpnProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
 	r := math.Hypot(x, y)
 	if r == 0 {
-		// At the origin, find zeta such that polyEval(zeta) = 0.
-		// Usually zeta = 0 (coeffs[0] = 0) but not guaranteed.
-		if p.coeffs[0] == 0 {
-			return 0, math.Pi / 2, true
+		phi = 0
+	} else {
+		phi = atan2Safe(x, -y)
+	}
+
+	k := p.degree
+	var zd float64
+	const tol = 1e-13
+
+	switch {
+	case k < 1:
+		// Constant polynomial — no solution.
+		return 0, 0, false
+
+	case k == 1:
+		// Linear: R = pv[0] + pv[1]·ζ
+		zd = (r - p.coeffs[0]) / p.coeffs[1]
+
+	case k == 2:
+		// Quadratic: pv[2]·ζ² + pv[1]·ζ + (pv[0] - r) = 0
+		a := p.coeffs[2]
+		b := p.coeffs[1]
+		c := p.coeffs[0] - r
+		d := b*b - 4*a*c
+		if d < 0 {
+			return 0, 0, false
+		}
+		d = math.Sqrt(d)
+		// Choose the root closest to the pole (smaller ζ).
+		zd1 := (-b + d) / (2 * a)
+		zd2 := (-b - d) / (2 * a)
+		if zd1 < zd2 {
+			zd = zd1
+		} else {
+			zd = zd2
+		}
+		if zd < -tol {
+			// Try the other root.
+			if zd1 > zd2 {
+				zd = zd1
+			} else {
+				zd = zd2
+			}
+		}
+		if zd < 0 {
+			if zd < -tol {
+				return 0, 0, false
+			}
+			zd = 0
+		} else if zd > math.Pi {
+			if zd > math.Pi+tol {
+				return 0, 0, false
+			}
+			zd = math.Pi
+		}
+
+	default:
+		// Higher order: weighted false-position bracketing on
+		// [0, zdMax]. The bracket is valid because the polynomial
+		// is monotonic on this range by construction (zdMax is
+		// the first inflection point, located by setup()).
+		zd1 := 0.0
+		r1 := p.coeffs[0]
+		zd2 := p.zdMax
+		r2 := p.rMax
+
+		// Outside the valid monotonic range → no solution.
+		if r < r1 {
+			if r < r1-tol {
+				return 0, 0, false
+			}
+			zd = zd1
+		} else if r > r2 {
+			if r > r2+tol {
+				return 0, 0, false
+			}
+			zd = zd2
+		} else {
+			// Dissect the interval with false-position,
+			// clamping lambda to avoid stalls. wcslib caps
+			// the loop at 100 iterations.
+			for j := 0; j < 100; j++ {
+				lambda := (r2 - r) / (r2 - r1)
+				if lambda < 0.1 {
+					lambda = 0.1
+				} else if lambda > 0.9 {
+					lambda = 0.9
+				}
+				zd = zd2 - lambda*(zd2-zd1)
+				rt := p.polyEval(zd)
+				if rt < r {
+					if r-rt < tol {
+						break
+					}
+					r1 = rt
+					zd1 = zd
+				} else {
+					if rt-r < tol {
+						break
+					}
+					r2 = rt
+					zd2 = zd
+				}
+				if math.Abs(zd2-zd1) < tol {
+					break
+				}
+			}
 		}
 	}
-	phi = math.Atan2(x, -y)
-	// Initial guess: assume linear leading term, i.e. zeta ≈ r / coeffs[1]
-	// if coeffs[1] != 0, else r / coeffs[p.degree].
-	var guess float64
-	if p.coeffs[1] != 0 {
-		guess = r / p.coeffs[1]
-	} else {
-		guess = math.Pow(r/p.coeffs[p.degree], 1/float64(p.degree))
-	}
-	if guess < 0 {
-		guess = 0
-	}
-	if guess > math.Pi {
-		guess = math.Pi
-	}
-	zeta, err := solveNewton(p.polyEval, p.polyDeriv, r, guess, 0, math.Pi, 1e-13, 50)
-	if err != nil {
-		return 0, 0, false
-	}
-	theta = math.Pi/2 - zeta
+
+	theta = math.Pi/2 - zd
 	return phi, theta, true
 }

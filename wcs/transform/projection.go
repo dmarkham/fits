@@ -188,6 +188,29 @@ func pvFloat(pv map[wcs.PVKey]float64, axis, index int, def float64) float64 {
 	return def
 }
 
+// atan2Safe mirrors wcslib's atan2d convention (wcstrig.c:184) for the
+// (0, 0) origin: when y == 0 the result is 0 for any x >= 0 and π for
+// x < 0, regardless of the sign of zero. Go's math.Atan2 follows strict
+// IEEE 754, which returns π for atan2(+0, -0) — this differs from
+// wcslib at the exact origin, causing phi=π instead of phi=0 at
+// reference points. Using atan2Safe in projection inverses matches
+// wcslib's behavior bit-for-bit at singular points.
+func atan2Safe(y, x float64) float64 {
+	if y == 0 {
+		if x >= 0 {
+			return 0
+		}
+		return math.Pi
+	}
+	if x == 0 {
+		if y > 0 {
+			return math.Pi / 2
+		}
+		return -math.Pi / 2
+	}
+	return math.Atan2(y, x)
+}
+
 // degToRad converts degrees to radians.
 func degToRad(d float64) float64 { return d * math.Pi / 180 }
 

@@ -131,20 +131,27 @@ func ParseTPV(w *wcs.Header) *TPV {
 	return t
 }
 
-// evalOne evaluates one axis's polynomial at intermediate coordinates
-// (xi, eta), in the same units as the PV coefficients (typically degrees).
-func evalTPV(coefs *[40]float64, xi, eta float64) float64 {
+// tpvPowers computes the power tables for xi, eta, and r = sqrt(xi²+eta²)
+// at indices 0..7. Every index is filled correctly; unlike a previous
+// version that had a bug leaving rPow[2..7] = 0, this is usable for the
+// radial terms (slots 3, 11, 23, 39 → powers 1, 3, 5, 7) and for
+// analytic derivatives that need r^(p-2).
+func tpvPowers(xi, eta float64) (xiPow, etaPow, rPow [8]float64) {
 	r := math.Hypot(xi, eta)
-	var sum float64
-	// Pre-compute power tables up to 7.
-	xiPow := [8]float64{1, xi, xi * xi, xi * xi * xi, 0, 0, 0, 0}
-	etaPow := [8]float64{1, eta, eta * eta, eta * eta * eta, 0, 0, 0, 0}
-	rPow := [8]float64{1, r, 0, 0, 0, 0, 0, 0}
-	for k := 4; k < 8; k++ {
+	xiPow[0], etaPow[0], rPow[0] = 1, 1, 1
+	for k := 1; k < 8; k++ {
 		xiPow[k] = xiPow[k-1] * xi
 		etaPow[k] = etaPow[k-1] * eta
 		rPow[k] = rPow[k-1] * r
 	}
+	return
+}
+
+// evalTPV evaluates one axis's polynomial at (xi, eta), in the same
+// units as the PV coefficients (typically degrees).
+func evalTPV(coefs *[40]float64, xi, eta float64) float64 {
+	xiPow, etaPow, rPow := tpvPowers(xi, eta)
+	var sum float64
 	for k, c := range coefs {
 		if c == 0 {
 			continue
@@ -159,6 +166,63 @@ func evalTPV(coefs *[40]float64, xi, eta float64) float64 {
 	return sum
 }
 
+// evalTPVWithJacobian evaluates one axis's polynomial at (xi, eta) and
+// its analytic partial derivatives ∂/∂xi and ∂/∂eta in a single pass.
+//
+// For a non-radial term c·xi^a·eta^b:
+//
+//	∂/∂xi  = c·a·xi^(a-1)·eta^b     (0 if a=0)
+//	∂/∂eta = c·b·xi^a·eta^(b-1)     (0 if b=0)
+//
+// For a radial term c·r^p (TPV has only p=1, 3, 5, 7 with xi/eta
+// exponents zero):
+//
+//	∂/∂xi  = c·p·r^(p-2)·xi
+//	∂/∂eta = c·p·r^(p-2)·eta
+//
+// For p=1 the derivative is c·xi/r, singular at the origin. We skip
+// the radial contribution when r is below a tiny threshold — the
+// linear PV_1 / PV_2 coefficient dominates the Jacobian near the
+// origin so this doesn't affect convergence.
+func evalTPVWithJacobian(coefs *[40]float64, xi, eta float64) (val, dvdxi, dvdeta float64) {
+	xiPow, etaPow, rPow := tpvPowers(xi, eta)
+	r := rPow[1]
+	const rMin = 1e-20
+	for k, c := range coefs {
+		if c == 0 {
+			continue
+		}
+		term := tpvTerms[k]
+		a, b, p := term.xiPow, term.etaPow, term.rPow
+
+		if p == 0 {
+			// Non-radial monomial.
+			val += c * xiPow[a] * etaPow[b]
+			if a >= 1 {
+				dvdxi += c * float64(a) * xiPow[a-1] * etaPow[b]
+			}
+			if b >= 1 {
+				dvdeta += c * xiPow[a] * float64(b) * etaPow[b-1]
+			}
+		} else {
+			// Radial term: c·r^p (TPV has a=b=0 for all radial slots).
+			val += c * rPow[p]
+			if r > rMin {
+				if p == 1 {
+					dvdxi += c * xi / r
+					dvdeta += c * eta / r
+				} else {
+					// p ≥ 3 odd: c·p·r^(p-2)·(xi|eta)
+					rp2 := rPow[p-2]
+					dvdxi += c * float64(p) * rp2 * xi
+					dvdeta += c * float64(p) * rp2 * eta
+				}
+			}
+		}
+	}
+	return
+}
+
 // Forward applies the TPV polynomial to intermediate world coordinates.
 // Input (xi, eta) is the pre-distortion position; output is the
 // distortion-corrected position, both in degrees.
@@ -167,31 +231,32 @@ func (t *TPV) Forward(xi, eta float64) (xiOut, etaOut float64) {
 }
 
 // Inverse applies the inverse TPV correction via Newton iteration
-// against the forward polynomial.
+// against the forward polynomial, using the analytic Jacobian. Each
+// iteration evaluates both the residual and the 2×2 Jacobian in one
+// pass per axis, so total cost is 2 polynomial walks per iteration
+// (vs. 6 for the previous numerical-Jacobian version). The analytic
+// Jacobian is also numerically stable at any distance from the origin,
+// unlike finite differences which lose precision at the h ~ 1e-7
+// scale.
 func (t *TPV) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
-	// Initial guess: pass-through (TPV is close to identity for small
-	// distortions).
+	// Initial guess: pass-through (TPV is close to identity for
+	// small distortions).
 	xi, eta = xiPrime, etaPrime
 	for range 50 {
-		fx, fy := t.Forward(xi, eta)
+		fx, dfxdxi, dfxdeta := evalTPVWithJacobian(&t.Axis1, xi, eta)
+		fy, dfydxi, dfydeta := evalTPVWithJacobian(&t.Axis2, xi, eta)
 		rx := xiPrime - fx
 		ry := etaPrime - fy
 		if math.Abs(rx) < 1e-13 && math.Abs(ry) < 1e-13 {
 			return xi, eta, true
 		}
-		const h = 1e-7
-		fx1, fy1 := t.Forward(xi+h, eta)
-		fx2, fy2 := t.Forward(xi, eta+h)
-		j11 := (fx1 - fx) / h
-		j12 := (fx2 - fx) / h
-		j21 := (fy1 - fy) / h
-		j22 := (fy2 - fy) / h
-		det := j11*j22 - j12*j21
+		// 2×2 Newton step: solve J · Δ = residual, apply.
+		det := dfxdxi*dfydeta - dfxdeta*dfydxi
 		if det == 0 {
 			return 0, 0, false
 		}
-		xi += (j22*rx - j12*ry) / det
-		eta += (-j21*rx + j11*ry) / det
+		xi += (dfydeta*rx - dfxdeta*ry) / det
+		eta += (-dfydxi*rx + dfxdxi*ry) / det
 	}
 	return xi, eta, true
 }
