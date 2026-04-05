@@ -39,6 +39,9 @@ func TestCompressedFixtures(t *testing.T) {
 		// Float RICE with quantization: lossy to ~ZSCALE precision.
 		{"RICE_1 float32 nodither", "comp_rice_f32_nodither.fits", "comp_raw_rice_f32_nodither.fits", "RICE_1", false, 0.1, "float32"},
 		{"RICE_1 float32 dither", "comp_rice_f32_dither.fits", "comp_raw_rice_f32_dither.fits", "RICE_1", false, 0.1, "float32"},
+		// Real SUBTRACTIVE_DITHER_1 fixture — exercises the Park-Miller
+		// PRNG and the per-tile dither offset application.
+		{"RICE_1 float32 SUBTRACTIVE_DITHER_1", "comp_rice_f32_dither1.fits", "comp_raw_rice_f32_dither1.fits", "RICE_1", false, 0.1, "float32"},
 		{"GZIP_1 float32", "comp_gzip1_f32.fits", "comp_raw_gzip1_f32.fits", "GZIP_1", false, 0.1, "float32"},
 		{"GZIP_2 float32", "comp_gzip2_f32.fits", "comp_raw_gzip2_f32.fits", "GZIP_2", false, 0.1, "float32"},
 		// Tile geometry edge cases.

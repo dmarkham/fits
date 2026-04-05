@@ -41,12 +41,15 @@ module — never in the root `fits` package.
   projections from Paper II + HEALPix, SIP/TPV/TNX distortion, sky-frame
   conversions (ICRS/FK5/FK4/galactic/ecliptic/supergalactic),
   cross-validated against wcslib/astropy.
-- **Tile compression** (`fits/compress`): read-side decoders for every
+- **Tile compression** (`fits/compress`): both read AND write for every
   algorithm in the Pence et al. 2010 FITS tile compression convention —
-  RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, and NOCOMPRESS — cross-
-  validated byte-exact against astropy-generated fixtures across int16,
-  int32, and float32 with quantization. Covers JWST, HST, Gaia, Planck,
-  WMAP, and every other mission using tile-compressed FITS.
+  RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, and NOCOMPRESS. Read-side
+  cross-validated byte-exact against astropy-generated fixtures; write-
+  side cross-validated by having astropy read back Go-written files
+  (all 6 algorithms pass). Float quantization supports NO_DITHER,
+  SUBTRACTIVE_DITHER_1, and SUBTRACTIVE_DITHER_2 via the IRAF Park-
+  Miller PRNG. Covers JWST, HST, Gaia, Planck, WMAP, and every other
+  mission using tile-compressed FITS.
 
 ## Requirements
 

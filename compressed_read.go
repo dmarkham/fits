@@ -188,7 +188,9 @@ func decompressAllTiles(h *CompressedImageHDU, meta *compressedMetadata) ([]byte
 				zscale = 1
 				zzero = 0
 			}
-			dequantizeTile(tileBytes, bp, int(tileNpix), zscale, zzero, meta.Blank, meta.BlankSet)
+			// Apply dither (and BLANK → NaN) per ZQUANTIZ.
+			dither := compress.ParseDitherMethod(meta.Quantize)
+			dequantizeTile(tileBytes, bp, int(tileNpix), zscale, zzero, meta.Blank, meta.BlankSet, dither, int(t+1), int(meta.Dither0))
 		}
 
 		// Copy tileBytes into the correct region of the output.
@@ -361,32 +363,49 @@ func readVarBytes(t *BinaryTableHDU, col int, nrows int64) ([][]byte, error) {
 // writes the results back into buf as big-endian floats. For BITPIX=-32
 // the intermediate integer is read from 4 bytes per pixel; for -64 from
 // 8 bytes. NULL pixels (value == ZBLANK) are written as NaN.
-func dequantizeTile(buf []byte, bp bitpix.BITPIX, nelem int, zscale, zzero float64, blank int64, blankSet bool) {
+//
+// When the image was compressed with SUBTRACTIVE_DITHER_1 or
+// SUBTRACTIVE_DITHER_2 quantization, the per-pixel random dither offset
+// is applied during reconstruction. tileRow is the 1-based tile index
+// within the binary table; zdither0 is the ZDITHER0 seed from the
+// header (typically 1).
+func dequantizeTile(buf []byte, bp bitpix.BITPIX, nelem int, zscale, zzero float64, blank int64, blankSet bool, dither compress.DitherMethod, tileRow, zdither0 int) {
+	// Decode the big-endian integer tile bytes into an int32 scratch
+	// slice, dequantize via the dither-aware path, and write the float
+	// result back into buf. Dither state must thread pixel-by-pixel
+	// which is why we go through int32 intermediate storage rather than
+	// inlining as in the original (non-dither) version.
 	switch bp {
 	case bitpix.Float32:
-		// The compressed stream decoded into 4 bytes per pixel as int32.
+		ints := make([]int32, nelem)
 		for i := 0; i < nelem; i++ {
-			off := i * 4
-			v := int64(bigendian.Int32(buf[off : off+4]))
-			var out float32
-			if blankSet && v == blank {
-				out = float32(math.NaN())
+			ints[i] = bigendian.Int32(buf[i*4:])
+		}
+		out := make([]float32, nelem)
+		compress.DequantizeFloat32(ints, out, zscale, zzero, dither, tileRow, zdither0)
+		for i := 0; i < nelem; i++ {
+			if blankSet && int64(ints[i]) == blank {
+				bigendian.PutFloat32(buf[i*4:], float32(math.NaN()))
 			} else {
-				out = float32(float64(v)*zscale + zzero)
+				bigendian.PutFloat32(buf[i*4:], out[i])
 			}
-			bigendian.PutFloat32(buf[off:], out)
 		}
 	case bitpix.Float64:
+		ints := make([]int32, nelem)
 		for i := 0; i < nelem; i++ {
-			off := i * 8
-			v := bigendian.Int64(buf[off : off+8])
-			var out float64
-			if blankSet && v == blank {
-				out = math.NaN()
+			// cfitsio stores BITPIX=-64 quantized tiles as int32 still
+			// (it's the same on-disk integer width after quantization —
+			// the 64-bit BITPIX is recovered via ZSCALE/ZZERO to float64).
+			ints[i] = int32(bigendian.Int64(buf[i*8:]))
+		}
+		out := make([]float64, nelem)
+		compress.Dequantize(ints, out, zscale, zzero, dither, tileRow, zdither0)
+		for i := 0; i < nelem; i++ {
+			if blankSet && int64(ints[i]) == blank {
+				bigendian.PutFloat64(buf[i*8:], math.NaN())
 			} else {
-				out = float64(v)*zscale + zzero
+				bigendian.PutFloat64(buf[i*8:], out[i])
 			}
-			bigendian.PutFloat64(buf[off:], out)
 		}
 	}
 }
