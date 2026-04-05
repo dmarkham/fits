@@ -45,6 +45,9 @@ func dump(path string) error {
 			continue
 		}
 		fmt.Printf("--- HDU %d: %s ---\n", i, h.Type())
+		if h.Compressed() {
+			fmt.Printf("  Compressed: %s\n", h.CompressionType())
+		}
 		switch v := h.(type) {
 		case *fits.ImageHDU:
 			fmt.Printf("  BITPIX = %d\n", v.BITPIX())
@@ -52,6 +55,10 @@ func dump(path string) error {
 			if v.NAXIS() > 0 {
 				fmt.Printf("  Shape  = %v\n", v.Shape())
 			}
+		case *fits.CompressedImageHDU:
+			fmt.Printf("  BITPIX = %d (logical, from ZBITPIX)\n", v.BITPIX())
+			fmt.Printf("  NAXIS  = %d\n", v.NAXIS())
+			fmt.Printf("  Shape  = %v\n", v.Shape())
 		case *fits.BinaryTableHDU:
 			cols, err := v.Columns()
 			if err == nil {

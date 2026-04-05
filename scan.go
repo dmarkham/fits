@@ -207,6 +207,10 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 			if v, ok := c.Value.(int64); ok {
 				rec.tfields = v
 			}
+		case "ZIMAGE":
+			if v, ok := c.Value.(bool); ok && v {
+				rec.zimage = true
+			}
 		case header.KeyExtname:
 			if v, ok := c.Value.(string); ok {
 				rec.extname = v
@@ -276,6 +280,8 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 }
 
 // classifyKind maps the SIMPLE/XTENSION fields onto an hduKind value.
+// Binary tables with ZIMAGE=T are reclassified as kindCompressed so the
+// makeHDU factory returns a CompressedImageHDU wrapper.
 func classifyKind(r *hduRecord) hduKind {
 	if r.xtension == "" {
 		return kindPrimaryImage
@@ -284,6 +290,9 @@ func classifyKind(r *hduRecord) hduKind {
 	case "IMAGE":
 		return kindImageExt
 	case "BINTABLE", "A3DTABLE":
+		if r.zimage {
+			return kindCompressed
+		}
 		return kindBinTable
 	case "TABLE":
 		return kindASCIITable

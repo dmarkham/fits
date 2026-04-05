@@ -16,6 +16,12 @@ func (h *ImageHDU) Type() HDUType { return TypeImage }
 // Index returns the 0-based HDU index.
 func (h *ImageHDU) Index() int { return h.rec.index }
 
+// Compressed returns false — plain ImageHDUs are raw, not tile-compressed.
+func (*ImageHDU) Compressed() bool { return false }
+
+// CompressionType returns the empty string for uncompressed images.
+func (*ImageHDU) CompressionType() string { return "" }
+
 // Header returns the parsed header, loading it lazily on first call.
 // Errors during parse panic here; callers that need to handle parse errors
 // explicitly must call (*File).HDU followed by direct access via the header

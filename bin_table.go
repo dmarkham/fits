@@ -60,6 +60,14 @@ func (h *BinaryTableHDU) Type() HDUType { return TypeBinaryTable }
 // Index returns the 0-based HDU index.
 func (h *BinaryTableHDU) Index() int { return h.rec.index }
 
+// Compressed returns false — plain binary tables are not compressed.
+// (CompressedImageHDU is a separate type backed by a binary table with
+// ZIMAGE=T, not a BinaryTableHDU.)
+func (*BinaryTableHDU) Compressed() bool { return false }
+
+// CompressionType returns the empty string for plain binary tables.
+func (*BinaryTableHDU) CompressionType() string { return "" }
+
 // Header returns the parsed header (lazy).
 func (h *BinaryTableHDU) Header() *header.Header {
 	hdr, err := h.rec.loadHeader()

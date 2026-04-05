@@ -17,6 +17,12 @@ func (h *ASCIITableHDU) Type() HDUType { return TypeASCIITable }
 // Index returns the 0-based HDU index.
 func (h *ASCIITableHDU) Index() int { return h.rec.index }
 
+// Compressed returns false — ASCII tables are never compressed.
+func (*ASCIITableHDU) Compressed() bool { return false }
+
+// CompressionType returns the empty string for ASCII tables.
+func (*ASCIITableHDU) CompressionType() string { return "" }
+
 // Header returns the parsed header (lazy).
 func (h *ASCIITableHDU) Header() *header.Header {
 	hdr, err := h.rec.loadHeader()

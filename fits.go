@@ -66,6 +66,11 @@ type hduRecord struct {
 	extver   int64
 	tfields  int64 // only for table HDUs
 
+	// zimage is true if this HDU is a binary table with ZIMAGE=T,
+	// indicating it holds a tile-compressed image per Pence et al. 2010.
+	// Detected during the minimal-eager scan; used by classifyKind.
+	zimage bool
+
 	// Raw header bytes (excluding the trailing END/padding) preserved for
 	// lazy full parsing.
 	rawHeader []byte
