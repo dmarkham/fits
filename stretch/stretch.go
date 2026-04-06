@@ -100,6 +100,58 @@ func AsinhRGB(r, g, b []float32, beta, offset float32) {
 	}
 }
 
+// NormalizeChannels scales all channels to [0, 1] using a single
+// shared min/max across every channel. This preserves the relative
+// intensity between channels, which matters for stretches that
+// operate on color ratios (linked autostretch, asinh RGB).
+//
+// If the data is already in [0, 1] (common for calibrated float FITS),
+// this is effectively a no-op.
+//
+// Note: normalizing each channel independently (per-channel min/max)
+// will alter the color balance before stretching. This is fine when
+// that's the intent, but for linked stretches it shifts the result
+// because the channels no longer reflect their original relative
+// brightness.
+func NormalizeChannels(channels ...[]float32) {
+	if len(channels) == 0 {
+		return
+	}
+	// Find global min/max across all channels.
+	mn := channels[0][0]
+	mx := channels[0][0]
+	for _, ch := range channels {
+		for _, v := range ch {
+			if v == v { // skip NaN
+				if v < mn {
+					mn = v
+				}
+				if v > mx {
+					mx = v
+				}
+			}
+		}
+	}
+	rng := mx - mn
+	if rng <= 0 {
+		return
+	}
+	// Already in [0, 1] — skip the work.
+	if mn >= 0 && mx <= 1 {
+		return
+	}
+	inv := 1.0 / rng
+	for _, ch := range channels {
+		for i, v := range ch {
+			if v != v { // NaN
+				ch[i] = 0
+				continue
+			}
+			ch[i] = (v - mn) * inv
+		}
+	}
+}
+
 func maxf32(a, b float32) float32 {
 	if a > b {
 		return a
