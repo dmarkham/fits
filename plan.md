@@ -1,8 +1,16 @@
-# CFITSIO Go Port — Plan
+# FITS Go Library — Plan
 
 ## Context
 
-Pure-Go port of the CFITSIO C library (https://github.com/HEASARC/cfitsio). Target module path: `github.com/dmarkham/fits`. Reference materials in `reference/`: FITS standard v3.0 and v4.0 PDFs plus a full clone of HEASARC/cfitsio.
+Pure-Go FITS library. Target module path: `github.com/dmarkham/fits`. Reference materials in `reference/`: FITS standard v3.0 and v4.0 PDFs plus a full clone of HEASARC/cfitsio.
+
+## Philosophy — compatibility, not replacement
+
+This library is not trying to replace cfitsio, wcslib, healpy, Siril, or any other established C/C++/Python tool. Those projects have decades of production mileage across thousands of missions and pipelines. They are the right choice for many workflows and will remain so.
+
+Our goal is to bring **Go onto level footing** with the existing ecosystem — giving Go programs the same FITS read/write, WCS, compression, HEALPix, and image-processing capabilities without requiring cgo, while staying as compatible as possible with the files and conventions the reference implementations define.
+
+Every algorithm is ported from a specific reference source (cfitsio for I/O and compression, wcslib for projections, astrometry.net for HEALPix, Siril/RawTherapee for image stretching) and cross-validated against it with golden fixtures. Where our output differs from the reference, we treat that as a bug in our code, not a difference of opinion.
 
 ## Guiding principle — no auto-anything
 

@@ -1,6 +1,22 @@
 # fits
 
-Pure-Go port of the CFITSIO library for reading and writing FITS files.
+Pure-Go FITS library for reading, writing, and processing astronomical
+data files.
+
+## Philosophy
+
+This library is not trying to replace cfitsio, wcslib, healpy, or any
+other established C/C++/Python implementation. Those tools have decades
+of production mileage and are the right choice for many workflows. Our
+goal is to bring **Go onto level footing** — giving Go programs native
+access to the same FITS capabilities without cgo, while staying as
+compatible as possible with the files and conventions those reference
+implementations define.
+
+Every algorithm is ported from the reference source (cfitsio, wcslib,
+astrometry.net, Siril) and cross-validated against it. Where our output
+differs from the reference, we treat that as a bug in our code, not a
+difference of opinion.
 
 ## Guiding principle
 
