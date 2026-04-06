@@ -285,6 +285,70 @@ func TestGHT_Siril(t *testing.T) {
 	}
 }
 
+// ---------- CLAHE test ----------
+
+func TestCLAHE_Structural(t *testing.T) {
+	// CLAHE implementation details (tile boundary handling, clip
+	// redistribution, interpolation) differ between libraries — even
+	// scikit-image and OpenCV disagree by ~22% on average for the
+	// same parameters. So we validate structurally:
+	//
+	//  1. Output range is expanded (contrast enhanced)
+	//  2. No values outside [0, 1]
+	//  3. Output is not identical to input (CLAHE had an effect)
+	//  4. Mean brightness is higher (data was originally dark)
+	r, g, b, nx, ny := loadInput(t)
+
+	// Compute input stats.
+	inMean := mean32(r) + mean32(g) + mean32(b)
+	inRange := rangeF32(r) + rangeF32(g) + rangeF32(b)
+
+	// Apply CLAHE (clipLimit=3, tileGridSize=8).
+	CLAHERGB(r, g, b, nx, ny, 8, 3.0)
+
+	// Check bounds.
+	for i := range r {
+		if r[i] < 0 || r[i] > 1 || g[i] < 0 || g[i] > 1 || b[i] < 0 || b[i] > 1 {
+			t.Fatalf("pixel %d out of [0,1]: R=%g G=%g B=%g", i, r[i], g[i], b[i])
+		}
+	}
+
+	outMean := mean32(r) + mean32(g) + mean32(b)
+	outRange := rangeF32(r) + rangeF32(g) + rangeF32(b)
+
+	t.Logf("mean: %.4f → %.4f, range sum: %.4f → %.4f", inMean, outMean, inRange, outRange)
+
+	// CLAHE should increase both mean brightness and dynamic range
+	// for our dark test image.
+	if outMean <= inMean {
+		t.Errorf("CLAHE did not increase mean brightness: %g → %g", inMean, outMean)
+	}
+	if outRange <= inRange {
+		t.Errorf("CLAHE did not expand range: %g → %g", inRange, outRange)
+	}
+}
+
+func mean32(data []float32) float32 {
+	var s float64
+	for _, v := range data {
+		s += float64(v)
+	}
+	return float32(s / float64(len(data)))
+}
+
+func rangeF32(data []float32) float32 {
+	mn, mx := data[0], data[0]
+	for _, v := range data[1:] {
+		if v < mn {
+			mn = v
+		}
+		if v > mx {
+			mx = v
+		}
+	}
+	return mx - mn
+}
+
 // ---------- MTF unit test ----------
 
 func TestMTFValue(t *testing.T) {
