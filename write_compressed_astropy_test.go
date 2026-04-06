@@ -11,6 +11,16 @@ import (
 	"github.com/dmarkham/fits/compress"
 )
 
+// astropyPython returns the path to a Python interpreter with astropy
+// installed. Set FITS_ASTROPY_PYTHON to override; the default looks for
+// a venv in the sibling fits-manager project.
+func astropyPython() string {
+	if p := os.Getenv("FITS_ASTROPY_PYTHON"); p != "" {
+		return p
+	}
+	return "python3" // fallback to system python
+}
+
 // TestWriteCompressedReadByAstropy is the interop acid test: we write a
 // tile-compressed FITS file via AppendCompressedImage, then invoke
 // astropy.io.fits (via the fits-manager venv) to decompress it, and
@@ -19,7 +29,7 @@ import (
 // This closes the loop — if astropy can read our compressed output,
 // any other FITS-aware tool can too.
 func TestWriteCompressedReadByAstropy(t *testing.T) {
-	venvPython := "/home/dmarkham/git/dmarkham/fits-manager/venv/bin/python"
+	venvPython := astropyPython()
 	if _, err := os.Stat(venvPython); err != nil {
 		t.Skip("fits-manager venv not available")
 	}
@@ -124,7 +134,7 @@ with fits.open(sys.argv[1]) as h:
 // path are readable by astropy. The constant tile must round-trip
 // bit-exactly (no quantization loss).
 func TestWriteCompressedFloat32_FallbackReadByAstropy(t *testing.T) {
-	venvPython := "/home/dmarkham/git/dmarkham/fits-manager/venv/bin/python"
+	venvPython := astropyPython()
 	if _, err := os.Stat(venvPython); err != nil {
 		t.Skip("fits-manager venv not available")
 	}
@@ -211,7 +221,7 @@ with fits.open(sys.argv[1]) as h:
 // it and compare the reconstructed pixel values against the originals
 // within the expected quantization precision.
 func TestWriteCompressedFloat32_ReadByAstropy(t *testing.T) {
-	venvPython := "/home/dmarkham/git/dmarkham/fits-manager/venv/bin/python"
+	venvPython := astropyPython()
 	if _, err := os.Stat(venvPython); err != nil {
 		t.Skip("fits-manager venv not available")
 	}

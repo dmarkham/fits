@@ -26,14 +26,14 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
 ## Project setup
 
 - **Module path**: `github.com/dmarkham/fits`
-- **Repository visibility**: private
+- **Repository visibility**: public (MIT license)
 - **License**: MIT
 - **Default branch**: `master` (per CLAUDE.md convention)
 - **Minimum Go version**: 1.23 (generics + `iter.Seq2`)
 - **Platform support**: **Linux only for v1.** macOS / Windows / WASM are not tested or supported in v1. The `EditFile` atomic-rename and fsync-on-directory paths assume POSIX semantics; we do not ship platform-specific code paths in v1. Non-Linux builds may work accidentally for read-only paths but are not a commitment.
 - **Concurrency model**: `*File` is **not safe for concurrent use by multiple goroutines.** Callers that want parallelism must coordinate externally (one `*File` per goroutine, or an external mutex). The library does not take internal locks in v1. Adding goroutine safety later is a non-breaking enhancement, so we keep the option open but do not commit to it. Document this prominently in the package godoc.
 - **Interop cross-check — MANDATORY in CI, not optional.** Every file the library writes must round-trip through cfitsio's `fitsverify` with zero errors. Every test fixture must parse-equivalent through `astropy.io.fits`. We do not ship v1 without both passing.
-  - Both toolchains are already installed and in active use by the neighboring `/home/dmarkham/git/dmarkham/fits-manager` project (Python + `astropy==7.2.0` + `fitsio==1.3.0` + system `cfitsio`). Our CI harness uses the same setup — either reuse the fits-manager venv or mirror its `requirements.txt` pins.
+  - Both toolchains should be available: Python + `astropy` + system `cfitsio`. The test suite uses a local Python venv with astropy for cross-validation (set `FITS_ASTROPY_PYTHON` to the interpreter path, or the tests skip gracefully).
 - **Prior art (surveyed April 2026)**:
   - [`github.com/astrogo/fitsio`](https://github.com/astrogo/fitsio) — was the dominant Go FITS library. **Archived on GitHub March 2025**, moved to codeberg. Last stable release v0.1.0 November 2019. BSD-3. Pure Go, read/write images + tables + VLAs. No generics (predates Go 1.18), no compression, no WCS, no `image.Image`, no edit surface. API pitfall to avoid: `Rows.Scan(args ...interface{})` — type-unsafe, defeats compile-time checking; our generics replace this directly.
   - [`github.com/ATTron/fits`](https://pkg.go.dev/github.com/ATTron/fits) — active exploratory project framed as "assess suitability of golang for scientific applications." Reads images + tables, not aiming at production.
@@ -166,7 +166,7 @@ Before tagging `v1.0.0` we must pass **every** item:
 5. Byte-exact round-trip on all cfitsio fixtures (`testprog.std`, `iter_image.fit`, `iter_a.fit`, `iter_b.fit`, `iter_c.fit`, `vari.fits`, `testf77.std`) via `cmd/fitscopy`.
 6. Byte-exact round-trip on at least one real ASI533MC Pro light frame from `~/Astrophotography/raw/` (including WCS/SIP keywords preserved unchanged).
 7. Fuzz tests run ≥ 10 M iterations each (`FuzzParseHeader`, `FuzzTForm`, `FuzzBlockFraming`, `FuzzCardDecode`) without panic, data-race, or memory-safety finding.
-8. `BenchmarkReadPixelsFloat32_1k²` within 2× of cfitsio throughput on the same hardware (measured on Linux, via the `fits-manager` venv's `fitsio` Python binding as the reference).
+8. `BenchmarkReadPixelsFloat32_1k²` within 2× of cfitsio throughput on the same hardware (measured on Linux, via the `fitsio` Python binding as the reference).
 9. Public API reviewed against Go idioms (naming, receiver choices, method granularity, error wrapping) and against the guiding principle (no auto-anything).
 
 All nine are required; we do not ship a partial v1.
