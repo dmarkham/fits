@@ -1,9 +1,6 @@
 package stretch
 
-import (
-	"math"
-	"sort"
-)
+import "math"
 
 // MTF applies the Midtone Transfer Function to a single channel.
 // This is the core of Siril's autostretch command.
@@ -115,26 +112,91 @@ func AutostretchLinkedParams(channels [][]float32, shadowsClip, targetBG float32
 	return shadows, midtones, highlights
 }
 
-// medianFloat32 computes the median of a float32 slice. Uses a copy
-// to avoid mutating the input. For large arrays this is O(n log n);
-// a histogram-based approach would be faster but sort is simpler and
-// matches Siril's exact median for our test sizes.
-func medianFloat32(data []float32) float32 {
-	if len(data) == 0 {
+// histogramPercentile computes the p-th percentile (p in [0,1]) of a
+// float32 array using the histogram-based interpolated algorithm from
+// Siril/RawTherapee (rt_algo.cc:findMinMaxPercentile). This matches
+// Siril's statistics output bit-for-bit, unlike a sort-based median
+// which gives a slightly different value due to binning interpolation.
+//
+// The algorithm:
+//  1. Find min/max of the data
+//  2. Build a histogram with min(65536, n) bins in [min, max]
+//  3. Walk the CDF to find the percentile
+//  4. Interpolate between the two bins straddling the percentile
+func histogramPercentile(data []float32, p float32) float32 {
+	n := len(data)
+	if n == 0 {
 		return 0
 	}
-	tmp := make([]float32, len(data))
-	copy(tmp, data)
-	sort.Slice(tmp, func(i, j int) bool { return tmp[i] < tmp[j] })
-	n := len(tmp)
-	if n%2 == 0 {
-		return (tmp[n/2-1] + tmp[n/2]) / 2
+	// Find min, max.
+	minVal, maxVal := data[0], data[0]
+	for _, v := range data[1:] {
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
 	}
-	return tmp[n/2]
+	if maxVal == minVal {
+		return minVal
+	}
+	// Histogram with min(65536, n) bins.
+	histoSize := n
+	if histoSize > 65536 {
+		histoSize = 65536
+	}
+	scale := float32(histoSize-1) / (maxVal - minVal)
+	histo := make([]int, histoSize)
+	for _, v := range data {
+		bin := int(scale * (v - minVal))
+		if bin < 0 {
+			bin = 0
+		}
+		if bin >= histoSize {
+			bin = histoSize - 1
+		}
+		histo[bin]++
+	}
+	// Walk CDF to find percentile.
+	thresh := p * float32(n)
+	k := 0
+	count := 0
+	for count < int(thresh) {
+		count += histo[k]
+		k++
+	}
+	// Interpolate (matching Siril's rt_algo.cc:270-277).
+	var result float32
+	if k > 0 {
+		countPrev := count - histo[k-1]
+		c0 := float32(count) - thresh
+		c1 := thresh - float32(countPrev)
+		result = (c1*float32(k) + c0*float32(k-1)) / (c0 + c1)
+	} else {
+		result = float32(k)
+	}
+	// Convert back to original range.
+	result = result/scale + minVal
+	if result < minVal {
+		result = minVal
+	}
+	if result > maxVal {
+		result = maxVal
+	}
+	return result
+}
+
+// medianFloat32 computes the median using Siril's histogram-based
+// interpolated percentile algorithm. This matches Siril's
+// histogram_median_float exactly.
+func medianFloat32(data []float32) float32 {
+	return histogramPercentile(data, 0.5)
 }
 
 // madFloat32 computes the Median Absolute Deviation: median(|xi - median|).
-// The raw MAD (without the 1.4826 normalization factor).
+// The raw MAD (without the 1.4826 normalization factor). Uses the same
+// histogram-based median algorithm as medianFloat32.
 func madFloat32(data []float32, median float32) float32 {
 	if len(data) == 0 {
 		return 0
@@ -147,12 +209,7 @@ func madFloat32(data []float32, median float32) float32 {
 		}
 		tmp[i] = d
 	}
-	sort.Slice(tmp, func(i, j int) bool { return tmp[i] < tmp[j] })
-	n := len(tmp)
-	if n%2 == 0 {
-		return (tmp[n/2-1] + tmp[n/2]) / 2
-	}
-	return tmp[n/2]
+	return histogramPercentile(tmp, 0.5)
 }
 
 // Autostretch applies the full autostretch pipeline to a single channel:

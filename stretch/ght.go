@@ -15,6 +15,8 @@ type GHTParams struct {
 }
 
 // ghtCoeffs holds the precomputed piecewise coefficients.
+// These mirror Siril's ght_compute_params struct fields used for
+// STRETCH_PAYNE_NORMAL.
 type ghtCoeffs struct {
 	b1             float64
 	a2, b2, c2, d2 float64
@@ -55,161 +57,103 @@ func GHT(pixels []float32, params GHTParams) {
 }
 
 // ghtSetup precomputes the piecewise polynomial coefficients for the
-// GHT. Port of Siril's GHTsetup (ght.c).
+// GHT STRETCH_PAYNE_NORMAL mode. Direct port of Siril's GHTsetup
+// (ght.c lines 34-115).
+//
+// Siril's approach: compute qlp, q0, qwp, q1 (the unnormalized
+// function values at the boundaries), then q = 1/(q1-q0) as the
+// global normalization factor. All coefficients are expressed in
+// terms of q0 and q so the output spans [0, 1].
 func ghtSetup(D, B, LP, SP, HP float64) ghtCoeffs {
 	var c ghtCoeffs
 
-	// The GHT is piecewise on [0,LP], [LP,SP], [SP,HP], [HP,1].
-	// Each region uses a different functional form depending on B.
-	// We compute the coefficients to ensure C1 continuity.
+	if B == -1.0 {
+		// Logarithmic family (B == -1).
+		qlp := -math.Log1p(D * (SP - LP))
+		q0 := qlp - D*LP/(1.0+D*(SP-LP))
+		qwp := math.Log1p(D * (HP - SP))
+		q1 := qwp + D*(1.0-HP)/(1.0+D*(HP-SP))
+		q := 1.0 / (q1 - q0)
 
-	if B == 0 {
-		// Exponential family.
+		c.b1 = (1.0 + D*(SP-LP)) / (D * q)
+		c.a2 = (-q0) * q
+		c.b2 = -q
+		c.c2 = 1.0 + D*SP
+		c.d2 = -D
+		c.a3 = (-q0) * q
+		c.b3 = q
+		c.c3 = 1.0 - D*SP
+		c.d3 = D
+		c.a4 = (qwp - q0 - D*HP/(1.0+D*(HP-SP))) * q
+		c.b4 = q * D / (1.0 + D*(HP-SP))
+
+	} else if B < 0.0 {
+		// Generalized power, B < 0 (B != -1). Siril negates B.
+		B = -B
+		qlp := (1.0 - math.Pow(1.0+D*B*(SP-LP), (B-1.0)/B)) / (B - 1.0)
+		q0 := qlp - D*LP*math.Pow(1.0+D*B*(SP-LP), -1.0/B)
+		qwp := (math.Pow(1.0+D*B*(HP-SP), (B-1.0)/B) - 1.0) / (B - 1.0)
+		q1 := qwp + D*(1.0-HP)*math.Pow(1.0+D*B*(HP-SP), -1.0/B)
+		q := 1.0 / (q1 - q0)
+
+		c.b1 = D * math.Pow(1.0+D*B*(SP-LP), -1.0/B) * q
+		c.a2 = (1.0/(B-1.0) - q0) * q
+		c.b2 = -q / (B - 1.0)
+		c.c2 = 1.0 + D*B*SP
+		c.d2 = -D * B
+		c.e2 = (B - 1.0) / B
+		c.a3 = (-1.0/(B-1.0) - q0) * q
+		c.b3 = q / (B - 1.0)
+		c.c3 = 1.0 - D*B*SP
+		c.d3 = D * B
+		c.e3 = (B - 1.0) / B
+		c.a4 = (qwp - q0 - D*HP*math.Pow(1.0+D*B*(HP-SP), -1.0/B)) * q
+		c.b4 = D * math.Pow(1.0+D*B*(HP-SP), -1.0/B) * q
+
+	} else if B == 0.0 {
+		// Exponential family (B == 0).
+		qlp := math.Exp(-D * (SP - LP))
+		q0 := qlp - D*LP*math.Exp(-D*(SP-LP))
+		qwp := 2.0 - math.Exp(-D*(HP-SP))
+		q1 := qwp + D*(1.0-HP)*math.Exp(-D*(HP-SP))
+		q := 1.0 / (q1 - q0)
+
+		c.b1 = D * math.Exp(-D*(SP-LP)) * q
+		c.a2 = -q0 * q
+		c.b2 = q
 		c.c2 = -D * SP
 		c.d2 = D
+		c.a3 = (2.0 - q0) * q
+		c.b3 = -q
 		c.c3 = D * SP
 		c.d3 = -D
-		// At x=SP: both sides meet. Region 2 value at SP: exp(-D*SP + D*SP) = exp(0) = 1.
-		// Region 3 value at SP: exp(D*SP - D*SP) = 1.
-		// b2 and b3 scale so that the function spans [0, 1] properly.
-		// See Siril ght.c for the exact coefficient derivation.
-		exp_c2_d2LP := math.Exp(c.c2 + c.d2*LP)
-		exp_c2_d2SP := math.Exp(c.c2 + c.d2*SP)
-		exp_c3_d3SP := math.Exp(c.c3 + c.d3*SP)
-		exp_c3_d3HP := math.Exp(c.c3 + c.d3*HP)
-
-		if exp_c2_d2SP == exp_c2_d2LP {
-			c.b2 = 1
-		} else {
-			c.b2 = 1.0 / (exp_c2_d2SP - exp_c2_d2LP)
-		}
-		c.a2 = -c.b2 * exp_c2_d2LP
-
-		if exp_c3_d3SP == exp_c3_d3HP {
-			c.b3 = 1
-		} else {
-			c.b3 = -1.0 / (exp_c3_d3HP - exp_c3_d3SP)
-		}
-		c.a3 = 1.0 - c.b3*exp_c3_d3HP
-
-	} else if B == -1 {
-		// Logarithmic family.
-		c.c2 = 1 + D*SP
-		c.d2 = -D
-		c.c3 = 1 - D*SP
-		c.d3 = D
-		log_c2_d2LP := math.Log(c.c2 + c.d2*LP)
-		log_c2_d2SP := math.Log(c.c2 + c.d2*SP)
-		log_c3_d3SP := math.Log(c.c3 + c.d3*SP)
-		log_c3_d3HP := math.Log(c.c3 + c.d3*HP)
-
-		if log_c2_d2SP == log_c2_d2LP {
-			c.b2 = 1
-		} else {
-			c.b2 = 1.0 / (log_c2_d2SP - log_c2_d2LP)
-		}
-		c.a2 = -c.b2 * log_c2_d2LP
-
-		if log_c3_d3SP == log_c3_d3HP {
-			c.b3 = 1
-		} else {
-			c.b3 = -1.0 / (log_c3_d3HP - log_c3_d3SP)
-		}
-		c.a3 = 1.0 - c.b3*log_c3_d3HP
-
-	} else if B < 0 {
-		// Generalized power (B < 0, B != -1).
-		c.e2 = (B - 1) / B
-		c.c2 = 1 + D*SP
-		c.d2 = -D
-		c.c3 = 1 - D*SP
-		c.d3 = D
-		c.e3 = c.e2
-
-		pow_LP := math.Pow(c.c2+c.d2*LP, c.e2)
-		pow_SP2 := math.Pow(c.c2+c.d2*SP, c.e2)
-		pow_SP3 := math.Pow(c.c3+c.d3*SP, c.e3)
-		pow_HP := math.Pow(c.c3+c.d3*HP, c.e3)
-
-		if pow_SP2 == pow_LP {
-			c.b2 = 1
-		} else {
-			c.b2 = 1.0 / (pow_SP2 - pow_LP)
-		}
-		c.a2 = -c.b2 * pow_LP
-
-		if pow_SP3 == pow_HP {
-			c.b3 = 1
-		} else {
-			c.b3 = -1.0 / (pow_HP - pow_SP3)
-		}
-		c.a3 = 1.0 - c.b3*pow_HP
+		c.a4 = (qwp - q0 - D*HP*math.Exp(-D*(HP-SP))) * q
+		c.b4 = D * math.Exp(-D*(HP-SP)) * q
 
 	} else {
-		// B > 0: power law with negative exponent.
+		// B > 0: power law.
+		qlp := math.Pow(1.0+D*B*(SP-LP), -1.0/B)
+		q0 := qlp - D*LP*math.Pow(1.0+D*B*(SP-LP), -(1.0+B)/B)
+		qwp := 2.0 - math.Pow(1.0+D*B*(HP-SP), -1.0/B)
+		q1 := qwp + D*(1.0-HP)*math.Pow(1.0+D*B*(HP-SP), -(1.0+B)/B)
+		q := 1.0 / (q1 - q0)
+
+		c.b1 = D * math.Pow(1.0+D*B*(SP-LP), -(1.0+B)/B) * q
+		c.a2 = -q0 * q
+		c.b2 = q
+		c.c2 = 1.0 + D*B*SP
+		c.d2 = -D * B
 		c.e2 = -1.0 / B
-		c.c2 = 1 + D*SP
-		c.d2 = -D
-		c.c3 = 1 - D*SP
-		c.d3 = D
-		c.e3 = c.e2
-
-		pow_LP := math.Pow(c.c2+c.d2*LP, c.e2)
-		pow_SP2 := math.Pow(c.c2+c.d2*SP, c.e2)
-		pow_SP3 := math.Pow(c.c3+c.d3*SP, c.e3)
-		pow_HP := math.Pow(c.c3+c.d3*HP, c.e3)
-
-		if pow_SP2 == pow_LP {
-			c.b2 = 1
-		} else {
-			c.b2 = 1.0 / (pow_SP2 - pow_LP)
-		}
-		c.a2 = -c.b2 * pow_LP
-
-		if pow_SP3 == pow_HP {
-			c.b3 = 1
-		} else {
-			c.b3 = -1.0 / (pow_HP - pow_SP3)
-		}
-		c.a3 = 1.0 - c.b3*pow_HP
-	}
-
-	// Linear region [0, LP]: slope matches region 2 at LP.
-	if LP > 0 {
-		valLP := ghtRegion2(LP, B, &c)
-		c.b1 = valLP / LP
-	}
-
-	// Linear region [HP, 1]: slope matches region 3 at HP.
-	valHP := ghtRegion3(HP, B, &c)
-	if HP < 1 {
-		c.a4 = 1.0
-		c.b4 = (1.0 - valHP) / (1.0 - HP)
-		c.a4 = valHP - c.b4*HP
-	} else {
-		c.a4 = 0
-		c.b4 = 1
+		c.a3 = (2.0 - q0) * q
+		c.b3 = -q
+		c.c3 = 1.0 - D*B*SP
+		c.d3 = D * B
+		c.e3 = -1.0 / B
+		c.a4 = (qwp - q0 - D*HP*math.Pow(1.0+D*B*(HP-SP), -(1.0+B)/B)) * q
+		c.b4 = D * math.Pow(1.0+D*B*(HP-SP), -(1.0+B)/B) * q
 	}
 
 	return c
-}
-
-func ghtRegion2(x, B float64, c *ghtCoeffs) float64 {
-	if B == 0 {
-		return c.a2 + c.b2*math.Exp(c.c2+c.d2*x)
-	} else if B == -1 {
-		return c.a2 + c.b2*math.Log(c.c2+c.d2*x)
-	}
-	return c.a2 + c.b2*math.Pow(c.c2+c.d2*x, c.e2)
-}
-
-func ghtRegion3(x, B float64, c *ghtCoeffs) float64 {
-	if B == 0 {
-		return c.a3 + c.b3*math.Exp(c.c3+c.d3*x)
-	} else if B == -1 {
-		return c.a3 + c.b3*math.Log(c.c3+c.d3*x)
-	}
-	return c.a3 + c.b3*math.Pow(c.c3+c.d3*x, c.e3)
 }
 
 func ghtEval(in, D, B, LP, SP, HP float64, c *ghtCoeffs) float32 {
@@ -217,14 +161,25 @@ func ghtEval(in, D, B, LP, SP, HP float64, c *ghtCoeffs) float32 {
 	if D == 0 {
 		return float32(in)
 	}
+	var res1, res2 float64
+	if B == -1.0 {
+		res1 = c.a2 + c.b2*math.Log(c.c2+c.d2*in)
+		res2 = c.a3 + c.b3*math.Log(c.c3+c.d3*in)
+	} else if B == 0.0 {
+		res1 = c.a2 + c.b2*math.Exp(c.c2+c.d2*in)
+		res2 = c.a3 + c.b3*math.Exp(c.c3+c.d3*in)
+	} else {
+		res1 = c.a2 + c.b2*math.Pow(c.c2+c.d2*in, c.e2)
+		res2 = c.a3 + c.b3*math.Pow(c.c3+c.d3*in, c.e3)
+	}
 	var out float64
 	switch {
 	case in < LP:
 		out = c.b1 * in
 	case in < SP:
-		out = ghtRegion2(in, B, c)
+		out = res1
 	case in < HP:
-		out = ghtRegion3(in, B, c)
+		out = res2
 	default:
 		out = c.a4 + c.b4*in
 	}
