@@ -107,12 +107,6 @@ func AsinhRGB(r, g, b []float32, beta, offset float32) {
 //
 // If the data is already in [0, 1] (common for calibrated float FITS),
 // this is effectively a no-op.
-//
-// Note: normalizing each channel independently (per-channel min/max)
-// will alter the color balance before stretching. This is fine when
-// that's the intent, but for linked stretches it shifts the result
-// because the channels no longer reflect their original relative
-// brightness.
 func NormalizeChannels(channels ...[]float32) {
 	if len(channels) == 0 {
 		return
