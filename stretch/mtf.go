@@ -114,22 +114,21 @@ func AutostretchLinkedParams(channels [][]float32, shadowsClip, targetBG float32
 }
 
 // histogramPercentile computes the p-th percentile (p in [0,1]) of a
-// float32 array using the histogram-based interpolated algorithm from
-// Siril/RawTherapee (rt_algo.cc:findMinMaxPercentile). This matches
-// Siril's statistics output bit-for-bit, unlike a sort-based median
-// which gives a slightly different value due to binning interpolation.
+// float32 array. Line-for-line port of RawTherapee/Siril's
+// findMinMaxPercentile (rt_algo.cc:167). Siril uses this for all
+// float-image statistics (median, MAD).
 //
 // The algorithm:
 //  1. Find min/max of the data
-//  2. Build a histogram with min(65536, n) bins in [min, max]
-//  3. Walk the CDF to find the percentile
+//  2. Build a histogram with min(65536, n) bins spanning [min, max]
+//  3. Walk the CDF to the percentile
 //  4. Interpolate between the two bins straddling the percentile
+//  5. Convert back to the original value range
 func histogramPercentile(data []float32, p float32) float32 {
 	n := len(data)
 	if n == 0 {
 		return 0
 	}
-	// Find min, max.
 	minVal, maxVal := data[0], data[0]
 	for _, v := range data[1:] {
 		if v < minVal {
@@ -139,45 +138,50 @@ func histogramPercentile(data []float32, p float32) float32 {
 			maxVal = v
 		}
 	}
-	if maxVal == minVal {
+	if maxVal-minVal == 0 {
 		return minVal
 	}
-	// Histogram with min(65536, n) bins.
+
+	// rt_algo.cc:215 — histoSize = min(65536, size)
 	histoSize := n
 	if histoSize > 65536 {
 		histoSize = 65536
 	}
+
+	// rt_algo.cc:218 — scale uses (histoSize - 1) so the max value
+	// maps to the last bin, not one past it.
 	scale := float32(histoSize-1) / (maxVal - minVal)
-	histo := make([]int, histoSize)
+
+	// rt_algo.cc:227 — bin assignment via uint16 truncation.
+	histo := make([]uint32, histoSize)
 	for _, v := range data {
-		bin := int(scale * (v - minVal))
-		if bin < 0 {
-			bin = 0
-		}
-		if bin >= histoSize {
-			bin = histoSize - 1
-		}
+		bin := uint16(scale * (v - minVal))
 		histo[bin]++
 	}
-	// Walk CDF to find percentile.
-	thresh := p * float32(n)
+
+	// rt_algo.cc:261-268 — walk CDF.
+	// The C++ loop: while (count < threshmin) { count += histo[k++]; }
+	// uses float comparison (count is size_t, promoted to float).
+	thresh := float32(p) * float32(n)
 	k := 0
-	count := 0
-	for count < int(thresh) {
-		count += histo[k]
+	var count float32
+	for count < thresh {
+		count += float32(histo[k])
 		k++
 	}
-	// Interpolate (matching Siril's rt_algo.cc:270-277).
+
+	// rt_algo.cc:270-277 — interpolation.
 	var result float32
 	if k > 0 {
-		countPrev := count - histo[k-1]
-		c0 := float32(count) - thresh
-		c1 := thresh - float32(countPrev)
+		countPrev := count - float32(histo[k-1])
+		c0 := count - thresh
+		c1 := thresh - countPrev
 		result = (c1*float32(k) + c0*float32(k-1)) / (c0 + c1)
 	} else {
 		result = float32(k)
 	}
-	// Convert back to original range.
+
+	// rt_algo.cc:279-281 — back to original range + clamp.
 	result = result/scale + minVal
 	if result < minVal {
 		result = minVal
