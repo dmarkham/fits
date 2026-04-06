@@ -3,6 +3,7 @@ package fits
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/dmarkham/fits/header"
@@ -46,7 +47,57 @@ func WriteImage[T Numeric](dst WriteTarget, hdr *header.Header, shape []int64, d
 	if int64(len(data)) != npix {
 		return nil, fmt.Errorf("fits: WriteImage: data length %d != product of shape %d", len(data), npix)
 	}
+	// If BSCALE/BZERO is present, apply inverse scaling so that
+	// ReadPixels with the same BSCALE/BZERO recovers the original
+	// values. For integer BITPIX, clamp the result to the target
+	// type's range (matching Siril's savefits behavior). Float
+	// BITPIX preserves the full range — no clamping.
+	if hdr != nil {
+		bscale, errS := hdr.Float("BSCALE")
+		bzero, errZ := hdr.Float("BZERO")
+		hasScale := errS == nil || errZ == nil
+		if errS != nil {
+			bscale = 1
+		}
+		if errZ != nil {
+			bzero = 0
+		}
+		if hasScale && !(bscale == 1 && bzero == 0) {
+			data = applyInverseScaling(data, bp, bscale, bzero)
+		}
+	}
 	return dst.writeImage(bp, hdr, shape, anyDataFor(data))
+}
+
+// applyInverseScaling converts physical values back to on-disk
+// representation: on_disk = (physical - bzero) / bscale. For integer
+// BITPIX, the result is clamped to the target type's range to prevent
+// wraparound. Returns a new slice (never mutates the input).
+func applyInverseScaling[T Numeric](data []T, bp bitpix.BITPIX, bscale, bzero float64) []T {
+	out := make([]T, len(data))
+	invScale := 1.0 / bscale
+	for i, v := range data {
+		raw := (float64(v) - bzero) * invScale
+		out[i] = clampToType[T](raw, bp)
+	}
+	return out
+}
+
+// clampToType converts a float64 value to T, clamping to the target
+// integer type's range. Float types pass through without clamping.
+func clampToType[T Numeric](v float64, bp bitpix.BITPIX) T {
+	switch bp {
+	case bitpix.Int8:
+		v = math.Max(-128, math.Min(127, math.Round(v)))
+	case bitpix.Int16:
+		v = math.Max(-32768, math.Min(32767, math.Round(v)))
+	case bitpix.Int32:
+		v = math.Max(-2147483648, math.Min(2147483647, math.Round(v)))
+	case bitpix.Int64:
+		v = math.Max(-9223372036854775808, math.Min(9223372036854775807, math.Round(v)))
+	}
+	// Float types: no clamping, no rounding.
+	return T(v)
 }
 
 // pickBitpix returns the matching BITPIX enum for the generic numeric type T.
