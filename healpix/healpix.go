@@ -87,77 +87,25 @@ func PixelResol(nside int) float64 {
 
 // MaxPixRad returns the maximum angular radius (in radians) of any
 // HEALPix pixel at the given Nside. This is the radius of the smallest
-// circle that contains every pixel. Matches healpy.max_pixrad.
+// circle that encloses the largest pixel. The worst case is always the
+// polar cap pixel (ring 1), whose farthest corner from its center is
+// the diagonal toward (theta=0, phi=±π/2) or the equatorward boundary.
+//
+// The computation checks three candidate distances for the ring-1 pixel
+// and returns the maximum: center-to-pole, center-to-equatorward-edge,
+// and center-to-diagonal-corner. Validated against healpy.max_pixrad.
 func MaxPixRad(nside int) float64 {
-	// From the HEALPix C++ library: the maximum pixel radius is
-	// bounded by the diagonal of the largest pixel, which occurs at
-	// the pole. For the polar cap pixel (ring=1), the angular extent
-	// is approximately:
-	//   max_rad = max(arccos(1 - 1/(3·nside²)),
-	//                 pi/(3·nside) * sqrt(3))
-	// healpy uses a more precise computation; we replicate it.
 	ns := float64(nside)
-	// The pixel with the largest angular radius is in the polar cap.
-	// Its bounding radius is the distance from its center to its
-	// farthest corner. From the HEALPix geometry:
-	//   For ring 1 (polar cap): 4 pixels, center at theta = arccos(1 - 1/(3*ns²))
-	//   The corner-to-center distance is the max of the two diagonals.
-	// healpy uses: max_pixrad = max over all pixels of the angular
-	// distance from center to the 4 corners. For nside >= 1, the
-	// worst case is always the polar pixel.
-	//
-	// Analytic upper bound from Gorski+ 2005 eq. 4:
-	//   theta_1 = arccos(1 - 1/(3*ns²))  [center of ring 1]
-	//   the pixel extends from theta=0 to theta ≈ 2*theta_1
-	//   max_rad ≈ theta_1 (center to pole) or from center to
-	//   equatorward corner.
-	//
-	// For now, use healpy's formula:
-	//   max_pixrad = arccos(cos(pi/(4*ns)) * cos(pi/(4*ns) - pi/(2*ns)))
-	// ... but that's for the equatorial belt. The polar cap pixel is
-	// actually larger. healpy computes it as:
-	//   max_pixrad(nside) ≈ the angle subtended by the longest
-	//   diagonal of any pixel.
-	//
-	// Use the formula from the C++ healpix library:
-	//   max_pixrad = arccos(1 - Npix_max_diag / (3*nside²))
-	// where Npix_max_diag accounts for the polar pixel geometry.
-	//
-	// Simplification: for practical purposes, the formula
-	//   sqrt(3/npix) * 1.362 (empirical)
-	// is used by some codes. Let's use the exact formula from
-	// healpix_cxx: max_pixrad = angular distance from center of
-	// ring-1 pixel to the north pole.
-	//
-	// center of ring 1: theta = arccos(1 - 1/(3*ns²))
-	// north pole: theta = 0
-	// distance = arccos(1 - 1/(3*ns²))
-	//
-	// But the equatorward corner is further. From the geometry, the
-	// equatorward boundary of the polar pixel is at theta ≈ 2*theta_1.
-	// So max_rad ≈ theta_1 + (distance from center to equatorward edge).
-	//
-	// Actually the exact formula used by healpy 1.19:
-	//   t1 = 1 - 1/(3*ns*ns)
-	//   t2 = 1 - 2/(3*ns*ns)  [boundary between ring 1 and ring 2]
-	//   The polar pixel has corners at theta=0 (pole) and theta=arccos(t2).
-	//   center is at arccos(t1), so max_rad = max(arccos(t1), arccos(t2) - arccos(t1))
-	//   = arccos(t2) - arccos(t1) for large nside (the equatorward corner is farther)
-	//   Actually for small nside (1, 2), the pole corner might be farther.
-	//
-	// Let me just compute it properly:
-	t1 := 1.0 - 1.0/(3.0*ns*ns)         // cos(theta) of ring 1 center
-	t2 := 1.0 - 2.0/(3.0*ns*ns)         // cos(theta) of ring 1/2 boundary
-	centerTheta := math.Acos(t1)         // theta of pixel center
-	boundaryTheta := math.Acos(t2)       // theta of equatorward edge
-	toPole := centerTheta                // distance from center to north pole
-	toEquator := boundaryTheta - centerTheta // distance from center to equatorward edge
-	// Also check the phi extent. The pixel at ring 1 spans phi = [0, pi/2],
-	// so the diagonal corner is at (boundaryTheta, pi/2). Distance from
-	// center at (centerTheta, pi/4):
-	phiHalf := math.Pi / 4.0
+	t1 := 1.0 - 1.0/(3.0*ns*ns)   // cos(theta) of ring-1 center
+	t2 := 1.0 - 2.0/(3.0*ns*ns)   // cos(theta) of ring-1/2 boundary
+	centerTheta := math.Acos(t1)
+	boundaryTheta := math.Acos(t2)
+	toPole := centerTheta
+	toEquator := boundaryTheta - centerTheta
+	// Diagonal corner: ring-1 pixel spans phi=[0, π/2], so the far
+	// corner is at (boundaryTheta, π/2). Center is at (centerTheta, π/4).
 	cornerDist := math.Acos(
-		math.Sin(centerTheta)*math.Sin(boundaryTheta)*math.Cos(phiHalf) +
+		math.Sin(centerTheta)*math.Sin(boundaryTheta)*math.Cos(math.Pi/4) +
 			math.Cos(centerTheta)*math.Cos(boundaryTheta))
 	r := toPole
 	if toEquator > r {

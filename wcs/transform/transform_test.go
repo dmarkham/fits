@@ -280,8 +280,8 @@ func assertRoundTrip(t *testing.T, code string, crval1, crval2, crpix1, crpix2, 
 
 // TestAllPaperIICodesImplemented verifies that every 3-letter code in
 // allProjectionCodes constructs successfully via Select (with sensible
-// default PV parameters). This is the v1.1 gate: no code in Paper II
-// may be "known but not yet implemented."
+// default PV parameters). All 27 Paper II projections plus HPX/XPH
+// are implemented; none may return ErrUnsupportedProjection.
 func TestAllPaperIICodesImplemented(t *testing.T) {
 	// Conic projections require a non-zero PV2_1 (theta_a); supply one.
 	conicPV := map[wcs.PVKey]float64{

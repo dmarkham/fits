@@ -47,7 +47,7 @@ type Transform struct {
 
 // New builds a Transform from a parsed *wcs.Header. Returns an error if
 // the header is not a 2-D celestial WCS, if the linear transform is
-// singular, or if the projection code is not yet implemented (see
+// singular, or if the projection code is not supported (see
 // ErrUnsupportedProjection in projection.go).
 func New(h *wcs.Header) (*Transform, error) {
 	if h == nil {

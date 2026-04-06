@@ -154,9 +154,9 @@ var (
 )
 
 // Select returns the Decoder for the given algorithm, configured from
-// params. Returns ErrUnknownCompression for Unknown, or
-// ErrUnsupportedCompression for algorithms this package recognizes but
-// does not yet implement.
+// params. Returns ErrUnknownCompression for unknown algorithm strings,
+// or ErrUnsupportedCompression if a future FITS standard revision adds
+// an algorithm this package does not support.
 func Select(algo Algorithm, params Params) (Decoder, error) {
 	switch algo {
 	case RICE1:

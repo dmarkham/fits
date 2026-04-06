@@ -43,8 +43,10 @@ import (
 	"github.com/dmarkham/fits/wcs"
 )
 
-// ErrUnsupportedProjection is returned by Select when asked for a
-// projection code the transform package does not yet implement.
+// ErrUnsupportedProjection is a forward-compatibility sentinel returned
+// by Select for FITS projection codes that a future standard revision
+// might define but this package does not support. Currently unreachable
+// — all 27 standard projections plus HPX/XPH are implemented.
 var ErrUnsupportedProjection = errors.New("wcs/transform: unsupported projection")
 
 // ErrUnknownProjection is returned by Select when the 3-letter code is not
@@ -172,7 +174,7 @@ func Select(code string, pv map[wcs.PVKey]float64, latAxis int) (Projection, err
 		return xphProjection{}, nil
 	}
 	if allProjectionCodes[code] {
-		return nil, fmt.Errorf("%w: %q (known but not yet implemented)", ErrUnsupportedProjection, code)
+		return nil, fmt.Errorf("%w: %q (recognized but not supported)", ErrUnsupportedProjection, code)
 	}
 	return nil, fmt.Errorf("%w: %q", ErrUnknownProjection, code)
 }
@@ -226,13 +228,3 @@ func normalizeDeg(d float64) float64 {
 	return d
 }
 
-// normalizeRadPi maps a radian value into [-pi, pi].
-func normalizeRadPi(r float64) float64 {
-	r = math.Mod(r, 2*math.Pi)
-	if r > math.Pi {
-		r -= 2 * math.Pi
-	} else if r < -math.Pi {
-		r += 2 * math.Pi
-	}
-	return r
-}
