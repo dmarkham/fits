@@ -1,0 +1,114 @@
+{
+  "nside": 1,
+  "npix": 12,
+  "cases": [
+    {
+      "pix": 0,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 0,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 0
+    },
+    {
+      "pix": 1,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 1,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 1
+    },
+    {
+      "pix": 2,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 2,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 2
+    },
+    {
+      "pix": 3,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 3,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 3
+    },
+    {
+      "pix": 4,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 4,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 4
+    },
+    {
+      "pix": 5,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 5,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 5
+    },
+    {
+      "pix": 6,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 6,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 6
+    },
+    {
+      "pix": 7,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 7,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 7
+    },
+    {
+      "pix": 8,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 8,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 8
+    },
+    {
+      "pix": 9,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 9,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 9
+    },
+    {
+      "pix": 10,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 10,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 10
+    },
+    {
+      "pix": 11,
+      "ring_x": 0,
+      "ring_y": 0,
+      "ring_f": 11,
+      "nest_x": 0,
+      "nest_y": 0,
+      "nest_f": 11
+    }
+  ]
+}
