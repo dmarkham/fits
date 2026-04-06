@@ -43,13 +43,13 @@ func MTF(pixels []float32, shadows, midtones, highlights float32) {
 // sigma below the median to place the shadow clip point.
 // targetBG is the target midtone value (e.g. 0.25).
 //
-// For multi-channel linked mode, pass the concatenation of all channels
-// or call AutostretchLinkedParams.
-//
 // Port of Siril's find_unlinked_midtones_balance (mtf.c:374).
+// Siril excludes pixels that are exactly 0.0 or NaN from the median
+// and MAD computation (statistics_float.c reassign_to_non_null_data).
 func AutostretchParams(pixels []float32, shadowsClip, targetBG float32) (shadows, midtones, highlights float32) {
-	med := medianFloat32(pixels)
-	mad := madFloat32(pixels, med)
+	good := filterNonZero(pixels)
+	med := medianFloat32(good)
+	mad := madFloat32(good, med)
 	const madNorm = 1.4826
 	madN := mad * madNorm
 
@@ -86,8 +86,9 @@ func AutostretchLinkedParams(channels [][]float32, shadowsClip, targetBG float32
 	const madNorm = 1.4826
 
 	for _, ch := range channels {
-		med := medianFloat32(ch)
-		mad := madFloat32(ch, med)
+		good := filterNonZero(ch)
+		med := medianFloat32(good)
+		mad := madFloat32(good, med)
 		madN := mad * madNorm
 		if madN == 0 {
 			madN = 0.001
@@ -239,6 +240,23 @@ func MTFValue(x, m float32) float32 {
 		return 1
 	}
 	return (m - 1) * x / ((2*m-1)*x - m)
+}
+
+// filterNonZero returns a new slice containing only the non-zero,
+// non-NaN elements of data. Matches Siril's
+// reassign_to_non_null_data_float (statistics_float.c) which excludes
+// exact zeros and NaN before computing median and MAD.
+func filterNonZero(data []float32) []float32 {
+	out := make([]float32, 0, len(data))
+	for _, v := range data {
+		if v != 0 && v == v { // v == v is false for NaN
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		return data // fallback: use all data if everything is zero
+	}
+	return out
 }
 
 // ensure math is used

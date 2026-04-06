@@ -199,7 +199,7 @@ func TestAutostretch_Siril(t *testing.T) {
 			// clipping). The core MTF formula is correct; the
 			// remaining diff is from per-channel median/MAD computation
 			// on 3D FITS data. Tracked for future investigation.
-			const tol float32 = 0.04
+			const tol float32 = 5e-4
 			for _, ch := range []struct {
 				name string
 				got  []float32
@@ -225,7 +225,7 @@ func TestAutostretchLinked_Siril(t *testing.T) {
 
 	AutostretchLinked([][]float32{r, g, b}, -2.8, 0.25)
 
-	const tol float32 = 0.04
+	const tol float32 = 5e-4
 	for _, ch := range []struct {
 		name string
 		got  []float32
