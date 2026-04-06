@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/dmarkham/fits/internal/block"
 )
@@ -101,12 +102,11 @@ func readJournal(path string) (journalEntry, error) {
 
 // parentDir returns the directory portion of a path (or "").
 func parentDir(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' {
-			return p[:i]
-		}
+	d := filepath.Dir(p)
+	if d == "." {
+		return ""
 	}
-	return ""
+	return d
 }
 
 // journalPath returns the path of the journal file for main file `name`.

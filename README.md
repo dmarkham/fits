@@ -73,7 +73,9 @@ module — never in the root `fits` package.
 ## Requirements
 
 - Go 1.23 or later (generics + `iter.Seq2`).
-- Linux. macOS, Windows, and WASM are not supported in v1.
+- Linux, macOS, and Windows. WASM is not supported (the edit surface
+  requires a real filesystem; read-only via `OpenReader` / `OpenReadAll`
+  may work but is untested).
 
 ## Concurrency
 
