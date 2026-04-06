@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -315,7 +316,7 @@ func (t *TNX) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 		fy := eta + latVal
 		rx := xiPrime - fx
 		ry := etaPrime - fy
-		if absFloat(rx) < 1e-13 && absFloat(ry) < 1e-13 {
+		if math.Abs(rx) < 1e-13 && math.Abs(ry) < 1e-13 {
 			return xi, eta, true
 		}
 		// J = I + [dLonDxi dLonDeta; dLatDxi dLatDeta]
@@ -333,10 +334,3 @@ func (t *TNX) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 	return xi, eta, true
 }
 
-// absFloat is a tiny helper to avoid importing math for a single call.
-func absFloat(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
-}

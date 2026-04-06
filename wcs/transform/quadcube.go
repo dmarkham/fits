@@ -503,8 +503,6 @@ func (qscProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 	// (from wcslib qscs2x:7858-7931).
 	var xi, eta, x0, y0 float64
 	var zeco float64 // = 1 - zeta, used in the QSC area formula
-	useSmallAngle := false
-
 	switch face {
 	case 1:
 		xi, eta = m, n
@@ -531,7 +529,6 @@ func (qscProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 	// center) the 1-zeta subtraction loses precision. Use a
 	// second-order Taylor based on the face-local polar coordinates.
 	if zeco < 1e-8 {
-		useSmallAngle = true
 		var p float64
 		switch face {
 		case 1:
@@ -559,8 +556,6 @@ func (qscProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
 			zeco = t * t / 2
 		}
 	}
-	_ = useSmallAngle
-
 	// Apply the QSC area-equalization (wcslib qscs2x:7935-7957).
 	// Four branches depending on which of ±xi, ±eta dominates.
 	var xf, yf float64

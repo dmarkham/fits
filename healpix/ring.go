@@ -11,6 +11,43 @@ package healpix
 //	Equatorial belt:  rings nside+1..3·nside-1  (4·nside pixels per ring)
 //	South polar cap:  rings 3·nside..4·nside-1  (mirrored north)
 
+// decomposeRing finds the 1-based ring number and the longitude index
+// within that ring for a RING-ordered pixel index. Port of
+// astrometry.net healpix_decompose_ring (healpix.c:126).
+func decomposeRing(ringIdx int64, nside int) (ring, longind int64) {
+	ns := int64(nside)
+	offset := int64(0)
+	ring = 1
+	// North polar cap.
+	for ring <= ns {
+		npixRing := ring * 4
+		if offset+npixRing > ringIdx {
+			return ring, ringIdx - offset
+		}
+		offset += npixRing
+		ring++
+	}
+	// Equatorial belt.
+	for ring < 3*ns {
+		npixRing := ns * 4
+		if offset+npixRing > ringIdx {
+			return ring, ringIdx - offset
+		}
+		offset += npixRing
+		ring++
+	}
+	// South polar cap.
+	for ring < 4*ns {
+		npixRing := (4*ns - ring) * 4
+		if offset+npixRing > ringIdx {
+			return ring, ringIdx - offset
+		}
+		offset += npixRing
+		ring++
+	}
+	return 0, 0 // invalid input
+}
+
 // xyToRing converts an XY-scheme pixel index to RING ordering.
 // Port of astrometry.net healpix_xy_to_ring (healpix.c:262).
 func xyToRing(xy int64, nside int) int64 {
@@ -61,44 +98,8 @@ func ringToXY(ringIdx int64, nside int) int64 {
 	ns := int64(nside)
 
 	// Step 1: decompose ringIdx into (ring number, longitude index).
-	// Port of healpix_decompose_ring (healpix.c:126): iterative scan.
-	var ring, longind int64
-	offset := int64(0)
-	ring = 1
-	// North polar cap.
-	for ring <= ns {
-		npixRing := ring * 4
-		if offset+npixRing > ringIdx {
-			longind = ringIdx - offset
-			goto gotit
-		}
-		offset += npixRing
-		ring++
-	}
-	// Equatorial belt.
-	for ring < 3*ns {
-		npixRing := ns * 4
-		if offset+npixRing > ringIdx {
-			longind = ringIdx - offset
-			goto gotit
-		}
-		offset += npixRing
-		ring++
-	}
-	// South polar cap.
-	for ring < 4*ns {
-		npixRing := (4*ns - ring) * 4
-		if offset+npixRing > ringIdx {
-			longind = ringIdx - offset
-			goto gotit
-		}
-		offset += npixRing
-		ring++
-	}
-	// Should not reach here for valid input.
-	return 0
+	ring, longind := decomposeRing(ringIdx, nside)
 
-gotit:
 	// Step 2: convert (ring, longind) to (face, x, y).
 	var face, x, y int
 

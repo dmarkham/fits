@@ -42,7 +42,7 @@ func Pix2Vec(nside int, pix int64, scheme Scheme) (vx, vy, vz float64) {
 // called with dx=0.5, dy=0.5 for pixel centers.
 func xyToVec(xy int64, nside int) (vx, vy, vz float64) {
 	hp := xyDecompose(xy, nside)
-	chp := hp.Face
+	face := hp.Face
 	ns := float64(nside)
 
 	// Pixel-center position: xp + 0.5, yp + 0.5.
@@ -55,13 +55,13 @@ func xyToVec(xy int64, nside int) (vx, vy, vz float64) {
 	// Check polar/equatorial boundary (healpix.c:1023-1034).
 	// North polar faces (0-3): polar region is where x+y > nside.
 	// South polar faces (8-11): polar region is where x+y < nside.
-	if chp <= 3 {
+	if face <= 3 {
 		if x+y > ns {
 			equatorial = false
 			zfactor = 1.0
 		}
 	}
-	if chp >= 8 {
+	if face >= 8 {
 		if x+y < ns {
 			equatorial = false
 			zfactor = -1.0
@@ -76,23 +76,23 @@ func xyToVec(xy int64, nside int) (vx, vy, vz float64) {
 		x /= ns
 		y /= ns
 
-		if chp <= 3 {
+		if face <= 3 {
 			// North polar face, equatorial part.
 			phioff = 1.0
-			// zoff stays 0, chp unchanged.
-		} else if chp <= 7 {
+			// zoff stays 0, face unchanged.
+		} else if face <= 7 {
 			// Equatorial face.
 			zoff = -1.0
-			chp -= 4
+			face -= 4
 		} else {
 			// South polar face, equatorial part.
 			phioff = 1.0
 			zoff = -2.0
-			chp -= 8
+			face -= 8
 		}
 
 		z = (2.0 / 3.0) * (x + y + zoff)
-		phi = (math.Pi / 4.0) * (x - y + phioff + 2*float64(chp))
+		phi = (math.Pi / 4.0) * (x - y + phioff + 2*float64(face))
 	} else {
 		// Polar path (healpix.c:1062-1104).
 		if zfactor == -1 {

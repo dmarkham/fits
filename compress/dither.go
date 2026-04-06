@@ -1,5 +1,7 @@
 package compress
 
+import "sync"
+
 // Float-quantization dither support for FITS tile compression.
 //
 // Reference: cfitsio/imcompress.c fits_init_randoms() and
@@ -75,34 +77,35 @@ func ParseDitherMethod(s string) DitherMethod {
 	return NoDither
 }
 
-// fitsRandoms holds the 10000-entry PRNG lookup table, initialized on
-// first access.
-var fitsRandoms []float32
+// fitsRandomsOnce guards the one-time generation of the PRNG table.
+// Using sync.Once avoids a data race if two goroutines call
+// FitsRandoms concurrently on first use.
+var (
+	fitsRandoms     []float32
+	fitsRandomsOnce sync.Once
+)
 
 // FitsRandoms returns the Park-Miller random lookup table used by the
 // dither algorithm. On first call it generates the sequence and verifies
 // the cfitsio invariant that the internal seed equals 1043618065 after
-// exactly NRandom iterations.
+// exactly NRandom iterations. Thread-safe via sync.Once.
 func FitsRandoms() []float32 {
-	if fitsRandoms != nil {
-		return fitsRandoms
-	}
-	const a = 16807.0
-	const m = 2147483647.0
-	out := make([]float32, NRandom)
-	seed := 1.0
-	for i := 0; i < NRandom; i++ {
-		temp := a * seed
-		seed = temp - m*float64(int64(temp/m))
-		out[i] = float32(seed / m)
-	}
-	if int(seed) != 1043618065 {
-		// This would be a porting bug; cfitsio's fits_init_randoms
-		// checks the exact same invariant.
-		panic("compress: fits_init_randoms invariant violated (got seed != 1043618065)")
-	}
-	fitsRandoms = out
-	return out
+	fitsRandomsOnce.Do(func() {
+		const a = 16807.0
+		const m = 2147483647.0
+		out := make([]float32, NRandom)
+		seed := 1.0
+		for i := 0; i < NRandom; i++ {
+			temp := a * seed
+			seed = temp - m*float64(int64(temp/m))
+			out[i] = float32(seed / m)
+		}
+		if int(seed) != 1043618065 {
+			panic("compress: fits_init_randoms invariant violated (got seed != 1043618065)")
+		}
+		fitsRandoms = out
+	})
+	return fitsRandoms
 }
 
 // Dequantize applies the per-pixel dither + scale + zero reconstruction

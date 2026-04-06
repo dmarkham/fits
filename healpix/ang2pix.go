@@ -90,7 +90,7 @@ func vec2xy(nside int, vx, vy, vz float64) int64 {
 		// Determine the sector column from phi.
 		sector := (phi - phiT) / halfpi
 		column := int(math.Round(sector))
-		column = ((column % 4) + 4) % 4
+		column = ((column % 4) + 4) % 4 // positive modulo: result in [0, 3]
 
 		if north {
 			basehp = column
@@ -112,7 +112,7 @@ func vec2xy(nside int, vx, vy, vz float64) int64 {
 		// Which sector column.
 		sector := (phi - phiT) / halfpi
 		offset := int(math.Round(sector))
-		offset = ((offset % 4) + 4) % 4
+		offset = ((offset % 4) + 4) % 4 // positive modulo: result in [0, 3]
 
 		// Determine which quadrant (north polar / left eq / right eq / south polar).
 		if xx >= ns {

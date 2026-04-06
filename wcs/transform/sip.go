@@ -2,6 +2,7 @@ package transform
 
 import (
 	"math"
+	"strconv"
 
 	"github.com/dmarkham/fits/header"
 )
@@ -147,36 +148,13 @@ func readSIPPoly(h *header.Header, prefix string, order int) *SIPPoly {
 	for i := 0; i <= order; i++ {
 		p.Coeffs[i] = make([]float64, order+1)
 		for j := 0; j+i <= order; j++ {
-			key := prefix + "_" + itoa(i) + "_" + itoa(j)
+			key := prefix + "_" + strconv.Itoa(i) + "_" + strconv.Itoa(j)
 			if v, err := h.Float(key); err == nil {
 				p.Coeffs[i][j] = v
 			}
 		}
 	}
 	return p
-}
-
-// itoa is a tiny helper that avoids importing strconv just for this.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [8]byte
-	i := len(buf)
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	for n > 0 {
-		i--
-		buf[i] = '0' + byte(n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }
 
 // Forward applies the SIP forward correction to a pixel offset (u, v)

@@ -25,8 +25,8 @@ const NullValueInt32 int32 = -2147483647
 // pixel values must not collide with these.
 const nReservedValues = 10
 
-// QuantizeResult holds the output of a QuantizeFloat32 / QuantizeFloat64
-// call when the quantizer succeeded.
+// QuantizeResult holds the output of a QuantizeFloat32 call when the
+// quantizer succeeded.
 type QuantizeResult struct {
 	BScale  float64 // FITS BSCALE: one unit in idata == BScale in fdata
 	BZero   float64 // FITS BZERO: integer 0 in idata == BZero in fdata
@@ -253,29 +253,6 @@ func SubstituteNaN32(data []float32, sentinel float32) int {
 	}
 	return n
 }
-
-// SubstituteNaN64 is the float64 variant of SubstituteNaN32.
-func SubstituteNaN64(data []float64, sentinel float64) int {
-	n := 0
-	for i, v := range data {
-		if v != v {
-			data[i] = sentinel
-			n++
-		}
-	}
-	return n
-}
-
-// Float32NanInt32Bits is the int32 value whose bit pattern equals an
-// IEEE 754 float32 NaN (specifically the one cfitsio uses: all-ones,
-// i.e. int32(-1)). This is used by the NO_QUANTIZE lossless path,
-// where the float tile is gzipped as raw bytes and null positions
-// must be marked as NaN in the byte stream.
-const Float32NanInt32Bits int32 = -1
-
-// Float64NanInt64Bits is the int64 value whose bit pattern equals an
-// IEEE 754 float64 NaN (all-ones, i.e. int64(-1)).
-const Float64NanInt64Bits int64 = -1
 
 // ReplaceSentinelWithNaNBits walks a float32 byte buffer and, wherever
 // the 4-byte value equals the sentinel, overwrites those bytes with

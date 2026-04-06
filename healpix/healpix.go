@@ -46,8 +46,16 @@ const (
 	Nested Scheme = 1 // NESTED ordering: pixels numbered by hierarchical quad-tree
 )
 
+// String returns "RING" or "NESTED".
+func (s Scheme) String() string {
+	if s == Nested {
+		return "NESTED"
+	}
+	return "RING"
+}
+
 // Nside2Npix returns the total number of pixels for the given Nside
-// parameter: npix = 12 * nside².
+// parameter: npix = 12 * nside². Behavior is undefined for nside <= 0.
 func Nside2Npix(nside int) int64 {
 	return 12 * int64(nside) * int64(nside)
 }

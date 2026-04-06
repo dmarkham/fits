@@ -33,9 +33,9 @@ func newBON(pv map[wcs.PVKey]float64, latAxis int) Projection {
 	}
 }
 
-// safeCot returns cot(x) = cos(x)/sin(x), with a large finite value when
-// sin(x) is zero (equator → infinite radius, the SFL degenerate case is
-// special-cased below).
+// safeCot returns cot(x) = cos(x)/sin(x), or 0 when sin(x) is zero.
+// Returning 0 is safe because BON's Forward/Inverse special-case
+// theta1==0 to delegate to SFL before safeCot is called with x=0.
 func safeCot(x float64) float64 {
 	s := math.Sin(x)
 	if s == 0 {

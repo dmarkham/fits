@@ -189,7 +189,7 @@ func fnNoise1Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 		diffs = append(diffs, stdev)
 	}
 	xnoise := medianDoubleLowerMiddle(diffs)
-	return 0.70710678 * xnoise
+	return 0.70710678 * xnoise // 1/sqrt(2): normalize first-difference variance to per-pixel sigma
 }
 
 // fnNoise5Float32 ports FnNoise5_float.

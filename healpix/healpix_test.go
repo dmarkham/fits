@@ -2,6 +2,7 @@ package healpix
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -282,7 +283,7 @@ func loadGolden(t *testing.T, pattern string, nside int) []byte {
 	t.Helper()
 	var name string
 	if nside > 0 {
-		name = filepath.Join(goldenDir, nsideFmt(pattern, nside))
+		name = filepath.Join(goldenDir, fmt.Sprintf(pattern, nside))
 	} else {
 		name = filepath.Join(goldenDir, pattern)
 	}
@@ -293,7 +294,7 @@ func loadGolden(t *testing.T, pattern string, nside int) []byte {
 	return data
 }
 
-func mustUnmarshal(t *testing.T, data []byte, v interface{}) {
+func mustUnmarshal(t *testing.T, data []byte, v any) {
 	t.Helper()
 	if err := json.Unmarshal(data, v); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -301,44 +302,7 @@ func mustUnmarshal(t *testing.T, data []byte, v interface{}) {
 }
 
 func nsideName(n int) string {
-	return nsideFmt("nside%d", n)
-}
-
-func nsideFmt(pattern string, nside int) string {
-	// Simple sprintf replacement.
-	out := make([]byte, 0, len(pattern)+10)
-	for i := 0; i < len(pattern); i++ {
-		if i+1 < len(pattern) && pattern[i] == '%' && pattern[i+1] == 'd' {
-			s := itoa64(int64(nside))
-			out = append(out, s...)
-			i++ // skip 'd'
-		} else {
-			out = append(out, pattern[i])
-		}
-	}
-	return string(out)
-}
-
-func itoa64(n int64) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [20]byte
-	i := len(buf)
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	for n > 0 {
-		i--
-		buf[i] = '0' + byte(n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
+	return fmt.Sprintf("nside%d", n)
 }
 
 // floatEq compares two float64 angle values. Two tolerances:

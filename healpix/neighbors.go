@@ -53,8 +53,8 @@ func GetNeighbors(nside int, pix int64, scheme Scheme) [8]int64 {
 	if x == ns-1 {
 		nbase = baseNeighbor(base, 1, 0)
 		if isNorthPolar(base) {
-			nx = x
-			nx, ny = ny, nx
+			// Crossing +x boundary on a north polar face: swap coords.
+			nx, ny = ny, ns-1
 		}
 	} else {
 		nbase = base
@@ -205,14 +205,14 @@ func GetNeighbors(nside int, pix int64, scheme Scheme) [8]int64 {
 	} else if x == ns-1 {
 		nbase = baseNeighbor(base, 1, 0)
 		if isNorthPolar(base) {
-			nx = x
-			nx, ny = ny, nx
+			// Crossing +x boundary on north polar: swap coords.
+			nx, ny = ny, ns-1
 		}
 	} else if y == 0 {
 		nbase = baseNeighbor(base, 0, -1)
 		if isSouthPolar(base) {
-			ny = y
-			nx, ny = ny, nx
+			// Crossing -y boundary on south polar: swap coords.
+			nx, ny = 0, nx
 		}
 	} else {
 		nbase = base
