@@ -17,3 +17,5 @@ __pycache__/
 # wcs/transform/testdata/wref/wref.c; rebuild locally via
 # `make -C wcs/transform/testdata/wref` when regenerating goldens.
 /wcs/transform/testdata/wref/wref
+# Siril/RawTherapee stats reference harness.
+/stats/testdata/sref/sref
