@@ -74,9 +74,12 @@ func Mean[T Numeric](data []T) float64 {
 	return sum / float64(n)
 }
 
-// MeanStdev returns the arithmetic mean and population standard
-// deviation of data, skipping NaN. Uses float64 accumulators.
-// For empty slices, returns (0, 0).
+// MeanStdev returns the arithmetic mean and sample standard deviation
+// (Bessel-corrected, N-1 denominator) of data, skipping NaN. Uses
+// float64 accumulators. For empty or single-element slices, stdev is 0.
+//
+// The N-1 denominator matches Siril's siril_stats_float_sd, which is
+// the oracle we cross-validate against.
 func MeanStdev[T Numeric](data []T) (mean, stdev float64) {
 	var sum, sum2 float64
 	var n int64
@@ -93,10 +96,14 @@ func MeanStdev[T Numeric](data []T) (mean, stdev float64) {
 		return 0, 0
 	}
 	mean = sum / float64(n)
-	// One-pass variance (cfitsio convention). Can lose precision due to
-	// catastrophic cancellation when values cluster far from zero;
-	// the variance < 0 guard handles the worst case.
-	variance := sum2/float64(n) - mean*mean
+	if n < 2 {
+		return mean, 0
+	}
+	// Two-pass-equivalent sample variance: (sum2 - n*mean^2) / (n-1).
+	// Can lose precision via catastrophic cancellation when values
+	// cluster far from zero; the variance < 0 guard handles the
+	// worst case.
+	variance := (sum2 - float64(n)*mean*mean) / float64(n-1)
 	if variance < 0 {
 		variance = 0
 	}
