@@ -1,5 +1,12 @@
 package stats
 
+import "fmt"
+
+// MaxHistoSize is the upper bound on histogram bins used by the
+// percentile/median family. Callers using the *Buf zero-alloc
+// variants should pre-allocate a histogram slice of this length
+// (or len(data), whichever is smaller).
+const MaxHistoSize = 65536
 
 // Percentile returns the p-th percentile (p in [0, 1], clamped) of data using
 // a histogram-based interpolated algorithm. This is a line-for-line
@@ -14,7 +21,32 @@ package stats
 //  5. Convert back to the original value range
 //
 // For empty slices (or all-NaN), returns 0.
+//
+// Allocates a histogram slice on every call. For hot paths, use
+// PercentileBuf with a caller-supplied scratch buffer.
 func Percentile[T Numeric](data []T, p float64) float64 {
+	histoSize := len(data)
+	if histoSize > MaxHistoSize {
+		histoSize = MaxHistoSize
+	}
+	histo := make([]uint32, histoSize)
+	return PercentileBuf(data, p, histo)
+}
+
+// PercentileBuf is the zero-alloc variant of Percentile. The histo
+// slice must have len >= min(len(data), MaxHistoSize); panics
+// otherwise. histo is zeroed and overwritten on each call, so callers
+// can reuse the same buffer across many calls without resetting it.
+//
+// Typical usage: pre-allocate one MaxHistoSize histogram per goroutine
+// and reuse it for every Percentile/Median/MAD call:
+//
+//	var histo = make([]uint32, stats.MaxHistoSize)
+//	for _, frame := range frames {
+//		med := stats.PercentileBuf(frame, 0.5, histo)
+//		// ...
+//	}
+func PercentileBuf[T Numeric](data []T, p float64, histo []uint32) float64 {
 	if p < 0 {
 		p = 0
 	}
@@ -25,19 +57,21 @@ func Percentile[T Numeric](data []T, p float64) float64 {
 	// to match Siril/RawTherapee's findMinMaxPercentile exactly
 	// (it operates on float data with float scale/bin computation).
 	if f32, ok := any(data).([]float32); ok {
-		return percentileFloat32(f32, float32(p))
+		return percentileFloat32Buf(f32, float32(p), histo)
 	}
 	// Generic path for all other types: float64 arithmetic.
-	return percentileGeneric(data, p)
+	return percentileGenericBuf(data, p, histo)
 }
 
-// percentileFloat32 is the Siril-matching float32 specialization.
+// percentileFloat32Buf is the Siril-matching float32 specialization,
+// taking a caller-supplied histogram scratch buffer.
+//
 // Reimplementation of the findMinMaxPercentile algorithm from
 // RawTherapee/Siril using float32 arithmetic for scale, bin
 // assignment, and CDF walk — matching the C code's behavior.
 // The bin index uses uint16 truncation without clamping, matching
 // the C code's static_cast<uint16_t> behavior.
-func percentileFloat32(data []float32, p float32) float64 {
+func percentileFloat32Buf(data []float32, p float32, histo []uint32) float64 {
 	n := 0
 	for _, v := range data {
 		if v == v { // skip NaN
@@ -69,11 +103,17 @@ func percentileFloat32(data []float32, p float32) float64 {
 		return float64(minVal)
 	}
 	histoSize := n
-	if histoSize > 65536 {
-		histoSize = 65536
+	if histoSize > MaxHistoSize {
+		histoSize = MaxHistoSize
+	}
+	if len(histo) < histoSize {
+		panic(fmt.Sprintf("stats: histo buffer too small: got len %d, need %d", len(histo), histoSize))
+	}
+	histo = histo[:histoSize]
+	for i := range histo {
+		histo[i] = 0
 	}
 	scale := float32(histoSize-1) / (maxVal - minVal)
-	histo := make([]uint32, histoSize)
 	for _, v := range data {
 		if v != v {
 			continue
@@ -107,7 +147,7 @@ func percentileFloat32(data []float32, p float32) float64 {
 	return float64(result)
 }
 
-func percentileGeneric[T Numeric](data []T, p float64) float64 {
+func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float64 {
 	// Collect non-NaN values and find min/max in one pass.
 	n := 0
 	var minVal, maxVal float64
@@ -139,12 +179,18 @@ func percentileGeneric[T Numeric](data []T, p float64) float64 {
 
 	// Histogram with min(65536, n) bins.
 	histoSize := n
-	if histoSize > 65536 {
-		histoSize = 65536
+	if histoSize > MaxHistoSize {
+		histoSize = MaxHistoSize
+	}
+	if len(histo) < histoSize {
+		panic(fmt.Sprintf("stats: histo buffer too small: got len %d, need %d", len(histo), histoSize))
+	}
+	histo = histo[:histoSize]
+	for i := range histo {
+		histo[i] = 0
 	}
 	scale := float64(histoSize-1) / (maxVal - minVal)
 
-	histo := make([]uint32, histoSize)
 	for _, v := range data {
 		if isNaN(v) {
 			continue
@@ -191,13 +237,26 @@ func percentileGeneric[T Numeric](data []T, p float64) float64 {
 }
 
 // Median returns the median of data (the 50th percentile).
+//
+// Allocates a histogram on every call. For hot paths, use MedianBuf
+// with a caller-supplied scratch buffer.
 func Median[T Numeric](data []T) float64 {
 	return Percentile(data, 0.5)
+}
+
+// MedianBuf is the zero-alloc variant of Median. The histo slice must
+// have len >= min(len(data), MaxHistoSize); panics otherwise. histo is
+// zeroed and overwritten on each call.
+func MedianBuf[T Numeric](data []T, histo []uint32) float64 {
+	return PercentileBuf(data, 0.5, histo)
 }
 
 // MAD returns the Median Absolute Deviation: median(|xi - median(x)|).
 // This is the raw MAD — caller multiplies by 1.4826 for Gaussian-
 // equivalent sigma if needed.
+//
+// Allocates two slices on every call (histogram + absolute deviations).
+// For hot paths, use MADWithMedianBuf with caller-supplied scratch.
 func MAD[T Numeric](data []T) float64 {
 	_, mad := MADWithMedian(data)
 	return mad
@@ -205,11 +264,43 @@ func MAD[T Numeric](data []T) float64 {
 
 // MADWithMedian returns the median and the MAD, avoiding double-
 // computing the median when the caller needs both.
+//
+// Allocates two slices on every call. For hot paths, use
+// MADWithMedianBuf.
 func MADWithMedian[T Numeric](data []T) (median, mad float64) {
-	median = Median(data)
-
-	// Compute |xi - median| as float64.
+	histoSize := len(data)
+	if histoSize > MaxHistoSize {
+		histoSize = MaxHistoSize
+	}
+	histo := make([]uint32, histoSize)
 	absDev := make([]float64, 0, len(data))
+	return MADWithMedianBuf(data, histo, absDev)
+}
+
+// MADWithMedianBuf is the zero-alloc variant of MADWithMedian. Caller
+// supplies two scratch slices:
+//
+//   - histo: must have len >= min(len(data), MaxHistoSize); used for
+//     both the median pass and the MAD-of-deviations pass. Zeroed and
+//     overwritten internally.
+//   - absDev: must have cap >= len(data); used as scratch for the
+//     |xi - median| array. Length is reset to 0 on entry, then grown
+//     by append up to the non-NaN count of data.
+//
+// Panics if either buffer is too small.
+//
+// Note: absDev is []float64 (not generic []T) so a single buffer
+// works for any T. The deviations are computed as float64
+// regardless of input type, matching the existing MADWithMedian.
+func MADWithMedianBuf[T Numeric](data []T, histo []uint32, absDev []float64) (median, mad float64) {
+	if cap(absDev) < len(data) {
+		panic(fmt.Sprintf("stats: absDev buffer too small: got cap %d, need %d", cap(absDev), len(data)))
+	}
+
+	median = MedianBuf(data, histo)
+
+	// Reset absDev length and append |xi - median|.
+	absDev = absDev[:0]
 	for _, v := range data {
 		if isNaN(v) {
 			continue
@@ -224,9 +315,10 @@ func MADWithMedian[T Numeric](data []T) (median, mad float64) {
 		return median, 0
 	}
 
-	// MAD = median of the absolute deviations. Use the same
-	// histogram-based percentile on the float64 deviations.
-	mad = Percentile(absDev, 0.5)
+	// MAD = median of the absolute deviations. Reuses the same histo
+	// scratch — PercentileBuf zeroes it on entry, so the previous
+	// median pass's contents don't corrupt this one.
+	mad = PercentileBuf(absDev, 0.5, histo)
 	return median, mad
 }
 
