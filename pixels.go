@@ -20,6 +20,84 @@ type Numeric interface {
 		~int64 | ~uint64 | ~float32 | ~float64
 }
 
+// ReadFloat32 reads the image pixels as float32 normalized to [0, 1].
+// Accepts both *ImageHDU and *CompressedImageHDU — callers do not need
+// to type-switch.
+//
+// For integer BITPIX (8, 16, 32, 64), the normalization maps the full
+// physical range (after BSCALE/BZERO) into [0, 1]:
+//
+//	normalized = (physical - physMin) / (physMax - physMin)
+//
+// The raw range per BITPIX:
+//
+//	BITPIX=8:  [0, 255]        → phys via BSCALE/BZERO
+//	BITPIX=16: [-32768, 32767] → commonly [0, 65535] with BZERO=32768
+//	BITPIX=32: [-2^31, 2^31-1] → phys via BSCALE/BZERO
+//	BITPIX=64: [-2^63, 2^63-1] → phys via BSCALE/BZERO
+//
+// For float BITPIX (-32, -64), values are returned as-is after
+// BSCALE/BZERO application — assumed already in [0, 1] per the Siril
+// convention used by astrophotography processing pipelines.
+//
+// This is the standard entry point for processing pipelines (stacking,
+// debayering, calibration, background extraction, etc.) that operate
+// on normalized float32 data.
+func ReadFloat32(h HDU) ([]float32, error) {
+	var pixels []float32
+	var bp int
+	var bscale, bzero float64
+	var err error
+
+	switch img := h.(type) {
+	case *ImageHDU:
+		pixels, err = ReadPixels[float32](img)
+		bp = img.BITPIX()
+		bscale = img.BSCALE()
+		bzero = img.BZERO()
+	case *CompressedImageHDU:
+		pixels, err = ReadPixelsCompressed[float32](img)
+		bp = img.BITPIX()
+		bscale = img.BSCALE()
+		bzero = img.BZERO()
+	default:
+		return nil, fmt.Errorf("fits.ReadFloat32: unsupported HDU type %T (need *ImageHDU or *CompressedImageHDU)", h)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Float BITPIX: pass through — assumed already [0, 1].
+	if bp < 0 {
+		return pixels, nil
+	}
+
+	// Integer BITPIX: normalize (physical - physMin) / (physMax - physMin).
+	var rawMin, rawMax float64
+	switch bp {
+	case 8:
+		rawMin, rawMax = 0, 255
+	case 16:
+		rawMin, rawMax = -32768, 32767
+	case 32:
+		rawMin, rawMax = -2147483648, 2147483647
+	case 64:
+		rawMin, rawMax = -9223372036854775808, 9223372036854775807
+	}
+	physMin := rawMin*bscale + bzero
+	physMax := rawMax*bscale + bzero
+	span := float32(physMax - physMin)
+	if span == 0 {
+		return pixels, nil
+	}
+	offset := float32(physMin)
+	inv := 1.0 / span
+	for i, v := range pixels {
+		pixels[i] = (v - offset) * inv
+	}
+	return pixels, nil
+}
+
 // ReadPixels reads every pixel of h into a single flat slice of type T,
 // applying BSCALE/BZERO. Returns an error (wrapping ErrTypeMismatch) if the
 // requested type cannot losslessly hold the file's data. Row-major order
