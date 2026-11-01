@@ -243,7 +243,8 @@ func (t *TPV) Forward(xi, eta float64) (xiOut, etaOut float64) {
 // (vs. 6 for the previous numerical-Jacobian version). The analytic
 // Jacobian is also numerically stable at any distance from the origin,
 // unlike finite differences which lose precision at the h ~ 1e-7
-// scale.
+// scale. ok is false if the iteration does not converge within 50
+// steps, for instance where the polynomial has no inverse.
 func (t *TPV) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 	// Initial guess: pass-through (TPV is close to identity for
 	// small distortions).
@@ -265,5 +266,6 @@ func (t *TPV) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 		xi += (dfydeta*rx - dfxdeta*ry) / det
 		eta += (-dfydxi*rx + dfxdxi*ry) / det
 	}
-	return xi, eta, true
+	// Not converged: the polynomial may have no inverse at this point.
+	return xi, eta, false
 }

@@ -58,8 +58,8 @@ type Transform struct {
 // New builds a Transform from a parsed *wcs.Header. Returns an error if
 // the header is not a 2-D celestial WCS, if the linear transform is
 // singular, if the projection code is not supported (see
-// ErrUnsupportedProjection in projection.go), or if CTYPE declares a
-// distortion other than SIP.
+// ErrUnsupportedProjection in projection.go), or if the celestial CTYPEs
+// declare a distortion other than SIP or different distortions.
 //
 // SIP distortion ("RA---TAN-SIP") is applied automatically from
 // h.SIP; a "-SIP" CTYPE without SIP coefficients is treated as
@@ -81,13 +81,17 @@ func New(h *wcs.Header) (*Transform, error) {
 			h.LonAxis, h.LatAxis)
 	}
 
+	lonDist, latDist := celestialDistCodes(h)
+	if lonDist != latDist {
+		return nil, fmt.Errorf("wcs/transform: celestial axes declare different distortions (%q, %q)", lonDist, latDist)
+	}
 	var sip *SIP
-	switch dist := celestialDistCode(h); dist {
+	switch lonDist {
 	case "":
 	case "SIP":
 		sip = sipFromWCS(h.SIP)
 	default:
-		return nil, fmt.Errorf("wcs/transform: unsupported distortion %q in CTYPE", dist)
+		return nil, fmt.Errorf("wcs/transform: unsupported distortion %q in CTYPE", lonDist)
 	}
 
 	code := h.CelestialProjCode()
@@ -299,13 +303,17 @@ func (t *Transform) SkyToPixel(alpha, delta float64) (p1, p2 float64, err error)
 	return dx + t.crpixX, dy + t.crpixY, nil
 }
 
-// celestialDistCode returns the distortion code declared on the celestial
-// longitude axis, or "" if none (or if the header predates DistCode).
-func celestialDistCode(h *wcs.Header) string {
-	if h.LonAxis < 1 || h.LonAxis > len(h.DistCode) {
-		return ""
+// celestialDistCodes returns the distortion codes declared on the
+// celestial longitude and latitude axes ("" for none, or for a header
+// built without DistCode).
+func celestialDistCodes(h *wcs.Header) (lon, lat string) {
+	code := func(axis int) string {
+		if axis < 1 || axis > len(h.DistCode) {
+			return ""
+		}
+		return h.DistCode[axis-1]
 	}
-	return h.DistCode[h.LonAxis-1]
+	return code(h.LonAxis), code(h.LatAxis)
 }
 
 // Code returns the projection code in use (e.g. "TAN", or "TPV" for TAN

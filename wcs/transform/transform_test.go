@@ -653,3 +653,52 @@ func TestNewRejectsUnknownDistortion(t *testing.T) {
 		t.Fatal("expected an error for distortion XYZ")
 	}
 }
+
+// TestNewRejectsInconsistentDistortion: both celestial axes must declare
+// the same distortion; a latitude-only suffix is not silently dropped.
+func TestNewRejectsInconsistentDistortion(t *testing.T) {
+	for _, ct := range [][2]string{
+		{"RA---TAN", "DEC--TAN-XYZ"},
+		{"RA---TAN", "DEC--TAN-SIP"},
+		{"RA---TAN-SIP", "DEC--TAN"},
+		{"RA---TAN-SIP", "DEC--TAN-XYZ"},
+	} {
+		w, err := wcs.Parse(newHeader("NAXIS", int64(2),
+			"CTYPE1", ct[0], "CTYPE2", ct[1], "CDELT1", -1e-3, "CDELT2", 1e-3,
+			"A_ORDER", int64(2), "B_ORDER", int64(2)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := New(w); err == nil {
+			t.Errorf("%s / %s: want an error", ct[0], ct[1])
+		}
+	}
+}
+
+// TestSIPSkyToPixelErrorsWithoutInverse: a sky position whose undistorted
+// offset is -10000 px has no SIP preimage under u + 1e-4·u², so
+// SkyToPixel must return an error instead of a wrong pixel.
+func TestSIPSkyToPixelErrorsWithoutInverse(t *testing.T) {
+	parse := func(suffix string) *Transform {
+		w, err := wcs.Parse(newHeader("NAXIS", int64(2),
+			"CTYPE1", "RA---TAN"+suffix, "CTYPE2", "DEC--TAN"+suffix,
+			"CRVAL1", 150.0, "CRVAL2", 2.0, "CRPIX1", 1.0, "CRPIX2", 1.0,
+			"CDELT1", -1e-5, "CDELT2", 1e-5,
+			"A_ORDER", int64(2), "A_2_0", 1e-4, "B_ORDER", int64(2)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr, err := New(w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr
+	}
+	a, d, err := parse("").PixelToSky(-10000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x, y, err := parse("-SIP").SkyToPixel(a, d); err == nil {
+		t.Errorf("SkyToPixel(%v, %v) = (%v, %v), want an error", a, d, x, y)
+	}
+}

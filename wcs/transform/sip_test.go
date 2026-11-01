@@ -115,3 +115,60 @@ func TestSIPAPInversePolynomial(t *testing.T) {
 		t.Fatalf("BP inverse: v=%v", v)
 	}
 }
+
+// TestSIPInverseReportsNonConvergence: u + 1e-4·u² never reaches -10000
+// (the discriminant is negative), so Newton cannot converge and Inverse
+// must say so rather than return a point 10000 px off.
+func TestSIPInverseReportsNonConvergence(t *testing.T) {
+	sip := &SIP{
+		A: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 0}, {0, 0, 0}, {1e-4, 0, 0}}},
+		B: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}},
+	}
+	if u, v, ok := sip.Inverse(-10000, 0); ok {
+		fu, fv := sip.Forward(u, v)
+		t.Errorf("Inverse reported ok at (%v, %v); forward gives (%v, %v), want (-10000, 0)", u, v, fu, fv)
+	}
+}
+
+// TestSIPInverseConvergesFarFromCRPIX: now that running out of iterations
+// is a failure, a well-behaved inverse must still converge (and report ok)
+// thousands of pixels from CRPIX.
+func TestSIPInverseConvergesFarFromCRPIX(t *testing.T) {
+	sip := &SIP{
+		A: &SIPPoly{Order: 3, Coeffs: [][]float64{{0, 0, 2e-7, 0}, {0, -1e-7, 0, 0}, {-5e-8, 0, 0, 0}, {3e-11, 0, 0, 0}}},
+		B: &SIPPoly{Order: 3, Coeffs: [][]float64{{0, 0, -7e-8, 1e-11}, {0, -2e-7, 0, 0}, {-1.5e-7, 0, 0, 0}, {0, 0, 0, 0}}},
+	}
+	for _, p := range [][2]float64{{8000, -8000}, {-9500, 9100}, {12000, 300}} {
+		up, vp := sip.Forward(p[0], p[1])
+		u, v, ok := sip.Inverse(up, vp)
+		if !ok {
+			t.Fatalf("Inverse did not converge at %v", p)
+		}
+		if math.Abs(u-p[0]) > 1e-6 || math.Abs(v-p[1]) > 1e-6 {
+			t.Errorf("round trip %v → (%v, %v)", p, u, v)
+		}
+	}
+}
+
+// TestParseSIPRejectsInvalidOrder: orders outside 0..wcs.MaxSIPOrder are
+// an error, not a panic or a huge allocation.
+func TestParseSIPRejectsInvalidOrder(t *testing.T) {
+	for _, tc := range []struct {
+		key   string
+		order int64
+	}{
+		{"A_ORDER", -2}, {"B_ORDER", 1000}, {"AP_ORDER", -1}, {"BP_ORDER", 21},
+	} {
+		h := header.New()
+		for _, k := range []string{"A_ORDER", "B_ORDER", "AP_ORDER", "BP_ORDER"} {
+			v := int64(2)
+			if k == tc.key {
+				v = tc.order
+			}
+			h.Set(k, v, "")
+		}
+		if sip, err := ParseSIP(h); err == nil {
+			t.Errorf("%s = %d: got %+v, want an error", tc.key, tc.order, sip)
+		}
+	}
+}

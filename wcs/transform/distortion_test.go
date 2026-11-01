@@ -248,3 +248,15 @@ func TestTNXAbsent(t *testing.T) {
 		t.Fatal("expected nil for header without WAT")
 	}
 }
+
+// TestTPVInverseReportsNonConvergence: with xi' = xi + 0.02·xi², the
+// target xi' = -50° has no real solution, so Inverse must not report ok.
+func TestTPVInverseReportsNonConvergence(t *testing.T) {
+	tpv := &TPV{}
+	tpv.Axis1[1], tpv.Axis1[4] = 1, 0.02
+	tpv.Axis2[1] = 1
+	if xi, eta, ok := tpv.Inverse(-50, 0); ok {
+		fx, fy := tpv.Forward(xi, eta)
+		t.Errorf("Inverse reported ok at (%v, %v); forward gives (%v, %v), want (-50, 0)", xi, eta, fx, fy)
+	}
+}

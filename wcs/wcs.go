@@ -137,7 +137,8 @@ func Parse(h *header.Header) (*Header, error) { return ParseAlt(h, "") }
 // Parse never panics on malformed input; keywords that fail to parse as
 // their expected type are silently replaced with their defaults, matching
 // the behavior of astropy.wcs.WCS. Structural contradictions (PC+CD both
-// present) return an error.
+// present) and SIP orders outside 0..MaxSIPOrder on a "-SIP" header return
+// an error.
 func ParseAlt(h *header.Header, alt string) (*Header, error) {
 	if len(alt) > 1 {
 		return nil, fmt.Errorf("fits/wcs: alt WCS identifier %q must be 0 or 1 character", alt)
@@ -306,7 +307,11 @@ func parseWithAlt(h *header.Header, alt string) (*Header, error) {
 		}
 	}
 	if w.IsCelestial() && w.DistCode[w.LonAxis-1] == "SIP" {
-		w.SIP = ParseSIP(h)
+		sip, err := ParseSIP(h)
+		if err != nil {
+			return nil, err
+		}
+		w.SIP = sip
 	}
 
 	return w, nil

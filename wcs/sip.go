@@ -1,6 +1,7 @@
 package wcs
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/dmarkham/fits/header"
@@ -22,32 +23,50 @@ type SIP struct {
 	AP, BP *SIPPoly
 }
 
+// MaxSIPOrder is the largest SIP polynomial order ParseSIP accepts. Real
+// solutions stay well below it (HST, Spitzer and astrometry.net use 2-5);
+// the bound keeps a corrupt order from forcing a huge allocation.
+const MaxSIPOrder = 20
+
 // ParseSIP reads the SIP keywords (A_ORDER, A_i_j, B_ORDER, B_i_j and the
-// optional AP_/BP_ inverse) from h. It returns nil if A_ORDER or B_ORDER
-// is absent. It does not look at CTYPE; Parse calls it only when the
+// optional AP_/BP_ inverse) from h. It returns nil, nil if A_ORDER or
+// B_ORDER is absent, and an error if any declared order is outside
+// 0..MaxSIPOrder. It does not look at CTYPE; Parse calls it only when the
 // celestial CTYPEs carry the "-SIP" suffix.
-func ParseSIP(h *header.Header) *SIP {
+func ParseSIP(h *header.Header) (*SIP, error) {
 	aOrder, errA := h.Int("A_ORDER")
 	bOrder, errB := h.Int("B_ORDER")
 	if errA != nil || errB != nil {
-		return nil
+		return nil, nil
 	}
-	sip := &SIP{
-		A: readSIPPoly(h, "A", int(aOrder)),
-		B: readSIPPoly(h, "B", int(bOrder)),
+	sip := &SIP{}
+	var err error
+	if sip.A, err = readSIPPoly(h, "A", aOrder); err != nil {
+		return nil, err
+	}
+	if sip.B, err = readSIPPoly(h, "B", bOrder); err != nil {
+		return nil, err
 	}
 	if apOrder, err := h.Int("AP_ORDER"); err == nil {
 		if bpOrder, err := h.Int("BP_ORDER"); err == nil {
-			sip.AP = readSIPPoly(h, "AP", int(apOrder))
-			sip.BP = readSIPPoly(h, "BP", int(bpOrder))
+			if sip.AP, err = readSIPPoly(h, "AP", apOrder); err != nil {
+				return nil, err
+			}
+			if sip.BP, err = readSIPPoly(h, "BP", bpOrder); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return sip
+	return sip, nil
 }
 
 // readSIPPoly reads a polynomial from the header given its prefix ("A",
 // "B", "AP", "BP") and its declared order.
-func readSIPPoly(h *header.Header, prefix string, order int) *SIPPoly {
+func readSIPPoly(h *header.Header, prefix string, declared int64) (*SIPPoly, error) {
+	if declared < 0 || declared > MaxSIPOrder {
+		return nil, fmt.Errorf("fits/wcs: %s_ORDER = %d outside 0..%d", prefix, declared, MaxSIPOrder)
+	}
+	order := int(declared)
 	p := &SIPPoly{
 		Order:  order,
 		Coeffs: make([][]float64, order+1),
@@ -61,5 +80,5 @@ func readSIPPoly(h *header.Header, prefix string, order int) *SIPPoly {
 			}
 		}
 	}
-	return p
+	return p, nil
 }

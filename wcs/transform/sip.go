@@ -116,14 +116,19 @@ type SIP struct {
 }
 
 // ParseSIP extracts SIP coefficients from the given image header. Returns
-// nil, nil if A_ORDER or B_ORDER is absent; it does not look at CTYPE.
-// The error result is always nil and is kept for compatibility.
+// nil, nil if A_ORDER or B_ORDER is absent; it does not look at CTYPE. An
+// error indicates a malformed SIP section (an order outside
+// 0..wcs.MaxSIPOrder).
 //
 // Headers parsed with wcs.Parse already carry these coefficients in
 // wcs.Header.SIP when CTYPE ends in "-SIP", and New applies them; call
 // ParseSIP only when applying SIP yourself.
 func ParseSIP(h *header.Header) (*SIP, error) {
-	return sipFromWCS(wcs.ParseSIP(h)), nil
+	s, err := wcs.ParseSIP(h)
+	if err != nil {
+		return nil, err
+	}
+	return sipFromWCS(s), nil
 }
 
 // sipFromWCS converts the parsed keywords into a *SIP, or nil.
@@ -150,8 +155,10 @@ func (s *SIP) Forward(u, v float64) (uOut, vOut float64) {
 }
 
 // Inverse applies the SIP inverse correction. If AP/BP are present, it
-// evaluates them directly. Otherwise it iterates Newton's method against
-// the forward polynomial using the analytic Jacobian.
+// evaluates them directly (an approximation by design, always ok).
+// Otherwise it iterates Newton's method against the forward polynomial
+// using the analytic Jacobian, and ok is false if that does not converge
+// within 50 iterations (for instance where no inverse exists).
 //
 // The forward map is F(u, v) = (u + A(u, v), v + B(u, v)), so the
 // Jacobian is
@@ -191,5 +198,7 @@ func (s *SIP) Inverse(uPrime, vPrime float64) (u, v float64, ok bool) {
 		u += (j22*ru - j12*rv) / det
 		v += (-j21*ru + j11*rv) / det
 	}
-	return u, v, true
+	// Not converged: there may be no inverse at all (e.g. a quadratic
+	// term that never reaches the target), so do not report success.
+	return u, v, false
 }

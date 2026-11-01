@@ -338,3 +338,31 @@ func TestParseEpochFallback(t *testing.T) {
 		t.Fatalf("EPOCH fallback: %v", w.Equinox)
 	}
 }
+
+// TestParseRejectsInvalidSIPOrder: a "-SIP" header with an order outside
+// 0..MaxSIPOrder is an error, never a panic. Without the suffix the SIP
+// keywords are not read, so the same orders are harmless.
+func TestParseRejectsInvalidSIPOrder(t *testing.T) {
+	for _, order := range []int64{-2, MaxSIPOrder + 1, 1 << 40} {
+		for _, suffix := range []string{"-SIP", ""} {
+			h := newHeader("NAXIS", int64(2),
+				"CTYPE1", "RA---TAN"+suffix, "CTYPE2", "DEC--TAN"+suffix,
+				"CDELT1", -1e-3, "CDELT2", 1e-3,
+				"A_ORDER", order, "B_ORDER", int64(2))
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Errorf("A_ORDER=%d %q: Parse panicked: %v", order, suffix, r)
+					}
+				}()
+				_, err := Parse(h)
+				if suffix != "" && err == nil {
+					t.Errorf("A_ORDER=%d: want an error", order)
+				}
+				if suffix == "" && err != nil {
+					t.Errorf("A_ORDER=%d without -SIP: unexpected error %v", order, err)
+				}
+			}()
+		}
+	}
+}
