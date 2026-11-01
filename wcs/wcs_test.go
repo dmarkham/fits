@@ -202,23 +202,111 @@ func TestSplitCTypeVariants(t *testing.T) {
 		in       string
 		axisType string
 		projCode string
+		distCode string
 	}{
-		{"RA---TAN", "RA", "TAN"},
-		{"DEC--TAN", "DEC", "TAN"},
-		{"GLON-CAR", "GLON", "CAR"},
-		{"GLAT-CAR", "GLAT", "CAR"},
-		{"ELON-AIT", "ELON", "AIT"},
-		{"RA---SIN", "RA", "SIN"},
-		{"DEC--SIN", "DEC", "SIN"},
-		{"FREQ", "FREQ", ""},
-		{"WAVE", "WAVE", ""},
-		{"", "", ""},
+		{"RA---TAN", "RA", "TAN", ""},
+		{"DEC--TAN", "DEC", "TAN", ""},
+		{"GLON-CAR", "GLON", "CAR", ""},
+		{"GLAT-CAR", "GLAT", "CAR", ""},
+		{"ELON-AIT", "ELON", "AIT", ""},
+		{"RA---SIN", "RA", "SIN", ""},
+		{"DEC--SIN", "DEC", "SIN", ""},
+		{"RA---TAN-SIP", "RA", "TAN", "SIP"},
+		{"DEC--TAN-SIP", "DEC", "TAN", "SIP"},
+		{"ra---tan-sip", "RA", "TAN", "SIP"},
+		{"RA---TPV", "RA", "TPV", ""},
+		{"FREQ", "FREQ", "", ""},
+		{"WAVE", "WAVE", "", ""},
+		{"", "", "", ""},
 	}
 	for _, c := range cases {
-		at, pc := splitCType(c.in)
-		if at != c.axisType || pc != c.projCode {
-			t.Errorf("splitCType(%q) = (%q,%q), want (%q,%q)", c.in, at, pc, c.axisType, c.projCode)
+		at, pc, dc := splitCType(c.in)
+		if at != c.axisType || pc != c.projCode || dc != c.distCode {
+			t.Errorf("splitCType(%q) = (%q,%q,%q), want (%q,%q,%q)",
+				c.in, at, pc, dc, c.axisType, c.projCode, c.distCode)
 		}
+	}
+}
+
+// sipCards is a TAN WCS with a quadratic SIP distortion and its inverse.
+var sipCards = []any{
+	"NAXIS", int64(2),
+	"CRVAL1", 101.5, "CRVAL2", 28.9,
+	"CRPIX1", 2640.5, "CRPIX2", 2640.5,
+	"CD1_1", 4.5e-05, "CD1_2", 0.0, "CD2_1", 0.0, "CD2_2", -4.5e-05,
+	"A_ORDER", int64(2), "A_2_0", -5.4e-08, "A_1_1", -1.0e-07,
+	"B_ORDER", int64(2), "B_0_2", -7.1e-08,
+	"AP_ORDER", int64(2), "AP_2_0", 5.4e-08,
+	"BP_ORDER", int64(2), "BP_0_2", 7.1e-08,
+}
+
+// TestParseSIPSuffix: "RA---TAN-SIP" is a celestial TAN axis with a SIP
+// distortion, and the SIP coefficients are read into Header.SIP.
+func TestParseSIPSuffix(t *testing.T) {
+	h := newHeader(append([]any{"CTYPE1", "RA---TAN-SIP", "CTYPE2", "DEC--TAN-SIP"}, sipCards...)...)
+	w, err := Parse(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.IsCelestial() {
+		t.Fatalf("RA---TAN-SIP not celestial: AxisType=%v", w.AxisType)
+	}
+	if got := w.CelestialProjCode(); got != "TAN" {
+		t.Errorf("CelestialProjCode() = %q, want TAN", got)
+	}
+	if w.DistCode[0] != "SIP" || w.DistCode[1] != "SIP" {
+		t.Errorf("DistCode = %v, want [SIP SIP]", w.DistCode)
+	}
+	if w.SIP == nil {
+		t.Fatal("SIP coefficients not parsed")
+	}
+	if w.SIP.A.Order != 2 || w.SIP.A.Coeffs[2][0] != -5.4e-08 || w.SIP.A.Coeffs[1][1] != -1.0e-07 {
+		t.Errorf("A = %+v", w.SIP.A)
+	}
+	if w.SIP.B.Coeffs[0][2] != -7.1e-08 {
+		t.Errorf("B_0_2 = %v", w.SIP.B.Coeffs[0][2])
+	}
+	if w.SIP.AP == nil || w.SIP.AP.Coeffs[2][0] != 5.4e-08 || w.SIP.BP == nil || w.SIP.BP.Coeffs[0][2] != 7.1e-08 {
+		t.Errorf("AP/BP = %+v / %+v", w.SIP.AP, w.SIP.BP)
+	}
+}
+
+// TestParseSIPKeysWithoutSuffix: SIP keywords are only read when CTYPE
+// declares "-SIP". ATLAS difference images, for example, declare TPV and
+// carry a redundant SIP set that must not be applied on top of it.
+func TestParseSIPKeysWithoutSuffix(t *testing.T) {
+	for _, ct := range [][2]string{{"RA---TAN", "DEC--TAN"}, {"RA---TPV", "DEC--TPV"}} {
+		h := newHeader(append([]any{"CTYPE1", ct[0], "CTYPE2", ct[1]}, sipCards...)...)
+		w, err := Parse(h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.SIP != nil {
+			t.Errorf("%s: SIP parsed without a -SIP suffix", ct[0])
+		}
+		if w.DistCode[0] != "" {
+			t.Errorf("%s: DistCode = %q, want empty", ct[0], w.DistCode[0])
+		}
+	}
+}
+
+// TestParseSIPSuffixWithoutCoefficients: a "-SIP" CTYPE with no A_ORDER /
+// B_ORDER parses as celestial with no SIP polynomial (as astropy.wcs).
+func TestParseSIPSuffixWithoutCoefficients(t *testing.T) {
+	h := newHeader("NAXIS", int64(2), "CTYPE1", "RA---TAN-SIP", "CTYPE2", "DEC--TAN-SIP",
+		"CRVAL1", 10.0, "CRVAL2", 20.0, "CDELT1", -1e-3, "CDELT2", 1e-3)
+	w, err := Parse(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.IsCelestial() || w.CelestialProjCode() != "TAN" {
+		t.Fatalf("not a celestial TAN header: %v", w)
+	}
+	if w.DistCode[0] != "SIP" {
+		t.Errorf("DistCode = %v", w.DistCode)
+	}
+	if w.SIP != nil {
+		t.Errorf("SIP = %+v, want nil", w.SIP)
 	}
 }
 

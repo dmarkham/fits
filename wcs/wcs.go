@@ -38,8 +38,9 @@ type PVKey struct {
 
 // Header is the parsed WCS keyword set for one coordinate representation.
 //
-// The slices (CType, CUnit, CRVal, CRPix, CDelt, ProjCode, AxisType) are
-// indexed 0-based: CType[0] corresponds to the FITS keyword CTYPE1.
+// The slices (CType, CUnit, CRVal, CRPix, CDelt, ProjCode, DistCode,
+// AxisType) are indexed 0-based: CType[0] corresponds to the FITS keyword
+// CTYPE1.
 //
 // PC and CD are row-major NAxis × NAxis matrices in the same 0-based
 // indexing: PC[i][j] corresponds to PCi+1_j+1. PC is always populated
@@ -86,6 +87,18 @@ type Header struct {
 	// of each CTYPEi (e.g. "TAN" from "RA---TAN"). For non-celestial axes
 	// this is the empty string.
 	ProjCode []string
+
+	// DistCode holds the 3-letter distortion code appended to a celestial
+	// CTYPEi per Paper IV (e.g. "SIP" from "RA---TAN-SIP"), or the empty
+	// string when CTYPEi declares none.
+	DistCode []string
+
+	// SIP holds the SIP distortion coefficients when the celestial CTYPEs
+	// declare "-SIP" and the header carries A_ORDER and B_ORDER; nil
+	// otherwise. SIP keywords without the CTYPE suffix are not read, so a
+	// header that declares another distortion (e.g. TPV) alongside a
+	// redundant SIP set is not distorted twice.
+	SIP *SIP
 
 	// AxisType holds the axis kind extracted from the leading portion of
 	// CTYPEi (e.g. "RA", "DEC", "GLON", "GLAT", "ELON", "ELAT"). Empty for
@@ -158,6 +171,7 @@ func parseWithAlt(h *header.Header, alt string) (*Header, error) {
 	w.CRPix = make([]float64, w.NAxis)
 	w.CDelt = make([]float64, w.NAxis)
 	w.ProjCode = make([]string, w.NAxis)
+	w.DistCode = make([]string, w.NAxis)
 	w.AxisType = make([]string, w.NAxis)
 
 	// Defaults per Paper I:
@@ -278,9 +292,9 @@ func parseWithAlt(h *header.Header, alt string) (*Header, error) {
 		w.MJDObs = v
 	}
 
-	// Derive projection code and axis type from each CTYPE.
+	// Derive axis type, projection and distortion codes from each CTYPE.
 	for i := range w.CType {
-		w.AxisType[i], w.ProjCode[i] = splitCType(w.CType[i])
+		w.AxisType[i], w.ProjCode[i], w.DistCode[i] = splitCType(w.CType[i])
 	}
 	// Identify the longitude/latitude axis pair (1-based indices).
 	for i, a := range w.AxisType {
@@ -290,6 +304,9 @@ func parseWithAlt(h *header.Header, alt string) (*Header, error) {
 		case "DEC", "GLAT", "ELAT", "SLAT", "HLAT":
 			w.LatAxis = i + 1
 		}
+	}
+	if w.IsCelestial() && w.DistCode[w.LonAxis-1] == "SIP" {
+		w.SIP = ParseSIP(h)
 	}
 
 	return w, nil
@@ -421,19 +438,25 @@ func floatValue(v any) (float64, bool) {
 	return 0, false
 }
 
-// splitCType parses a CTYPE value into an axis type and projection code.
+// splitCType parses a CTYPE value into an axis type, projection code and
+// distortion code.
 //
 // CTYPEi for celestial axes follows the pattern "NNNNN-TTT" where NNNNN is
 // a 1-to-4-character axis type code (e.g. "RA", "DEC", "GLON") padded on
 // the right with '-' characters to column 5, followed by the 3-character
-// projection code. Examples: "RA---TAN", "DEC--TAN", "GLON-CAR".
+// projection code. Examples: "RA---TAN", "DEC--TAN", "GLON-CAR". Paper IV
+// allows a further "-DDD" distortion code, e.g. "RA---TAN-SIP".
 //
 // For non-celestial or free-form CTYPE values the entire string becomes
-// the axis type and ProjCode is empty.
-func splitCType(ctype string) (axisType, projCode string) {
+// the axis type and ProjCode and DistCode are empty.
+func splitCType(ctype string) (axisType, projCode, distCode string) {
 	ctype = strings.TrimSpace(ctype)
+	if len(ctype) >= 12 && ctype[len(ctype)-4] == '-' && ctype[len(ctype)-8] == '-' {
+		distCode = strings.ToUpper(ctype[len(ctype)-3:])
+		ctype = ctype[:len(ctype)-4]
+	}
 	if len(ctype) < 5 {
-		return ctype, ""
+		return ctype, "", ""
 	}
 	// The hyphen-padded axis type ends at the first non-hyphen character of
 	// the trailing 3-character projection code. Equivalently: strip trailing
@@ -442,9 +465,9 @@ func splitCType(ctype string) (axisType, projCode string) {
 	if len(ctype) >= 8 && ctype[len(ctype)-4] == '-' {
 		prefix := strings.TrimRight(ctype[:len(ctype)-3], "-")
 		projCode = ctype[len(ctype)-3:]
-		return strings.ToUpper(prefix), strings.ToUpper(projCode)
+		return strings.ToUpper(prefix), strings.ToUpper(projCode), distCode
 	}
-	return strings.ToUpper(ctype), ""
+	return strings.ToUpper(ctype), "", ""
 }
 
 // String returns a short human-readable summary used in diagnostic output.

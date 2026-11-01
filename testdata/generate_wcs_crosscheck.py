@@ -26,6 +26,7 @@ The fixture set:
   - COBE/DMR    — CSC (historical)
   - 2MASS       — TNX (IRAF)
   - ATLAS       — TPV (difference-image stamp, CRPIX far off the cutout)
+  - UH88        — TAN + SIP (astrometry.net solution, 5280x5280 detector)
 
 Each fixture samples pixel → sky at ~20 grid points across the detector
 so that small-angle and large-angle behavior are both exercised.
@@ -58,7 +59,9 @@ def sample_wcs(header_cards, name, source, projcode, tolerance=1e-9, n=5):
     vectors = []
     for y in ys:
         for x in xs:
-            sky = w.wcs_pix2world([[x, y]], 0)[0]
+            # all_pix2world applies SIP; wcs_pix2world (core wcslib only)
+            # does not. The two agree for every fixture without SIP.
+            sky = w.all_pix2world([[x, y]], 0)[0]
             # astropy returns NaN for pixels outside the projection's
             # valid domain. JSON does not support NaN; skip those points.
             if not (np.isfinite(sky[0]) and np.isfinite(sky[1])):
@@ -89,7 +92,22 @@ def sample_wcs(header_cards, name, source, projcode, tolerance=1e-9, n=5):
             idx = int(k[4:])
             pvs.append({"axis": axis, "index": idx, "value": float(v)})
 
-    return {
+    def sip_poly(prefix):
+        order_key = prefix + "_ORDER"
+        if order_key not in header_cards:
+            return None
+        order = int(header_cards[order_key])
+        coeffs = [[float(header_cards.get(f"{prefix}_{i}_{j}", 0.0)) if i + j <= order else 0.0
+                   for j in range(order + 1)] for i in range(order + 1)]
+        return {"Order": order, "Coeffs": coeffs}
+
+    sip = None
+    if header_cards["CTYPE1"].endswith("-SIP") and sip_poly("A") and sip_poly("B"):
+        sip = {"A": sip_poly("A"), "B": sip_poly("B")}
+        if sip_poly("AP") and sip_poly("BP"):
+            sip["AP"], sip["BP"] = sip_poly("AP"), sip_poly("BP")
+
+    out = {
         "name": name,
         "source": source,
         "ctype1": header_cards["CTYPE1"],
@@ -106,6 +124,9 @@ def sample_wcs(header_cards, name, source, projcode, tolerance=1e-9, n=5):
         "tolerance": tolerance,
         "test_vectors": vectors,
     }
+    if sip:
+        out["sip"] = sip
+    return out
 
 
 def main():
@@ -207,6 +228,29 @@ def main():
         "PV2_22": 1.935996964426e-08,
         "RADESYS": "FK5", "EQUINOX": 2000.0,
     }, "atlas_tpv", "ATLAS difference stamp", "TPV"))
+
+    # UH88 TAN-SIP header (astrometry.net solution), full 5280x5280 frame:
+    # SIP corrections reach ~2 px at the corners.
+    fixtures.append(sample_wcs({
+        "NAXIS": 2, "NAXIS1": 5280, "NAXIS2": 5280,
+        "CTYPE1": "RA---TAN-SIP", "CTYPE2": "DEC--TAN-SIP",
+        "CUNIT1": "deg", "CUNIT2": "deg",
+        "CRVAL1": 101.531931895, "CRVAL2": 28.9319723058,
+        "CRPIX1": 2640.5, "CRPIX2": 2640.5,
+        "CD1_1": 4.56664458396e-05, "CD1_2": 1.65789570401e-07,
+        "CD2_1": 1.70901177979e-07, "CD2_2": -4.56699743556e-05,
+        "A_ORDER": 2,
+        "A_0_2": -4.51136534482e-08, "A_1_1": -1.02357905543e-07, "A_2_0": -5.43669607604e-08,
+        "B_ORDER": 2,
+        "B_0_2": -7.143588012e-08, "B_1_1": -2.07643869017e-07, "B_2_0": -1.51807826685e-07,
+        "AP_ORDER": 2,
+        "AP_0_0": 5.53851868084e-07, "AP_0_1": 1.77638829679e-07, "AP_0_2": 4.51135313836e-08,
+        "AP_1_0": 1.98630755541e-07, "AP_1_1": 1.0235777946e-07, "AP_2_0": 5.43668700797e-08,
+        "BP_ORDER": 2,
+        "BP_0_0": 1.1123140637e-06, "BP_0_1": 3.53518741358e-07, "BP_0_2": 7.143564447e-08,
+        "BP_1_0": 4.11686097018e-07, "BP_1_1": 2.07643618938e-07, "BP_2_0": 1.51807636879e-07,
+        "RADESYS": "FK5", "EQUINOX": 2000.0,
+    }, "uh88_sip", "UH88 (astrometry.net)", "TAN"))
 
     # Add more fixtures as real headers become available:
     # - HST ACS with SIP (A_ORDER, B_ORDER, A_i_j, B_i_j)

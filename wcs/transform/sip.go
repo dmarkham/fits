@@ -2,9 +2,9 @@ package transform
 
 import (
 	"math"
-	"strconv"
 
 	"github.com/dmarkham/fits/header"
+	"github.com/dmarkham/fits/wcs"
 )
 
 // SIP — Simple Imaging Polynomial distortion (Shupe et al. 2005).
@@ -48,10 +48,10 @@ import (
 //
 // # Parsing
 //
-// SIP coefficients are read from an image HDU's header outside of the
-// standard WCS keyword set. Because they are image-specific and not part
-// of Paper I, the wcs package does not parse them automatically. Instead,
-// ParseSIP reads them directly from a *header.Header.
+// wcs.Parse reads the SIP keywords into wcs.Header.SIP when the celestial
+// CTYPEs end in "-SIP", and New applies them automatically. ParseSIP reads
+// them directly from a *header.Header for callers that apply SIP
+// themselves.
 
 // SIPPoly holds a SIP polynomial as a 2D coefficient grid indexed by
 // (i, j), where Coeffs[i][j] is the coefficient of u^i * v^j. Order is
@@ -116,45 +116,28 @@ type SIP struct {
 }
 
 // ParseSIP extracts SIP coefficients from the given image header. Returns
-// nil, nil if the header does not declare SIP (i.e. CTYPE suffix is not
-// -SIP, or A_ORDER / B_ORDER is absent). An error indicates a malformed
-// SIP section.
+// nil, nil if A_ORDER or B_ORDER is absent; it does not look at CTYPE.
+// The error result is always nil and is kept for compatibility.
+//
+// Headers parsed with wcs.Parse already carry these coefficients in
+// wcs.Header.SIP when CTYPE ends in "-SIP", and New applies them; call
+// ParseSIP only when applying SIP yourself.
 func ParseSIP(h *header.Header) (*SIP, error) {
-	aOrder, errA := h.Int("A_ORDER")
-	bOrder, errB := h.Int("B_ORDER")
-	if errA != nil || errB != nil {
-		return nil, nil
-	}
-	sip := &SIP{
-		A: readSIPPoly(h, "A", int(aOrder)),
-		B: readSIPPoly(h, "B", int(bOrder)),
-	}
-	if apOrder, err := h.Int("AP_ORDER"); err == nil {
-		if bpOrder, err := h.Int("BP_ORDER"); err == nil {
-			sip.AP = readSIPPoly(h, "AP", int(apOrder))
-			sip.BP = readSIPPoly(h, "BP", int(bpOrder))
-		}
-	}
-	return sip, nil
+	return sipFromWCS(wcs.ParseSIP(h)), nil
 }
 
-// readSIPPoly reads a polynomial from the header given its prefix ("A",
-// "B", "AP", "BP") and its declared order.
-func readSIPPoly(h *header.Header, prefix string, order int) *SIPPoly {
-	p := &SIPPoly{
-		Order:  order,
-		Coeffs: make([][]float64, order+1),
+// sipFromWCS converts the parsed keywords into a *SIP, or nil.
+func sipFromWCS(s *wcs.SIP) *SIP {
+	if s == nil {
+		return nil
 	}
-	for i := 0; i <= order; i++ {
-		p.Coeffs[i] = make([]float64, order+1)
-		for j := 0; j+i <= order; j++ {
-			key := prefix + "_" + strconv.Itoa(i) + "_" + strconv.Itoa(j)
-			if v, err := h.Float(key); err == nil {
-				p.Coeffs[i][j] = v
-			}
+	poly := func(p *wcs.SIPPoly) *SIPPoly {
+		if p == nil {
+			return nil
 		}
+		return &SIPPoly{Order: p.Order, Coeffs: p.Coeffs}
 	}
-	return p
+	return &SIP{A: poly(s.A), B: poly(s.B), AP: poly(s.AP), BP: poly(s.BP)}
 }
 
 // Forward applies the SIP forward correction to a pixel offset (u, v)

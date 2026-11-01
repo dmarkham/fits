@@ -29,6 +29,11 @@ type Transform struct {
 	// TAN projection. Nil for every other projection.
 	tpv *TPV
 
+	// sip is the SIP polynomial for "-SIP" headers, applied to the pixel
+	// offset from CRPIX before the linear step. Nil when the header
+	// declares no SIP distortion or carries no SIP coefficients.
+	sip *SIP
+
 	// Linear forward transform: matrix M such that
 	//    (x, y) = M * (pixel - CRPIX)
 	// where (x, y) is the intermediate world coordinate in radians (the
@@ -52,8 +57,13 @@ type Transform struct {
 
 // New builds a Transform from a parsed *wcs.Header. Returns an error if
 // the header is not a 2-D celestial WCS, if the linear transform is
-// singular, or if the projection code is not supported (see
-// ErrUnsupportedProjection in projection.go).
+// singular, if the projection code is not supported (see
+// ErrUnsupportedProjection in projection.go), or if CTYPE declares a
+// distortion other than SIP.
+//
+// SIP distortion ("RA---TAN-SIP") is applied automatically from
+// h.SIP; a "-SIP" CTYPE without SIP coefficients is treated as
+// undistorted, as astropy.wcs does.
 func New(h *wcs.Header) (*Transform, error) {
 	if h == nil {
 		return nil, errors.New("wcs/transform: nil header")
@@ -69,6 +79,15 @@ func New(h *wcs.Header) (*Transform, error) {
 	if h.LonAxis != 1 || h.LatAxis != 2 {
 		return nil, fmt.Errorf("wcs/transform: celestial axes must be 1,2 (got lon=%d lat=%d)",
 			h.LonAxis, h.LatAxis)
+	}
+
+	var sip *SIP
+	switch dist := celestialDistCode(h); dist {
+	case "":
+	case "SIP":
+		sip = sipFromWCS(h.SIP)
+	default:
+		return nil, fmt.Errorf("wcs/transform: unsupported distortion %q in CTYPE", dist)
 	}
 
 	code := h.CelestialProjCode()
@@ -89,6 +108,7 @@ func New(h *wcs.Header) (*Transform, error) {
 		hdr:  h,
 		proj: proj,
 		tpv:  tpv,
+		sip:  sip,
 	}
 
 	// Build the pixel-offset-to-radians linear matrix from either CD or
@@ -216,6 +236,11 @@ func (t *Transform) PixelToSky(p1, p2 float64) (alpha, delta float64, err error)
 	dx := p1 - t.crpixX
 	dy := p2 - t.crpixY
 
+	// Step 1b: SIP distortion of the pixel offset.
+	if t.sip != nil {
+		dx, dy = t.sip.Forward(dx, dy)
+	}
+
 	// Step 2: linear to intermediate (radians).
 	x := t.lin[0][0]*dx + t.lin[0][1]*dy
 	y := t.lin[1][0]*dx + t.lin[1][1]*dy
@@ -262,8 +287,25 @@ func (t *Transform) SkyToPixel(alpha, delta float64) (p1, p2 float64, err error)
 	dx := t.linInv[0][0]*x + t.linInv[0][1]*y
 	dy := t.linInv[1][0]*x + t.linInv[1][1]*y
 
+	// Step 1b (inverse): undo the SIP distortion.
+	if t.sip != nil {
+		var ok bool
+		if dx, dy, ok = t.sip.Inverse(dx, dy); !ok {
+			return 0, 0, fmt.Errorf("wcs/transform: SIP inverse failed at sky (%g, %g)", alpha, delta)
+		}
+	}
+
 	// Step 1 (inverse): add CRPIX.
 	return dx + t.crpixX, dy + t.crpixY, nil
+}
+
+// celestialDistCode returns the distortion code declared on the celestial
+// longitude axis, or "" if none (or if the header predates DistCode).
+func celestialDistCode(h *wcs.Header) string {
+	if h.LonAxis < 1 || h.LonAxis > len(h.DistCode) {
+		return ""
+	}
+	return h.DistCode[h.LonAxis-1]
 }
 
 // Code returns the projection code in use (e.g. "TAN", or "TPV" for TAN

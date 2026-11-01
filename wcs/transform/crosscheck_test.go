@@ -62,6 +62,8 @@ func TestCrossCheckFixtures(t *testing.T) {
 				LatAxis:  2,
 				AxisType: []string{splitAxisType(f.CType1), splitAxisType(f.CType2)},
 				ProjCode: []string{splitProjCode(f.CType1), splitProjCode(f.CType2)},
+				DistCode: []string{splitDistCode(f.CType1), splitDistCode(f.CType2)},
+				SIP:      f.SIP,
 			}
 			tr, err := New(w)
 			if err != nil {
@@ -102,6 +104,7 @@ type CrossCheckFixture struct {
 	PC        [][]float64 `json:"pc,omitempty"`
 	CD        [][]float64 `json:"cd,omitempty"`
 	PV        []PVJSON    `json:"pv,omitempty"`
+	SIP       *wcs.SIP    `json:"sip,omitempty"` // A, B, AP, BP as {Order, Coeffs}
 	Tolerance float64     `json:"tolerance"`
 	TestVectors []CrossCheckVector `json:"test_vectors"`
 }
@@ -132,10 +135,12 @@ func unmarshalPVMap(pvs []PVJSON) map[wcs.PVKey]float64 {
 	return m
 }
 
-// splitAxisType / splitProjCode duplicate the logic in wcs.splitCType
-// because it is unexported in the wcs package. For a CTYPE like
-// "RA---TAN" returns ("RA", "TAN"); for a linear CTYPE returns (raw, "").
+// splitAxisType / splitProjCode / splitDistCode duplicate the logic in
+// wcs.splitCType because it is unexported in the wcs package. For a CTYPE
+// like "RA---TAN-SIP" they return "RA", "TAN" and "SIP"; for a linear
+// CTYPE, (raw, "", "").
 func splitAxisType(ctype string) string {
+	ctype = stripDistCode(ctype)
 	if len(ctype) >= 8 && ctype[len(ctype)-4] == '-' {
 		return trimRightDashes(ctype[:len(ctype)-3])
 	}
@@ -143,10 +148,29 @@ func splitAxisType(ctype string) string {
 }
 
 func splitProjCode(ctype string) string {
+	ctype = stripDistCode(ctype)
 	if len(ctype) >= 8 && ctype[len(ctype)-4] == '-' {
 		return ctype[len(ctype)-3:]
 	}
 	return ""
+}
+
+func splitDistCode(ctype string) string {
+	if hasDistCode(ctype) {
+		return ctype[len(ctype)-3:]
+	}
+	return ""
+}
+
+func stripDistCode(ctype string) string {
+	if hasDistCode(ctype) {
+		return ctype[:len(ctype)-4]
+	}
+	return ctype
+}
+
+func hasDistCode(ctype string) bool {
+	return len(ctype) >= 12 && ctype[len(ctype)-4] == '-' && ctype[len(ctype)-8] == '-'
 }
 
 func trimRightDashes(s string) string {
