@@ -340,6 +340,79 @@ func TestNewAcceptsMERHeader(t *testing.T) {
 	}
 }
 
+// makeTPVHeader builds a parsed TPV header with a quadratic distortion:
+// PV1_1 = PV2_1 = 1 (identity) plus PV1_4 (xi²) and PV2_4 (eta²).
+func makeTPVHeader(t *testing.T, ctype1, ctype2 string, withPV bool) *wcs.Header {
+	t.Helper()
+	pairs := []any{
+		"NAXIS", int64(2),
+		"CTYPE1", ctype1,
+		"CTYPE2", ctype2,
+		"CRVAL1", 150.0,
+		"CRVAL2", 2.0,
+		"CRPIX1", -2000.0,
+		"CRPIX2", 1500.0,
+		"CD1_1", -0.0005,
+		"CD1_2", 0.0,
+		"CD2_1", 0.0,
+		"CD2_2", 0.0005,
+	}
+	if withPV {
+		pairs = append(pairs,
+			"PV1_1", 1.0, "PV1_4", 0.02,
+			"PV2_1", 1.0, "PV2_4", -0.015)
+	}
+	w, err := wcs.Parse(newHeader(pairs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+// TestNewAcceptsTPVHeader: New() builds TPV as TAN plus the polynomial,
+// reports it as TPV, and SkyToPixel inverts PixelToSky.
+func TestNewAcceptsTPVHeader(t *testing.T) {
+	tr, err := New(makeTPVHeader(t, "RA---TPV", "DEC--TPV", true))
+	if err != nil {
+		t.Fatalf("TPV should be supported: %v", err)
+	}
+	if tr.Code() != "TPV" {
+		t.Errorf("Code() = %q, want TPV", tr.Code())
+	}
+	for _, p := range [][2]float64{{0, 0}, {50, 50}, {99, 0}, {0, 99}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		x, y, err := tr.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(x-p[0]) > 1e-7 || math.Abs(y-p[1]) > 1e-7 {
+			t.Errorf("round-trip %v → (%v, %v) → (%v, %v)", p, a, d, x, y)
+		}
+	}
+}
+
+// TestTPVDistortionIsApplied: the same header without its PV terms, as
+// plain TAN, must land measurably elsewhere — the polynomial is not
+// silently dropped.
+func TestTPVDistortionIsApplied(t *testing.T) {
+	tpv, err := New(makeTPVHeader(t, "RA---TPV", "DEC--TPV", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tan, err := New(makeTPVHeader(t, "RA---TAN", "DEC--TAN", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a1, d1, _ := tpv.PixelToSky(50, 50)
+	a2, d2, _ := tan.PixelToSky(50, 50)
+	if math.Hypot((a1-a2)*math.Cos(degToRad(d2)), d1-d2)*3600 < 1 {
+		t.Errorf("TPV and TAN agree to < 1\" at (50, 50): (%v, %v) vs (%v, %v)", a1, d1, a2, d2)
+	}
+}
+
 // TestNewRejectsNonCelestial: a WCS without lon/lat axes should not
 // construct a Transform.
 func TestNewRejectsNonCelestial(t *testing.T) {

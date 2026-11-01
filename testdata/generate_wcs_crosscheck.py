@@ -25,6 +25,7 @@ The fixture set:
   - WMAP        — HPX
   - COBE/DMR    — CSC (historical)
   - 2MASS       — TNX (IRAF)
+  - ATLAS       — TPV (difference-image stamp, CRPIX far off the cutout)
 
 Each fixture samples pixel → sky at ~20 grid points across the detector
 so that small-angle and large-angle behavior are both exercised.
@@ -147,6 +148,65 @@ def main():
         "CDELT1": -0.01, "CDELT2": 0.01,
         "PV2_1": 45.0,
     }, "conic_coe", "synthetic conic", "COE"))
+
+    # ATLAS difference-image stamp (01a59742o0240o.diff, MLO): TPV
+    # distortion from the ATLAS pipeline, on a 100x100 cutout whose CRPIX
+    # lies ~4000 px off the stamp, so the polynomial terms dominate.
+    fixtures.append(sample_wcs({
+        "NAXIS1": 100, "NAXIS2": 100,
+        "CTYPE1": "RA---TPV", "CTYPE2": "DEC--TPV",
+        "CRVAL1": 272.84895,
+        "CRVAL2": 8.28673,
+        "CRPIX1": -3799.0,
+        "CRPIX2": 1852.0,
+        "CD1_1": -0.0005172389232442,
+        "CD1_2": 8.768323883707e-06,
+        "CD2_1": 8.84243071444e-06,
+        "CD2_2": 0.0005171961669467,
+        "PV1_0": 2.172247402608e-13,
+        "PV1_1": 0.9999999999989,
+        "PV1_2": 8.547019713842e-12,
+        "PV1_4": 1.732758107952e-05,
+        "PV1_5": 2.291893113739e-05,
+        "PV1_6": 3.988039825779e-06,
+        "PV1_7": -0.0006465683213014,
+        "PV1_8": -5.326872236656e-06,
+        "PV1_9": -0.0006335762897805,
+        "PV1_10": -1.022284260944e-06,
+        "PV1_12": 3.225351893624e-07,
+        "PV1_13": 7.945185105527e-07,
+        "PV1_14": -2.941640767804e-08,
+        "PV1_15": 1.058822218628e-06,
+        "PV1_16": 3.905016850559e-07,
+        "PV1_17": -3.143883482666e-06,
+        "PV1_18": 1.420641960623e-07,
+        "PV1_19": -8.322414657774e-06,
+        "PV1_20": 3.606625473241e-07,
+        "PV1_21": -4.262232802183e-06,
+        "PV1_22": 3.562970026892e-08,
+        "PV2_0": -4.986662354562e-14,
+        "PV2_1": 0.9999999999991,
+        "PV2_2": -8.416590590396e-12,
+        "PV2_4": 1.948199301454e-05,
+        "PV2_5": 5.608380547107e-07,
+        "PV2_6": 1.883925313334e-05,
+        "PV2_7": -0.0006489064539911,
+        "PV2_8": -4.337750661674e-07,
+        "PV2_9": -0.0006448985069562,
+        "PV2_10": -1.268989767674e-06,
+        "PV2_12": 1.104589358844e-06,
+        "PV2_13": 7.033242408929e-07,
+        "PV2_14": 1.061381063149e-06,
+        "PV2_15": 5.795264155287e-07,
+        "PV2_16": -8.60685540635e-07,
+        "PV2_17": -2.490758118647e-06,
+        "PV2_18": 3.319013437658e-08,
+        "PV2_19": -8.309002201252e-06,
+        "PV2_20": 5.831004923987e-08,
+        "PV2_21": -3.523011214328e-06,
+        "PV2_22": 1.935996964426e-08,
+        "RADESYS": "FK5", "EQUINOX": 2000.0,
+    }, "atlas_tpv", "ATLAS difference stamp", "TPV"))
 
     # Add more fixtures as real headers become available:
     # - HST ACS with SIP (A_ORDER, B_ORDER, A_i_j, B_i_j)

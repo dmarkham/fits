@@ -24,6 +24,11 @@ type Transform struct {
 	hdr  *wcs.Header
 	proj Projection
 
+	// tpv is the TPV polynomial for RA---TPV / DEC--TPV headers, applied to
+	// the intermediate world coordinates between the linear step and the
+	// TAN projection. Nil for every other projection.
+	tpv *TPV
+
 	// Linear forward transform: matrix M such that
 	//    (x, y) = M * (pixel - CRPIX)
 	// where (x, y) is the intermediate world coordinate in radians (the
@@ -67,7 +72,15 @@ func New(h *wcs.Header) (*Transform, error) {
 	}
 
 	code := h.CelestialProjCode()
-	proj, err := Select(code, h.PV, h.LatAxis)
+	pv := h.PV
+	var tpv *TPV
+	if code == "TPV" {
+		// TPV is TAN plus a polynomial distortion. Its PVi_m are the
+		// polynomial coefficients, not TAN projection parameters.
+		tpv = ParseTPV(h)
+		code, pv = "TAN", nil
+	}
+	proj, err := Select(code, pv, h.LatAxis)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +88,7 @@ func New(h *wcs.Header) (*Transform, error) {
 	t := &Transform{
 		hdr:  h,
 		proj: proj,
+		tpv:  tpv,
 	}
 
 	// Build the pixel-offset-to-radians linear matrix from either CD or
@@ -206,6 +220,12 @@ func (t *Transform) PixelToSky(p1, p2 float64) (alpha, delta float64, err error)
 	x := t.lin[0][0]*dx + t.lin[0][1]*dy
 	y := t.lin[1][0]*dx + t.lin[1][1]*dy
 
+	// Step 2b: TPV distortion, which works in degrees.
+	if t.tpv != nil {
+		xd, yd := t.tpv.Forward(radToDeg(x), radToDeg(y))
+		x, y = degToRad(xd), degToRad(yd)
+	}
+
 	// Step 3: projection → native (phi, theta) in radians.
 	phi, theta, ok := t.proj.Inverse(x, y)
 	if !ok {
@@ -229,6 +249,15 @@ func (t *Transform) SkyToPixel(alpha, delta float64) (p1, p2 float64, err error)
 		return 0, 0, fmt.Errorf("wcs/transform: sky (%g, %g) outside %s projection domain", alpha, delta, t.proj.Code())
 	}
 
+	// Step 2b (inverse): undo the TPV distortion.
+	if t.tpv != nil {
+		xd, yd, ok := t.tpv.Inverse(radToDeg(x), radToDeg(y))
+		if !ok {
+			return 0, 0, fmt.Errorf("wcs/transform: TPV inverse failed at sky (%g, %g)", alpha, delta)
+		}
+		x, y = degToRad(xd), degToRad(yd)
+	}
+
 	// Step 2 (inverse): intermediate → pixel offset.
 	dx := t.linInv[0][0]*x + t.linInv[0][1]*y
 	dy := t.linInv[1][0]*x + t.linInv[1][1]*y
@@ -237,5 +266,11 @@ func (t *Transform) SkyToPixel(alpha, delta float64) (p1, p2 float64, err error)
 	return dx + t.crpixX, dy + t.crpixY, nil
 }
 
-// Code returns the projection code in use (e.g. "TAN").
-func (t *Transform) Code() string { return t.proj.Code() }
+// Code returns the projection code in use (e.g. "TAN", or "TPV" for TAN
+// with a TPV distortion).
+func (t *Transform) Code() string {
+	if t.tpv != nil {
+		return "TPV"
+	}
+	return t.proj.Code()
+}
