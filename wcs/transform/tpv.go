@@ -35,6 +35,11 @@ import (
 // polynomial non-polynomial in (xi, eta) — they provide a way to encode
 // radial distortion efficiently.
 //
+// The axis-2 polynomial uses the same layout with xi and eta exchanged:
+// PV2_1 multiplies eta, PV2_2 multiplies xi, PV2_4 is eta², and so on
+// (wcslib tpv.c, SCAMP). An undistorted header is therefore
+// PV1_1 = PV2_1 = 1.
+//
 // Forward is direct polynomial evaluation. Inverse requires Newton
 // iteration against the forward polynomial.
 
@@ -227,7 +232,8 @@ func evalTPVWithJacobian(coefs *[40]float64, xi, eta float64) (val, dvdxi, dvdet
 // Input (xi, eta) is the pre-distortion position; output is the
 // distortion-corrected position, both in degrees.
 func (t *TPV) Forward(xi, eta float64) (xiOut, etaOut float64) {
-	return evalTPV(&t.Axis1, xi, eta), evalTPV(&t.Axis2, xi, eta)
+	// Axis 2 evaluates the shared term table with xi and eta exchanged.
+	return evalTPV(&t.Axis1, xi, eta), evalTPV(&t.Axis2, eta, xi)
 }
 
 // Inverse applies the inverse TPV correction via Newton iteration
@@ -244,7 +250,8 @@ func (t *TPV) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
 	xi, eta = xiPrime, etaPrime
 	for range 50 {
 		fx, dfxdxi, dfxdeta := evalTPVWithJacobian(&t.Axis1, xi, eta)
-		fy, dfydxi, dfydeta := evalTPVWithJacobian(&t.Axis2, xi, eta)
+		// Axis 2 swaps xi and eta, so its partials come back swapped too.
+		fy, dfydeta, dfydxi := evalTPVWithJacobian(&t.Axis2, eta, xi)
 		rx := xiPrime - fx
 		ry := etaPrime - fy
 		if math.Abs(rx) < 1e-13 && math.Abs(ry) < 1e-13 {
