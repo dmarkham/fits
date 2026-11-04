@@ -1,0 +1,22 @@
+# CAR with LONPOLE and LATPOLE given as PV1_3 / PV1_4 on the longitude
+# axis (Paper II sect. 2.5), which take precedence over the LONPOLE /
+# LATPOLE keywords also present (synthetic).
+NOTE pipeline: PVi_3 / PVi_4 on the longitude axis override LONPOLE / LATPOLE
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 0.0
+CRVAL2  = 10.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 180.0
+LATPOLE = 90.0
+PV1_3   = 0.0
+PV1_4   = -30.0

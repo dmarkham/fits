@@ -1,0 +1,17 @@
+# "-SIP" CTYPE suffix with no SIP keywords at all: wcslib treats the header
+# as an undistorted TAN, and so do we (synthetic).
+NOTE pipeline: -SIP CTYPE without coefficients is undistorted
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN-SIP'
+CTYPE2  = 'DEC--TAN-SIP'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001

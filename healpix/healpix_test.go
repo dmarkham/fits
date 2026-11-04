@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dmarkham/fits/internal/testutil"
 )
 
 const goldenDir = "testdata/golden"
@@ -14,49 +15,44 @@ const goldenDir = "testdata/golden"
 // ---------- XYF (internal XY scheme) validation ----------
 
 type xyfCase struct {
-	Nside int `json:"nside"`
-	Npix  int `json:"npix"`
-	Cases []struct {
-		Pix   int64 `json:"pix"`
-		RingX int   `json:"ring_x"`
-		RingY int   `json:"ring_y"`
-		RingF int   `json:"ring_f"`
-		NestX int   `json:"nest_x"`
-		NestY int   `json:"nest_y"`
-		NestF int   `json:"nest_f"`
-	} `json:"cases"`
+	Nside int  `json:"nside"`
+	Npix  int  `json:"npix"`
+	RingX i64s `json:"ring_x"`
+	RingY i64s `json:"ring_y"`
+	RingF i64s `json:"ring_f"`
+	NestX i64s `json:"nest_x"`
+	NestY i64s `json:"nest_y"`
+	NestF i64s `json:"nest_f"`
 }
 
+// TestXYF_Healpy: pix2xyf of every pixel (both orderings) equals
+// healpy.pix2xyf, and xyf2pix inverts healpy's (x, y, face) exactly.
 func TestXYF_Healpy(t *testing.T) {
 	for _, nside := range []int{1, 2, 4, 8, 16} {
 		t.Run(nsideName(nside), func(t *testing.T) {
 			data := loadGolden(t, "xyf_nside%d.json", nside)
 			var c xyfCase
 			mustUnmarshal(t, data, &c)
-			for _, row := range c.Cases {
-				// RING: pix → XY → check face, x, y.
-				xy := ringToXY(row.Pix, nside)
-				got := xyDecompose(xy, nside)
-				if got.Face != row.RingF || got.X != row.RingX || got.Y != row.RingY {
-					t.Errorf("RING pix %d: got (f=%d x=%d y=%d), want (f=%d x=%d y=%d)",
-						row.Pix, got.Face, got.X, got.Y, row.RingF, row.RingX, row.RingY)
+			if c.Npix != 12*nside*nside || c.RingX.Len() != c.Npix {
+				t.Fatalf("golden has %d values for npix %d", c.RingX.Len(), c.Npix)
+			}
+			for _, sc := range []struct {
+				name    string
+				scheme  Scheme
+				x, y, f i64s
+			}{{"RING", Ring, c.RingX, c.RingY, c.RingF}, {"NESTED", Nested, c.NestX, c.NestY, c.NestF}} {
+				gx, gy, gf := make([]int64, c.Npix), make([]int64, c.Npix), make([]int64, c.Npix)
+				for p := range gx {
+					x, y, f := pix2xyf(nside, int64(p), sc.scheme)
+					gx[p], gy[p], gf[p] = int64(x), int64(y), int64(f)
 				}
-				// Verify round-trip: XY → RING → same pix.
-				rt := xyToRing(xy, nside)
-				if rt != row.Pix {
-					t.Errorf("RING round-trip pix %d: XY→RING gave %d", row.Pix, rt)
-				}
-				// NESTED: pix → XY → check face, x, y.
-				xyN := nestedToXY(row.Pix, nside)
-				gotN := xyDecompose(xyN, nside)
-				if gotN.Face != row.NestF || gotN.X != row.NestX || gotN.Y != row.NestY {
-					t.Errorf("NESTED pix %d: got (f=%d x=%d y=%d), want (f=%d x=%d y=%d)",
-						row.Pix, gotN.Face, gotN.X, gotN.Y, row.NestF, row.NestX, row.NestY)
-				}
-				// NESTED round-trip.
-				rtN := xyToNested(xyN, nside)
-				if rtN != row.Pix {
-					t.Errorf("NESTED round-trip pix %d: XY→NESTED gave %d", row.Pix, rtN)
+				wx := sc.x.Resolve(t, sc.name+" pix2xyf x", gx)
+				wy := sc.y.Resolve(t, sc.name+" pix2xyf y", gy)
+				wf := sc.f.Resolve(t, sc.name+" pix2xyf face", gf)
+				for p := range wx {
+					if rt := xyf2pix(nside, int(wx[p]), int(wy[p]), int(wf[p]), sc.scheme); rt != int64(p) {
+						t.Errorf("%s xyf2pix(%d,%d,%d) = %d, want %d", sc.name, wx[p], wy[p], wf[p], rt, p)
+					}
 				}
 			}
 		})
@@ -66,10 +62,10 @@ func TestXYF_Healpy(t *testing.T) {
 // ---------- Ordering (ring2nest / nest2ring) validation ----------
 
 type orderingExhaustive struct {
-	Nside    int     `json:"nside"`
-	Npix     int     `json:"npix"`
-	Ring2Nest []int64 `json:"ring2nest"`
-	Nest2Ring []int64 `json:"nest2ring"`
+	Nside     int  `json:"nside"`
+	Npix      int  `json:"npix"`
+	Ring2Nest i64s `json:"ring2nest"`
+	Nest2Ring i64s `json:"nest2ring"`
 }
 
 func TestOrdering_Healpy(t *testing.T) {
@@ -78,16 +74,42 @@ func TestOrdering_Healpy(t *testing.T) {
 			data := loadGolden(t, "ordering_nside%d.json", nside)
 			var c orderingExhaustive
 			mustUnmarshal(t, data, &c)
-			for ring, wantNest := range c.Ring2Nest {
-				gotNest := Ring2Nest(nside, int64(ring))
-				if gotNest != wantNest {
-					t.Errorf("Ring2Nest(%d, %d) = %d, want %d", nside, ring, gotNest, wantNest)
-				}
+			if c.Npix != 12*nside*nside {
+				t.Fatalf("golden npix %d", c.Npix)
 			}
-			for nest, wantRing := range c.Nest2Ring {
-				gotRing := Nest2Ring(nside, int64(nest))
-				if gotRing != wantRing {
-					t.Errorf("Nest2Ring(%d, %d) = %d, want %d", nside, nest, gotRing, wantRing)
+			r2n, n2r := make([]int64, c.Npix), make([]int64, c.Npix)
+			for p := range r2n {
+				r2n[p] = Ring2Nest(nside, int64(p))
+				n2r[p] = Nest2Ring(nside, int64(p))
+			}
+			c.Ring2Nest.Check(t, "Ring2Nest", r2n)
+			c.Nest2Ring.Check(t, "Nest2Ring", n2r)
+		})
+	}
+}
+
+// TestOrderingSampled_Healpy loads ordering_sampled_nside{64,256,1024,8192}
+// (ring -> nest pairs from healpy.ring2nest) and checks both directions.
+func TestOrderingSampled_Healpy(t *testing.T) {
+	for _, nside := range []int{64, 256, 1024, 8192} {
+		t.Run(nsideName(nside), func(t *testing.T) {
+			var c struct {
+				Nside int `json:"nside"`
+				Cases []struct {
+					Ring int64 `json:"ring"`
+					Nest int64 `json:"nest"`
+				} `json:"cases"`
+			}
+			mustUnmarshal(t, loadGolden(t, "ordering_sampled_nside%d.json", nside), &c)
+			if c.Nside != nside || len(c.Cases) < 100 {
+				t.Fatalf("golden nside=%d with %d cases; want nside=%d and >= 100 cases", c.Nside, len(c.Cases), nside)
+			}
+			for _, row := range c.Cases {
+				if got := Ring2Nest(nside, row.Ring); got != row.Nest {
+					t.Errorf("Ring2Nest(%d, %d) = %d, want %d", nside, row.Ring, got, row.Nest)
+				}
+				if got := Nest2Ring(nside, row.Nest); got != row.Ring {
+					t.Errorf("Nest2Ring(%d, %d) = %d, want %d", nside, row.Nest, got, row.Ring)
 				}
 			}
 		})
@@ -149,14 +171,16 @@ func TestPix2Ang_Healpy(t *testing.T) {
 			mustUnmarshal(t, data, &c)
 			for i, row := range c.Cases {
 				gotTheta, gotPhi := Pix2Ang(nside, row.Pix, Ring)
-				if !floatEq(gotTheta, row.RingTheta) || !floatEq(gotPhi, row.RingPhi) {
-					t.Errorf("RING pix %d [%d]: got (%.17g, %.17g) want (%.17g, %.17g)",
-						row.Pix, i, gotTheta, gotPhi, row.RingTheta, row.RingPhi)
+				if !angEq(gotTheta, row.RingTheta) || !angEq(gotPhi, row.RingPhi) {
+					t.Errorf("RING pix %d [%d]: got (%.17g, %.17g) want (%.17g, %.17g) (%d, %d ULP)",
+						row.Pix, i, gotTheta, gotPhi, row.RingTheta, row.RingPhi,
+						ulpDiff(gotTheta, row.RingTheta), ulpDiff(gotPhi, row.RingPhi))
 				}
 				gotTheta, gotPhi = Pix2Ang(nside, row.Pix, Nested)
-				if !floatEq(gotTheta, row.NestTheta) || !floatEq(gotPhi, row.NestPhi) {
-					t.Errorf("NESTED pix %d [%d]: got (%.17g, %.17g) want (%.17g, %.17g)",
-						row.Pix, i, gotTheta, gotPhi, row.NestTheta, row.NestPhi)
+				if !angEq(gotTheta, row.NestTheta) || !angEq(gotPhi, row.NestPhi) {
+					t.Errorf("NESTED pix %d [%d]: got (%.17g, %.17g) want (%.17g, %.17g) (%d, %d ULP)",
+						row.Pix, i, gotTheta, gotPhi, row.NestTheta, row.NestPhi,
+						ulpDiff(gotTheta, row.NestTheta), ulpDiff(gotPhi, row.NestPhi))
 				}
 			}
 		})
@@ -167,9 +191,11 @@ func TestPix2Ang_Healpy(t *testing.T) {
 
 type utilCase struct {
 	Cases []struct {
-		Nside       int     `json:"nside"`
-		Npix        int64   `json:"npix"`
-		PixelAreaSr float64 `json:"pixel_area_sr"`
+		Nside         int     `json:"nside"`
+		Npix          int64   `json:"npix"`
+		PixelAreaSr   float64 `json:"pixel_area_sr"`
+		PixelResolRad float64 `json:"pixel_resol_rad"`
+		MaxPixRad     float64 `json:"max_pixrad"`
 	} `json:"cases"`
 }
 
@@ -185,9 +211,7 @@ func TestUtilities_Healpy(t *testing.T) {
 		if !ok || nside != row.Nside {
 			t.Errorf("Npix2Nside(%d) = (%d, %v), want (%d, true)", row.Npix, nside, ok, row.Nside)
 		}
-		if got := PixelArea(row.Nside); !floatEq(got, row.PixelAreaSr) {
-			t.Errorf("PixelArea(%d) = %.17g, want %.17g", row.Nside, got, row.PixelAreaSr)
-		}
+		checkUtilities(t, row.Nside, row.PixelAreaSr, row.PixelResolRad, row.MaxPixRad)
 	}
 }
 
@@ -209,14 +233,14 @@ func TestNeighbors_Healpy(t *testing.T) {
 			var c neighborCase
 			mustUnmarshal(t, data, &c)
 			for _, row := range c.Cases {
-				// RING neighbors.
+				// Ordered comparison: slot k must hold healpy's k-th
+				// neighbour (SW, W, NW, N, NE, E, SE, S), -1 in place.
 				gotRing := GetNeighbors(nside, row.Pix, Ring)
-				if !neighborSetEq(gotRing[:], row.NeighborsRing) {
+				if !neighborsEq(gotRing, row.NeighborsRing) {
 					t.Errorf("RING pix %d: got %v want %v", row.Pix, gotRing, row.NeighborsRing)
 				}
-				// NESTED neighbors.
 				gotNest := GetNeighbors(nside, row.Pix, Nested)
-				if !neighborSetEq(gotNest[:], row.NeighborsNest) {
+				if !neighborsEq(gotNest, row.NeighborsNest) {
 					t.Errorf("NESTED pix %d: got %v want %v", row.Pix, gotNest, row.NeighborsNest)
 				}
 			}
@@ -224,27 +248,14 @@ func TestNeighbors_Healpy(t *testing.T) {
 	}
 }
 
-// neighborSetEq checks if two neighbor arrays represent the same set
-// of neighbors. The order may differ between implementations, but the
-// set of valid (non -1) entries must match exactly.
-func neighborSetEq(a []int64, b []int64) bool {
-	setA := make(map[int64]bool)
-	setB := make(map[int64]bool)
-	for _, v := range a {
-		if v >= 0 {
-			setA[v] = true
-		}
-	}
-	for _, v := range b {
-		if v >= 0 {
-			setB[v] = true
-		}
-	}
-	if len(setA) != len(setB) {
+// neighborsEq compares an ordered neighbour array with healpy's
+// get_all_neighbours output slot by slot (including the -1 slots).
+func neighborsEq(got [8]int64, want []int64) bool {
+	if len(want) != 8 {
 		return false
 	}
-	for k := range setA {
-		if !setB[k] {
+	for k := range got {
+		if got[k] != want[k] {
 			return false
 		}
 	}
@@ -287,9 +298,9 @@ func loadGolden(t *testing.T, pattern string, nside int) []byte {
 	} else {
 		name = filepath.Join(goldenDir, pattern)
 	}
-	data, err := os.ReadFile(name)
+	data, err := testutil.ReadGolden(name)
 	if err != nil {
-		t.Skipf("golden not found: %s (run gen_golden.py)", name)
+		t.Fatalf("committed golden missing (this is a failure, not a skip): %s: %v (regenerate with gen_golden.py, see testdata/PROVENANCE.md)", name, err)
 	}
 	return data
 }
@@ -305,34 +316,50 @@ func nsideName(n int) string {
 	return fmt.Sprintf("nside%d", n)
 }
 
-// floatEq compares two float64 angle values. Two tolerances:
+// angleULPBudget is the largest difference, in units in the last place,
+// allowed between a Go angle (theta or phi, radians) and healpy's.
 //
-//   - Absolute: 1e-10 radians (≈ 20 microarcseconds). Covers the
-//     near-pole case where the astrometry.net formula computes
-//     z = 1 - t²/3 and the cancellation loses ~4 digits of precision
-//     for nside ≥ 256. healpy's healpix_cxx backend avoids this by
-//     computing z from ring arithmetic instead. The worst-case absolute
-//     difference across our test suite is ~5e-12 rad (≈1 µas).
-//
-//   - Relative: 1e-13. Covers the general case where Go's and numpy's
-//     implementations of atan2/acos/asin differ by 1-2 ULPs.
-//
-// Both tolerances must be satisfied (we take the more lenient of the
-// two). For reference, Gaia's astrometric precision is ~25 µas, so our
-// 1 µas worst-case error is 25× below the best instrument on Earth.
-func floatEq(a, b float64) bool {
+// Both sides evaluate the same healpix_cxx formulas in IEEE double, so the
+// only source of difference is the final libm call: healpy's acos/atan2
+// come from glibc (correctly rounded in practice) while Go's math.Acos and
+// math.Atan2 are accurate to about 1 ULP. Measured maximum over every
+// committed golden is reported by TestAngleULPBudget_Measured; the budget
+// is set to that maximum, so any extra error fails.
+const angleULPBudget = 1
+
+// vecAbsBudget is the absolute tolerance for unit-vector components. A
+// component that is mathematically ~0 (an equatorial z, or x at phi=pi/2)
+// has no meaningful ULP scale, so components are compared absolutely in
+// units of the double epsilon at 1.0 (2^-52).
+const vecAbsBudget = 2 * 0x1p-52
+
+// ulpDiff returns the number of representable doubles between a and b
+// (0 when equal; math.MaxUint64 when exactly one is NaN or signs differ
+// and neither is zero).
+func ulpDiff(a, b float64) uint64 {
 	if a == b {
-		return true
+		return 0
 	}
-	diff := math.Abs(a - b)
-	// Absolute tolerance: 1e-10 rad ≈ 20 µas.
-	if diff < 1e-10 {
-		return true
+	if math.IsNaN(a) || math.IsNaN(b) {
+		return math.MaxUint64
 	}
-	// Relative tolerance.
-	scale := math.Max(math.Abs(a), math.Abs(b))
-	if scale == 0 {
-		return diff < 1e-14
+	ia, ib := orderedBits(a), orderedBits(b)
+	if ia > ib {
+		return uint64(ia - ib)
 	}
-	return diff/scale < 1e-13
+	return uint64(ib - ia)
 }
+
+// orderedBits maps a double onto a monotonic int64 line so that
+// subtracting two of them counts the doubles between.
+func orderedBits(f float64) int64 {
+	b := int64(math.Float64bits(f))
+	if b < 0 {
+		return math.MinInt64 - b
+	}
+	return b
+}
+
+func angEq(got, want float64) bool { return ulpDiff(got, want) <= angleULPBudget }
+
+func vecEq(got, want float64) bool { return math.Abs(got-want) <= vecAbsBudget }

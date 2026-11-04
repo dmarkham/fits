@@ -1,0 +1,38 @@
+{
+ "file": "comp_fz_cube6d16_gzip2.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 8},
+   {"n": 5, "key": "NAXIS2", "u64": 6},
+   {"n": 6, "key": "PCOUNT", "u64": 708},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 1},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1PB(121)", "comment": "data format of field: variable length array"},
+   {"n": 12, "key": "ZTILE1", "u64": 5},
+   {"n": 13, "key": "ZTILE2", "u64": 4},
+   {"n": 14, "key": "ZTILE3", "u64": 1},
+   {"n": 15, "key": "ZTILE4", "u64": 2},
+   {"n": 16, "key": "ZTILE5", "u64": 1},
+   {"n": 17, "key": "ZTILE6", "u64": 2},
+   {"n": 18, "key": "ZCMPTYPE", "str": "GZIP_2", "comment": "compression algorithm"},
+   {"n": 19, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": ""},
+   {"n": 21, "key": "ZBITPIX", "u64": 16},
+   {"n": 22, "key": "ZNAXIS", "u64": 6},
+   {"n": 23, "key": "ZNAXIS1", "u64": 5},
+   {"n": 24, "key": "ZNAXIS2", "u64": 4},
+   {"n": 25, "key": "ZNAXIS3", "u64": 3},
+   {"n": 26, "key": "ZNAXIS4", "u64": 2},
+   {"n": 27, "key": "ZNAXIS5", "u64": 2},
+   {"n": 28, "key": "ZNAXIS6", "u64": 2}
+  ]}
+ ]
+}

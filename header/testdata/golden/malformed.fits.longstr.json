@@ -1,0 +1,38 @@
+{
+ "file": "malformed.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 0},
+   {"n": 4, "key": "DATE-OBS", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 7, "key": "BIGINT", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 8, "key": "BZEROU", "u64": 9223372036854775808},
+   {"n": 9, "key": "U64MAX", "u64": 18446744073709551615},
+   {"n": 10, "key": "NEGBIG", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 11, "key": "I64MIN", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 12, "key": "UNTERM", "str": "no closing quote", "comment": ""},
+   {"n": 14, "key": "NANTOK", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 15, "key": "INFTOK", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 19, "key": "HEXV", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 22, "key": "LOWE", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 23, "key": "TWOTOK", "u64": 1},
+   {"n": 25, "key": "CPXOK", "cplx": [1.5, -2.5]},
+   {"n": 26, "key": "CPXINT", "cplx": [3, -4]},
+   {"n": 27, "key": "NOSPACE", "u64": 1},
+   {"n": 28, "key": "EQ10", "u64": 5},
+   {"n": 31, "key": "CMTSP", "u64": 5},
+   {"n": 32, "key": "CMTNOSP", "u64": 5},
+   {"n": 33, "key": "NOSLASH", "u64": 5},
+   {"n": 34, "key": "EMPTYSTR", "str": "", "comment": ""},
+   {"n": 35, "key": "SPACESTR", "str": "", "comment": ""},
+   {"n": 36, "key": "LEADSP", "str": "  lead", "comment": "leading blanks are significant"},
+   {"n": 37, "key": "TRAILSP", "str": "trail", "comment": "trailing blanks are not"},
+   {"n": 38, "key": "QUOTES", "str": "it's", "comment": "doubled quote"},
+   {"n": 42, "key": "lowkey", "u64": 3},
+   {"n": 44, "key": "ESO   DBL   SPACE", "u64": 7},
+   {"n": 45, "key": "HIERARCH", "u64": 5},
+   {"n": 46, "key": "FINAL", "str": "still read", "comment": "proves later cards decode"}
+  ]}
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "file": "comp_plio_mask.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 22,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                   50 / number of rows in table",
+    "PCOUNT  =                  900 / number of group parameters",
+    "GCOUNT  =                    1 / number of groups",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'",
+    "TFORM1  = '1PI(11) '",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTENSION= 'IMAGE   '           / Image extension",
+    "ZBITPIX =                   16 / array data type",
+    "ZNAXIS  =                    2 / number of array dimensions",
+    "ZNAXIS1 =                   50",
+    "ZNAXIS2 =                   50",
+    "ZPCOUNT =                    0 / number of parameters",
+    "ZGCOUNT =                    1 / number of groups",
+    "ZTILE1  =                   50 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'PLIO_1  '           / compression algorithm",
+    "EXTNAME = 'IMG     '           / name of this binary table extension"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": true, "naxis": 2, "naxes": [50,50], "npix": 2500, "bscale": 1, "bzero": 0,
+    "phys": {"n": 2500, "sha256": "ea4b3a244ba50a46e8daa638b830bf5a34ff9cfdab9e4a52e3b40628eeca7e0c", "nulls": [], "sample": [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[39,0],[49,0],[79,0],[119,0],[158,0],[198,0],[238,0],[277,0],[317,0],[357,0],[396,0],[436,0],[476,0],[515,1],[555,0],[595,0],[634,1],[674,1],[714,0],[753,0],[793,0],[833,1],[872,1],[912,0],[952,0],[991,0],[1031,0],[1071,0],[1110,0],[1150,0],[1190,0],[1229,0],[1269,0],[1309,0],[1348,0],[1388,0],[1428,0],[1467,0],[1505,2],[1507,2],[1547,0],[1586,2],[1626,2],[1666,2],[1705,2],[1745,0],[1785,2],[1824,2],[1864,2],[1904,0],[1943,2],[1983,2],[2023,0],[2062,0],[2102,0],[2142,0],[2181,0],[2221,0],[2261,0],[2300,0],[2340,0],[2380,0],[2419,0],[2450,0],[2459,0],[2492,0],[2493,0],[2494,0],[2495,0],[2496,0],[2497,0],[2498,0],[2499,0]]},
+    "i64": {"n": 2500, "sha256": "52937b4a180ae428b1f8152307454d2033f0c7c54eb5e3c65af5c85783e52e6f", "nulls": [], "sample": [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[39,0],[49,0],[79,0],[119,0],[158,0],[198,0],[238,0],[277,0],[317,0],[357,0],[396,0],[436,0],[476,0],[515,1],[555,0],[595,0],[634,1],[674,1],[714,0],[753,0],[793,0],[833,1],[872,1],[912,0],[952,0],[991,0],[1031,0],[1071,0],[1110,0],[1150,0],[1190,0],[1229,0],[1269,0],[1309,0],[1348,0],[1388,0],[1428,0],[1467,0],[1505,2],[1507,2],[1547,0],[1586,2],[1626,2],[1666,2],[1705,2],[1745,0],[1785,2],[1824,2],[1864,2],[1904,0],[1943,2],[1983,2],[2023,0],[2062,0],[2102,0],[2142,0],[2181,0],[2221,0],[2261,0],[2300,0],[2340,0],[2380,0],[2419,0],[2450,0],[2459,0],[2492,0],[2493,0],[2494,0],[2495,0],[2496,0],[2497,0],[2498,0],[2499,0]]}
+   },
+   "errors": []
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+SIMPLE  =                    T
+BITPIX  =                   16
+NAXIS   =                    2
+NAXIS1  =                  800
+NAXIS2  =                  800
+WCSDIM  =                    2
+CTYPE1  = 'ELON-TNX'
+CTYPE2  = 'ELAT-TNX'
+CRVAL1  =               45.125
+CRVAL2  =                 12.5
+CRPIX1  =                400.5
+CRPIX2  =                400.5
+CD1_1   =              -0.0002
+CD1_2   =                  0.0
+CD2_1   =                  0.0
+CD2_2   =               0.0002
+WAT0_001= 'system=image'
+WAT1_001= 'wtype=tnx lngcor = "3. 2. 2. 1. -0.09 0.09 -0.09 0.09 3e-05 0.0012 -'
+WAT1_002= '0.0008 0.02 "'
+WAT2_001= 'wtype=tnx latcor = "3. 2. 2. 1. -0.09 0.09 -0.09 0.09 -1e-05 0.0006 '
+WAT2_002= '0.0011 -0.015 "'
+END

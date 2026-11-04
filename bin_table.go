@@ -1,6 +1,8 @@
 package fits
 
 import (
+	"math/big"
+
 	"github.com/dmarkham/fits/header"
 	"github.com/dmarkham/fits/internal/tform"
 )
@@ -24,6 +26,10 @@ const (
 )
 
 // Column describes a single table column.
+//
+// For binary tables Repeat is the TFORM repeat count (number of elements,
+// or of bits for X, or of characters for A) and Dim the parsed TDIMn. For
+// ASCII tables Repeat is 1 and Width the TFORM field width.
 type Column struct {
 	Index   int    // 1-based per FITS convention
 	Name    string // TTYPEn
@@ -33,14 +39,32 @@ type Column struct {
 	Type    ColumnType
 	Scale   float64 // TSCALn, default 1
 	Zero    float64 // TZEROn, default 0
-	Null    any     // TNULLn if set
+	Null    any     // TNULLn if set: int64 for binary tables, string for ASCII tables
 	Display string  // TDISPn
 	Dim     []int64 // TDIMn if set
+	// Width is the ASCII-table field width (TFORM Aw/Iw/Fw.d/...), or the
+	// substring width w of a binary "rAw" TFORM; 0 otherwise. (A TDIMn on
+	// an rAw column sets the string width instead: ReadStringArrayColumn.)
+	Width int
 
 	// Derived on column-metadata pass.
-	byteOffset int   // byte offset within a table row
-	byteSize   int   // total byte size of this column's row cells
+	byteOffset int // byte offset within a table row
+	byteSize   int // total byte size of this column's row cells
 	bin        tform.BinaryForm
+	ascii      tform.ASCIIForm
+
+	// Integer null (binary tables, B/I/J/K and their P/Q forms only).
+	hasNull bool
+	nullInt int64
+	// ASCII null string (TNULLn) and whether it is defined.
+	hasNullStr bool
+	nullStr    string
+	// scaleLit/zeroLit: the TSCALn/TZEROn literals, exactly (nil when
+	// the card is absent).
+	scaleLit, zeroLit *big.Rat
+	// zeroNear2p63: TZEROn is a float literal other than 2^63 whose
+	// nearest double is 2^63 (see readScaleZero).
+	zeroNear2p63 bool
 }
 
 // BinaryTableHDU represents a BINTABLE extension (§7.3).

@@ -1,0 +1,29 @@
+# Radio-style cube with the spectral axis first: (FREQ, RA, DEC), SIN, and
+# a PC matrix that rotates the celestial block only (synthetic).
+NOTE pipeline: celestial axes at 2,3 behind a FREQ axis
+GRID 1 256 9 1 256 9
+PIX 128.5 128.5
+HEADER
+NAXIS   = 3
+NAXIS1  = 64
+NAXIS2  = 256
+NAXIS3  = 256
+CTYPE1  = 'FREQ'
+CTYPE2  = 'RA---SIN'
+CTYPE3  = 'DEC--SIN'
+CRVAL1  = 1.42040575E9
+CRVAL2  = 83.8
+CRVAL3  = -5.4
+CRPIX1  = 32.0
+CRPIX2  = 128.5
+CRPIX3  = 128.5
+CDELT1  = 2.5E4
+CDELT2  = -0.002
+CDELT3  = 0.002
+CUNIT1  = 'Hz'
+CUNIT2  = 'deg'
+CUNIT3  = 'deg'
+PC2_2   = 0.96592582629
+PC2_3   = 0.2588190451
+PC3_2   = -0.2588190451
+PC3_3   = 0.96592582629

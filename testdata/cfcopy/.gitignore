@@ -1,0 +1,4 @@
+# build artifacts of cfcopy.c and mkcomments.c (make -C testdata/cfcopy)
+/cfcopy
+/mkcomments
+/verify.out/

@@ -1,0 +1,21 @@
+# A singular CD matrix (row 2 = row 1 / 2, exact in binary): no inverse
+# exists. wcslib 8.10 ACCEPTS it: wcsset succeeds and wcsp2s computes every
+# point (only wcss2p has no answer). We refuse it in transform.New
+# (rule 7: sky->pixel would be undefined for every point).
+# EXPECT-GO-ERROR: linear transform is singular
+NOTE stricter: singular_cd
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = 0.0009765625
+CD1_2   = 0.001953125
+CD2_1   = 0.00048828125
+CD2_2   = 0.0009765625
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'

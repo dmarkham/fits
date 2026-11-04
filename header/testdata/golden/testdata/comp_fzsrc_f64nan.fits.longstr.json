@@ -1,0 +1,12 @@
+{
+ "file": "comp_fzsrc_f64nan.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 40},
+   {"n": 5, "key": "NAXIS2", "u64": 24}
+  ]}
+ ]
+}

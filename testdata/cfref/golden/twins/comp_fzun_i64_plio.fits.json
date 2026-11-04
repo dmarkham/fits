@@ -1,0 +1,29 @@
+{
+ "file": "comp_fzun_i64_plio.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 5760,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 6,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                   64 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                   12",
+    "NAXIS2  =                    8",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 64, "equivtype": 64, "compressed": false, "naxis": 2, "naxes": [12,8], "npix": 96, "bscale": 1, "bzero": 0,
+    "phys": {"n": 96, "sha256": "16fdcd9d2edaadd8ae9636fbc624a28e82410618eb5b30450eca51f849330073", "pool": "f64"},
+    "i64": {"n": 96, "sha256": "d012b4d4d7ab02300cc5f514fcfa585944e1f29228fe23ff38002794186766e8", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

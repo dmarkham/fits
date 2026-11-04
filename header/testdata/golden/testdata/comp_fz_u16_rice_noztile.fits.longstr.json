@@ -1,0 +1,34 @@
+{
+ "file": "comp_fz_u16_rice_noztile.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 8},
+   {"n": 5, "key": "NAXIS2", "u64": 24},
+   {"n": 6, "key": "PCOUNT", "u64": 1822},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 1},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1PB(78)", "comment": "data format of field: variable length array"},
+   {"n": 12, "key": "ZCMPTYPE", "str": "RICE_1", "comment": "compression algorithm"},
+   {"n": 13, "key": "ZNAME1", "str": "BLOCKSIZE", "comment": "compression block size"},
+   {"n": 14, "key": "ZVAL1", "u64": 32},
+   {"n": 15, "key": "ZNAME2", "str": "BYTEPIX", "comment": "bytes per pixel (1, 2, 4, or 8)"},
+   {"n": 16, "key": "ZVAL2", "u64": 2},
+   {"n": 17, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": ""},
+   {"n": 19, "key": "ZBITPIX", "u64": 16},
+   {"n": 20, "key": "ZNAXIS", "u64": 2},
+   {"n": 21, "key": "ZNAXIS1", "u64": 40},
+   {"n": 22, "key": "ZNAXIS2", "u64": 24},
+   {"n": 26, "key": "BZERO", "u64": 32768},
+   {"n": 27, "key": "BSCALE", "u64": 1}
+  ]}
+ ]
+}

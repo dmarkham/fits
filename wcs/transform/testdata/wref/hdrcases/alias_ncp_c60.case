@@ -1,0 +1,17 @@
+# AIPS legacy NCP projection (synthetic, the CTYPE form legacy radio
+# headers carry). wcslib 8.10 wcsset translates it to SIN with
+# PV2_1 = 0, PV2_2 = cot(CRVAL2) (wcs.c "simple alias translations").
+NOTE alias NCP: RA---NCP, CRVAL2 = 60
+GRID 1.0 256.0 9 1.0 256.0 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 256
+NAXIS2  = 256
+CTYPE1  = 'RA---NCP'
+CTYPE2  = 'DEC--NCP'
+CRVAL1  = 201.365
+CRVAL2  = 60.0
+CRPIX1  = 128.5
+CRPIX2  = 129.25
+CDELT1  = -0.0125
+CDELT2  = 0.0125

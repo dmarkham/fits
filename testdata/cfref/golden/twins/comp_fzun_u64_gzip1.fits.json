@@ -1,0 +1,32 @@
+{
+ "file": "comp_fzun_u64_gzip1.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 5760,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 8,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                   64 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                   12",
+    "NAXIS2  =                   10",
+    "EXTEND  =                    T",
+    "BSCALE  =                    1",
+    "BZERO   =  9223372036854775808"
+   ],
+   "image": {"bitpix": 64, "equivtype": 64, "compressed": false, "naxis": 2, "naxes": [12,10], "npix": 120, "bscale": 1, "bzero": 9.2233720368547758e+18,
+    "phys": {"n": 120, "sha256": "1d60ed077bdead2f9b48111913561dc73e3ce478421672069fa7cb46dad1f321", "pool": "f64"},
+    "i64": null,
+    "raw": {"n": 120, "sha256": "4872f3046921f63fae74e86ad86d147aa44b4f53e9bd7c1db010e00f8513ee44", "pool": "i64"}
+   },
+   "errors": ["read_img TLONGLONG: status 412: datatype conversion overflow"]
+  }
+ ]
+}

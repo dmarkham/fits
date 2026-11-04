@@ -7,73 +7,95 @@ type CenterFunc int
 
 const (
 	CenterMean   CenterFunc = iota // Use arithmetic mean as center
-	CenterMedian                   // Use median as center (more robust)
+	CenterMedian                   // Use Median (histogram median) as center
 )
 
 // SigmaClipResult holds the output of iterative sigma clipping.
 type SigmaClipResult struct {
-	Mean   float64
-	Stdev  float64
-	Median float64
-	NGood  int // count of values that survived clipping
+	Mean   float64 // mean of the surviving values
+	Stdev  float64 // population standard deviation (ddof=0) of the survivors
+	Median float64 // Median of the survivors
+	NGood  int     // count of values that survived clipping
+	// NIter is the number of clipping iterations run, counted as
+	// astropy's SigmaClip counts them: the final iteration that rejects
+	// nothing is included.
+	NIter int
 }
 
-// SigmaClip performs iterative sigma clipping on data.
+// SigmaClip performs iterative sigma clipping on data with the semantics
+// of astropy.stats.sigma_clip(data, sigma_lower=kLow, sigma_upper=kHigh,
+// maxiters=maxIter, cenfunc=..., stdfunc="std"):
 //
-// At each iteration, values outside [center - kLow*sigma,
-// center + kHigh*sigma] are rejected. The center is recomputed from
-// the surviving values using the chosen CenterFunc. Iteration stops
-// when no more values are rejected or maxIter is reached (0 = iterate
-// until stable, capped at 100).
+//   - NaN and ±Inf values are removed before clipping begins (astropy
+//     does the same and warns); NGood counts finite survivors only.
+//   - Each iteration computes the center (the mean, or Median for
+//     CenterMedian) and sigma, the population standard deviation (ddof=0)
+//     about the mean of the current values, and keeps the values v with
+//     center - sigma*kLow <= v <= center + sigma*kHigh. kLow and kHigh
+//     are independent (astropy's sigma_lower and sigma_upper).
+//   - Iteration stops when an iteration rejects nothing or after maxIter
+//     iterations. maxIter <= 0 is astropy's maxiters=None: iterate until
+//     an iteration rejects nothing, with no cap (every other iteration
+//     removes at least one value, so this terminates).
 //
-// Data is copied internally — the caller's slice is never modified.
-// NaN values are excluded before clipping begins.
+// The mean and sigma are computed accurately (the compensated two-pass
+// method of MeanStdevTwoPass: the mean correctly rounded, sigma within 2
+// ULP of the exact value on every tested input), and
+// the tests run astropy with the exactly rounded mean and population std
+// as cenfunc and stdfunc: the surviving set and the iteration count are
+// identical to that. numpy's np.mean/np.std (astropy's default "mean" and
+// "std") carry their own rounding, which is large for data with a big
+// offset, so on such data plain astropy can keep a slightly different set.
+//
+// The result holds the mean, population stdev and Median of the
+// survivors. Median is the histogram median (Siril's for []float32), not
+// numpy's exact median, so CenterMedian matches astropy run with that
+// median as cenfunc; this is what the tests check (testdata/gen_golden.py
+// runs astropy with Siril's median compiled from source).
+//
+// Values are compared in float64. For []float32 input the working set
+// stays float32 so that Median uses the Siril float32 path (a named type
+// whose underlying type is float32 uses the float64 path). Data is copied
+// internally; the caller's slice is never modified. With no finite values
+// the result is the zero SigmaClipResult; if an iteration rejects every
+// value, the result is zero except NIter.
 func SigmaClip[T Numeric](data []T, kLow, kHigh float64, maxIter int, center CenterFunc) SigmaClipResult {
-	// For float32 input, stay in float32 throughout the clipping loop
-	// so that Percentile uses the float32 specialization (matching
-	// Siril's findMinMaxPercentile which works in float arithmetic).
 	if f32, ok := any(data).([]float32); ok {
-		return sigmaClipFloat32(f32, kLow, kHigh, maxIter, center)
+		work := make([]float32, 0, len(f32))
+		for _, v := range f32 {
+			if !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) {
+				work = append(work, v)
+			}
+		}
+		return sigmaClipLoop(work, kLow, kHigh, maxIter, center)
 	}
-	return sigmaClipGeneric(data, kLow, kHigh, maxIter, center)
-}
-
-func sigmaClipFloat32(data []float32, kLow, kHigh float64, maxIter int, center CenterFunc) SigmaClipResult {
-	work := make([]float32, 0, len(data))
+	work := make([]float64, 0, len(data))
 	for _, v := range data {
-		if v == v { // skip NaN
-			work = append(work, v)
+		x := toFloat64(v)
+		if !math.IsNaN(x) && !math.IsInf(x, 0) {
+			work = append(work, x)
 		}
 	}
+	return sigmaClipLoop(work, kLow, kHigh, maxIter, center)
+}
+
+func sigmaClipLoop[S float32 | float64](work []S, kLow, kHigh float64, maxIter int, center CenterFunc) SigmaClipResult {
 	if len(work) == 0 {
 		return SigmaClipResult{}
 	}
-	if maxIter <= 0 {
-		maxIter = 100
-	}
-	for iter := 0; iter < maxIter; iter++ {
-		var c, sigma float64
-		switch center {
-		case CenterMedian:
+	niter := 0
+	// astropy's loop: while nchanged != 0 and iteration < maxiters. An
+	// iteration on an empty set (everything was rejected) changes nothing
+	// and ends it, as in astropy.
+	for maxIter <= 0 || niter < maxIter {
+		niter++
+		m, sigma := meanPopStdev(work)
+		c := m
+		if center == CenterMedian {
 			c = Percentile(work, 0.5)
-		default:
-			var sum float64
-			for _, v := range work {
-				sum += float64(v)
-			}
-			c = sum / float64(len(work))
 		}
-		var sum2 float64
-		for _, v := range work {
-			d := float64(v) - c
-			sum2 += d * d
-		}
-		sigma = math.Sqrt(sum2 / float64(len(work)))
-		if sigma == 0 {
-			break
-		}
-		lo := c - kLow*sigma
-		hi := c + kHigh*sigma
+		lo := c - float64(sigma*kLow)
+		hi := c + float64(sigma*kHigh)
 		kept := work[:0]
 		for _, v := range work {
 			fv := float64(v)
@@ -81,103 +103,36 @@ func sigmaClipFloat32(data []float32, kLow, kHigh float64, maxIter int, center C
 				kept = append(kept, v)
 			}
 		}
-		if len(kept) == len(work) {
-			break
-		}
+		changed := len(kept) != len(work)
 		work = kept
-	}
-	if len(work) == 0 {
-		return SigmaClipResult{}
-	}
-	var sum float64
-	for _, v := range work {
-		sum += float64(v)
-	}
-	m := sum / float64(len(work))
-	var sum2 float64
-	for _, v := range work {
-		d := float64(v) - m
-		sum2 += d * d
-	}
-	return SigmaClipResult{
-		Mean:   m,
-		Stdev:  math.Sqrt(sum2 / float64(len(work))),
-		Median: Percentile(work, 0.5),
-		NGood:  len(work),
-	}
-}
-
-func sigmaClipGeneric[T Numeric](data []T, kLow, kHigh float64, maxIter int, center CenterFunc) SigmaClipResult {
-	work := make([]float64, 0, len(data))
-	for _, v := range data {
-		if !isNaN(v) {
-			work = append(work, toFloat64(v))
-		}
-	}
-	if len(work) == 0 {
-		return SigmaClipResult{}
-	}
-	if maxIter <= 0 {
-		maxIter = 100
-	}
-	for iter := 0; iter < maxIter; iter++ {
-		var c, sigma float64
-		switch center {
-		case CenterMedian:
-			c = Percentile(work, 0.5)
-		default:
-			c = meanF64(work)
-		}
-		sigma = stdevF64(work, c)
-		if sigma == 0 {
+		if !changed {
 			break
 		}
-		lo := c - kLow*sigma
-		hi := c + kHigh*sigma
-		kept := work[:0]
-		for _, v := range work {
-			if v >= lo && v <= hi {
-				kept = append(kept, v)
-			}
-		}
-		if len(kept) == len(work) {
-			break
-		}
-		work = kept
 	}
 	if len(work) == 0 {
-		return SigmaClipResult{}
+		return SigmaClipResult{NIter: niter}
 	}
-	m := meanF64(work)
-	s := stdevF64(work, m)
-	med := Percentile(work, 0.5)
+	m, s := meanPopStdev(work)
 	return SigmaClipResult{
 		Mean:   m,
 		Stdev:  s,
-		Median: med,
+		Median: Percentile(work, 0.5),
 		NGood:  len(work),
+		NIter:  niter,
 	}
 }
 
-func meanF64(data []float64) float64 {
-	if len(data) == 0 {
-		return 0
+// meanPopStdev returns the mean and the population (ddof=0) standard
+// deviation about it, with the compensated two-pass sums of
+// MeanStdevTwoPass (NaN for an empty set).
+func meanPopStdev[S float32 | float64](data []S) (mean, stdev float64) {
+	n, mean, m2 := twoPassMoments(data)
+	if n == 0 {
+		return mean, math.NaN()
 	}
-	var s float64
-	for _, v := range data {
-		s += v
+	variance := m2 / float64(n)
+	if variance < 0 {
+		variance = 0
 	}
-	return s / float64(len(data))
-}
-
-func stdevF64(data []float64, mean float64) float64 {
-	if len(data) == 0 {
-		return 0
-	}
-	var s float64
-	for _, v := range data {
-		d := v - mean
-		s += d * d
-	}
-	return math.Sqrt(s / float64(len(data)))
+	return mean, math.Sqrt(variance)
 }

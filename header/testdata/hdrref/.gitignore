@@ -1,0 +1,3 @@
+# Build artifact; the source hdrref.c is committed. Rebuild with
+# `make -C header/testdata hdrref/hdrref`.
+/hdrref

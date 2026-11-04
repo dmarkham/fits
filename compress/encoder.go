@@ -11,16 +11,19 @@ import (
 //
 // The caller allocates dst large enough to hold the worst case; the
 // encoder returns the actual number of bytes written. If dst is too
-// small, it returns ErrBufferTooSmall so the caller can retry with
-// a larger buffer or fall back to NOCOMPRESS for that tile.
+// small (including one byte short of the exact stream length), it
+// returns ErrBufferTooSmall and the caller retries with a larger buffer.
+// There is no NOCOMPRESS fallback: cfitsio cannot read NOCOMPRESS tiles,
+// so the fits writers never produce them (see the package doc).
 type Encoder interface {
 	Encode(src, dst []byte, nelem, elemSize int) (int, error)
 }
 
 // ErrBufferTooSmall is returned by Encoder.Encode when the caller's
-// destination buffer cannot hold the compressed output. Callers that
-// hit this should retry with a larger buffer or use the NOCOMPRESS
-// fallback for this specific tile.
+// destination buffer cannot hold the compressed output. Every encoder
+// returns it rather than a truncated stream, including RICE_1 when only
+// the final partial byte does not fit (checkExactBuffer in
+// encode_cref_test.go). Callers retry with a larger buffer.
 var ErrBufferTooSmall = fmt.Errorf("fits/compress: output buffer too small")
 
 // SelectEncoder returns the Encoder for the given algorithm, configured

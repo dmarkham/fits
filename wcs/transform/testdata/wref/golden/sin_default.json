@@ -1,0 +1,4 @@
+{"name": "sin_default", "code": "SIN", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 0, 0, null]},
+"forward": 1075, "inverse": 1161, "roundtrip": 555, "payload": "sin_default.bin", "payload_bytes": 59283}

@@ -1,0 +1,33 @@
+{
+ "file": "comp_fz_i16_hcomp_smooth.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 8},
+   {"n": 5, "key": "NAXIS2", "u64": 3},
+   {"n": 6, "key": "PCOUNT", "u64": 283},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 1},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1PB(96)", "comment": "data format of field: variable length array"},
+   {"n": 12, "key": "ZTILE1", "u64": 40},
+   {"n": 13, "key": "ZTILE2", "u64": 8},
+   {"n": 14, "key": "ZCMPTYPE", "str": "HCOMPRESS_1", "comment": "compression algorithm"},
+   {"n": 15, "key": "ZNAME1", "str": "SCALE", "comment": "HCOMPRESS scale factor"},
+   {"n": 17, "key": "ZNAME2", "str": "SMOOTH", "comment": "HCOMPRESS smooth option"},
+   {"n": 18, "key": "ZVAL2", "u64": 1},
+   {"n": 19, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": ""},
+   {"n": 21, "key": "ZBITPIX", "u64": 16},
+   {"n": 22, "key": "ZNAXIS", "u64": 2},
+   {"n": 23, "key": "ZNAXIS1", "u64": 40},
+   {"n": 24, "key": "ZNAXIS2", "u64": 24}
+  ]}
+ ]
+}

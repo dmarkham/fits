@@ -1,471 +1,372 @@
 package transform
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/dmarkham/fits/wcs"
 )
 
-// This file contains the zenithal perspective family (AZP, SZP) and the
-// zenithal polynomial (ZPN), separated from the simpler closed-form
-// zenithal projections in zenithal.go.
+// The zenithal perspective projections (AZP, SZP), the zenithal polynomial
+// (ZPN) and Airy's projection (AIR), Paper II §5.1. Ports of the wcslib
+// 8.10 prj.c functions of the same names, in degrees (see projection.go).
 
-// AZP — zenithal perspective projection (Paper II §5.1.1).
+// AZP — zenithal/azimuthal perspective.
 //
-// Parameters (on the latitude axis, conventionally axis 2):
+//	PV2_1 = mu    distance of the point of projection from the sphere
+//	              centre, in sphere radii (default 0)
+//	PV2_2 = gamma tilt of the projection plane, degrees (default 0)
 //
-//	PV2_1 = mu    (dimensionless distance from sphere center to
-//	              projection source, in sphere radii; default 0)
-//	PV2_2 = gamma (tilt angle in degrees, default 0)
-//
-// Forward: Paper II eq. 20.
-//
-//	R_theta = (mu + 1) * cos(theta) / (mu + sin(theta))
-//
-// (The gamma tilt adds a cos(gamma) denominator term when rotating the
-// projection plane; see eq. 19.) For gamma = 0 this reduces to the
-// un-tilted zenithal perspective.
-//
-// Inverse: quadratic in sin(theta). We derive it below from the forward.
+// Both directions include the tilt exactly (the previous Go inverse was
+// an approximation that was exact only along the principal meridians,
+// up to 1950 arcsec off). The forward rejects points on the far side of
+// the horizon (theta < asin(-1/mu) for |mu| > 1) and, for a tilted plane,
+// points beyond the plane's own horizon.
 type azpProjection struct {
-	mu    float64
-	gamma float64 // tilt, radians
+	mu                         float64
+	w0, w1, w2, w3, w4, w5, w7 float64
 }
 
-func newAZP(pv map[wcs.PVKey]float64, latAxis int) Projection {
-	return azpProjection{
-		mu:    pvFloat(pv, latAxis, 1, 0),
-		gamma: degToRad(pvFloat(pv, latAxis, 2, 0)),
+func newAZP(pv map[wcs.PVKey]float64, latAxis int) (azpProjection, error) {
+	mu := pvFloat(pv, latAxis, 1, 0)
+	gamma := pvFloat(pv, latAxis, 2, 0)
+	p := azpProjection{mu: mu}
+	p.w0 = float64(r2d * (mu + 1.0))
+	if p.w0 == 0.0 {
+		return p, errBadParam("AZP", "mu = PV%d_1 = -1", latAxis)
 	}
-}
-
-func (azpProjection) Code() string    { return "AZP" }
-func (azpProjection) Theta0() float64 { return math.Pi / 2 }
-
-func (p azpProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	sinPhi, cosPhi := math.Sincos(phi)
-	sinTheta, cosTheta := math.Sincos(theta)
-	sinGamma, cosGamma := math.Sincos(p.gamma)
-	denom := p.mu + sinTheta + cosTheta*cosPhi*sinGamma
-	if denom == 0 {
-		return 0, 0, false
+	p.w3 = cosd(gamma)
+	if p.w3 == 0.0 {
+		return p, errBadParam("AZP", "gamma = PV%d_2 = %g gives cos(gamma) = 0", latAxis, gamma)
 	}
-	r := (p.mu + 1) * cosTheta / denom
-	x = r * sinPhi
-	y = -r * cosPhi / cosGamma
-	return x, y, true
-}
-
-func (p azpProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	// For gamma = 0 (the common case with no tilt) we have a closed-form
-	// quadratic inverse. Setting u = sin(theta) and substituting into
-	//
-	//	R = (mu+1) * cos(theta) / (mu + sin(theta))
-	//
-	// gives the quadratic
-	//
-	//	u² * (R² + (mu+1)²) + 2*u*R²*mu + (R²*mu² - (mu+1)²) = 0
-	//
-	// whose larger root is the near-hemisphere solution. For gamma != 0
-	// the formula still has a closed form but involves cos(phi) coupling
-	// into the denominator; we handle gamma != 0 by scaling y first then
-	// applying the gamma=0 derivation (Paper II eq. 23 with the tilt
-	// correction absorbed into y).
-	cosGamma := math.Cos(p.gamma)
-	if cosGamma == 0 {
-		return 0, 0, false
-	}
-	yTilt := y * cosGamma
-	r := math.Hypot(x, yTilt)
-	if r == 0 {
-		return 0, math.Pi / 2, true
-	}
-	phi = math.Atan2(x, -yTilt)
-
-	// Quadratic coefficients. Without tilt, this is exact; with gamma != 0
-	// it is an approximation that is exact along the principal meridians.
-	muPlus1 := p.mu + 1
-	a := r*r + muPlus1*muPlus1
-	b := 2 * r * r * p.mu
-	c := r*r*p.mu*p.mu - muPlus1*muPlus1
-	disc := b*b - 4*a*c
-	if disc < 0 {
-		return 0, 0, false
-	}
-	sqrtDisc := math.Sqrt(disc)
-	// Larger root → near hemisphere.
-	u := (-b + sqrtDisc) / (2 * a)
-	if u < -1 || u > 1 {
-		u = (-b - sqrtDisc) / (2 * a)
-		if u < -1 || u > 1 {
-			return 0, 0, false
-		}
-	}
-	sinTheta := u
-	cosTheta := math.Sqrt((1 - u) * (1 + u))
-	theta = math.Atan2(sinTheta, cosTheta)
-	return phi, theta, true
-}
-
-// SZP — slant zenithal perspective (Paper II §5.1.2).
-//
-// Parameters (latitude axis):
-//
-//	PV2_1 = mu      (source distance in sphere radii; default 0)
-//	PV2_2 = phi_c   (native longitude of the projection source, degrees)
-//	PV2_3 = theta_c (native latitude of the projection source, degrees,
-//	                default 90)
-//
-// This is the most general zenithal perspective: the projection source
-// can be anywhere along the axis of a cone whose apex is at theta_c.
-// Used by some planetary stereo-pair instruments. When mu = 0 and
-// theta_c = 90 it reduces to TAN; when theta_c = 90 and mu != 0 it
-// reduces to AZP.
-type szpProjection struct {
-	mu     float64
-	phiC   float64 // radians
-	thetaC float64 // radians
-}
-
-func newSZP(pv map[wcs.PVKey]float64, latAxis int) Projection {
-	return szpProjection{
-		mu:     pvFloat(pv, latAxis, 1, 0),
-		phiC:   degToRad(pvFloat(pv, latAxis, 2, 0)),
-		thetaC: degToRad(pvFloat(pv, latAxis, 3, 90)),
-	}
-}
-
-func (szpProjection) Code() string    { return "SZP" }
-func (szpProjection) Theta0() float64 { return math.Pi / 2 }
-
-func (p szpProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	// Paper II eq. 24:
-	//   X_p = mu * cos(theta_c) * sin(phi_c)
-	//   Y_p = -mu * cos(theta_c) * cos(phi_c)
-	//   Z_p = mu * sin(theta_c) + 1
-	// And the projection (Paper II eq. 25):
-	//   X = (Z_p * cos(theta)*sin(phi) - X_p*(1 - sin(theta))) / (Z_p - (1 - sin(theta)))
-	//   Y = -(Z_p * cos(theta)*cos(phi) + Y_p*(1 - sin(theta))) / (Z_p - (1 - sin(theta)))
-	sinPhiC, cosPhiC := math.Sincos(p.phiC)
-	sinThC, cosThC := math.Sincos(p.thetaC)
-	Xp := p.mu * cosThC * sinPhiC
-	Yp := -p.mu * cosThC * cosPhiC
-	Zp := p.mu*sinThC + 1
-
-	sinTheta, cosTheta := math.Sincos(theta)
-	sinPhi, cosPhi := math.Sincos(phi)
-	s := 1 - sinTheta
-	denom := Zp - s
-	if denom == 0 {
-		return 0, 0, false
-	}
-	x = (Zp*cosTheta*sinPhi - Xp*s) / denom
-	y = -(Zp*cosTheta*cosPhi + Yp*s) / denom
-	return x, y, true
-}
-
-func (p szpProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	// Closed-form quadratic inverse. Port of wcslib's szpx2s
-	// (reference/cfitsio not applicable; see Siril subprojects/wcslib/
-	// prj.c:955). The SZP inverse solves a quadratic in sin(theta):
-	//
-	//	a * sin²(θ) + 2b * sin(θ) + c = 0
-	//
-	// with coefficients derived from the direction cosines of the
-	// projection source relative to the reference point. In wcslib's
-	// default unit system r0 = 180/π, giving w[0] = π/180 (the
-	// deg→rad factor). Our library is already radian-native, so we
-	// set r0 = 1 which collapses w[0] = 1 and the degree-scale
-	// constants w[4..6] to their unscaled counterparts w[1..3].
-	//
-	// The three SZP-specific constants (direction cosines of the
-	// projection source on the unit sphere) are:
-	//
-	//	w1 = -μ * cos(θc) * sin(φc)   (= -Xp in Paper II eq. 24)
-	//	w2 =  μ * cos(θc) * cos(φc)   (= -Yp)
-	//	w3 =  μ * sin(θc) + 1         (=  Zp)
-	sinPhiC, cosPhiC := math.Sincos(p.phiC)
-	sinThC, cosThC := math.Sincos(p.thetaC)
-	w1 := -p.mu * cosThC * sinPhiC
-	w2 := p.mu * cosThC * cosPhiC
-	w3 := p.mu*sinThC + 1
-	if w3 == 0 {
-		return 0, 0, false
-	}
-
-	xr, yr := x, y
-	r2 := xr*xr + yr*yr
-
-	x1 := (xr - w1) / w3
-	y1 := (yr - w2) / w3
-	xy := xr*x1 + yr*y1
-
-	const tol = 1e-13
-	var z, sinthe float64
-	if r2 < 1e-10 {
-		// Small-angle formula near the pole: avoids the
-		// 1-sinthe cancellation by computing z = r²/2 directly
-		// (exact leading term of the Taylor expansion). Matches
-		// wcslib's "Use small angle formula" branch.
-		theta = math.Pi/2 - math.Sqrt(r2/(1+xy))
-		sinthe = math.Sin(theta)
-		z = r2 / 2
+	p.w2 = 1.0 / p.w3
+	p.w4 = sind(gamma)
+	p.w1 = p.w4 / p.w3
+	if math.Abs(mu) > 1.0 {
+		p.w5 = asind(-1.0 / mu)
 	} else {
-		// Full quadratic.
-		t := x1*x1 + y1*y1
-		a := t + 1
-		b := xy - t
-		c := r2 - 2*xy + t - 1
-		d := b*b - a*c
-		if d < 0 {
-			return 0, 0, false
-		}
-		d = math.Sqrt(d)
-
-		// Two candidate solutions. wcslib picks the one closest
-		// to the pole (larger sin(θ)).
-		sinth1 := (-b + d) / a
-		sinth2 := (-b - d) / a
-		if sinth1 > sinth2 {
-			sinthe = sinth1
-		} else {
-			sinthe = sinth2
-		}
-		if sinthe > 1 {
-			if sinthe-1 < tol {
-				sinthe = 1
-			} else {
-				// Numerical overshoot above 1: try the other root.
-				if sinth1 < sinth2 {
-					sinthe = sinth1
-				} else {
-					sinthe = sinth2
-				}
-			}
-		}
-		if sinthe < -1 {
-			if sinthe+1 > -tol {
-				sinthe = -1
-			}
-		}
-		if sinthe > 1 || sinthe < -1 {
-			return 0, 0, false
-		}
-		theta = math.Asin(sinthe)
-		z = 1 - sinthe
+		p.w5 = -90.0
 	}
-
-	phi = atan2Safe(xr-x1*z, -(yr - y1*z))
-	return phi, theta, true
-}
-
-// ZPN — zenithal polynomial projection (Paper II §5.1.8).
-//
-// R_theta is a user-defined polynomial in zeta = π/2 - theta:
-//
-//	R(ζ) = pv[0] + pv[1]·ζ + pv[2]·ζ² + ... + pv[n]·ζⁿ
-//
-// with up to 30 coefficients. The polynomial is monotonic in ζ from
-// ζ=0 (pole) out to an inflection point where the derivative first
-// becomes non-positive; beyond that the inverse is undefined.
-//
-// Forward is straight polynomial evaluation. Inverse is a port of
-// wcslib's zpnx2s / zpnset (reference implementation, prj.c:2241 and
-// prj.c:2342): three-case dispatch on degree with closed-form
-// solutions for k=1 and k=2, and weighted false-position bracketing
-// for k≥3. The bracketing range is established by zpnset, which walks
-// the polynomial's derivative outward from ζ=0 to find the first
-// inflection point and caches it as the valid upper bound.
-type zpnProjection struct {
-	coeffs [30]float64 // pv[0..29]
-	degree int         // highest non-zero index (n in the math above)
-
-	// Inflection-point constants cached by setup (wcslib w[0], w[1]).
-	// zdMax is the ζ at the inflection (upper bracket for the inverse
-	// search); rMax is R(zdMax), the upper R bound. For degree < 2
-	// there is no inflection and zdMax is π (the whole hemisphere).
-	zdMax float64
-	rMax  float64
-}
-
-func newZPN(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
-	p := zpnProjection{}
-	for i := 0; i < 30; i++ {
-		p.coeffs[i] = pvFloat(pv, latAxis, i, 0)
-		if p.coeffs[i] != 0 {
-			p.degree = i
-		}
-	}
-	if p.degree == 0 && p.coeffs[0] == 0 {
-		return nil, fmt.Errorf("wcs/transform: ZPN requires at least one non-zero PV%d_i coefficient", latAxis)
-	}
-	if err := p.setup(); err != nil {
-		return nil, err
+	w6 := float64(mu * p.w3)
+	if math.Abs(w6) < 1.0 {
+		p.w7 = 1.0
 	}
 	return p, nil
 }
 
-// setup mirrors wcslib's zpnset (prj.c:2241). For degree < 2 there's no
-// inflection, so the whole ζ ∈ [0, π] range is valid. For degree ≥ 2
-// we walk the derivative outward from ζ=0 in 1° steps until it first
-// goes non-positive, then refine the inflection with secant iteration,
-// then cache (zdMax, R(zdMax)) as the upper bound for the inverse
-// bracket.
-func (p *zpnProjection) setup() error {
-	k := p.degree
-	if k < 2 {
-		p.zdMax = math.Pi
-		return nil
-	}
-	if p.coeffs[1] <= 0 {
-		return fmt.Errorf("wcs/transform: ZPN pv[1] must be > 0 (got %g)", p.coeffs[1])
-	}
+func (azpProjection) Code() string    { return "AZP" }
+func (azpProjection) theta0() float64 { return 90 }
 
-	// Walk in 1° steps looking for the first derivative sign change.
-	var zd1, d1 float64
-	var zd2, d2 float64
-	d1 = p.coeffs[1]
-	zd1 = 0
-	found := false
-	for j := 0; j < 180; j++ {
-		zd2 = float64(j) * math.Pi / 180
-		d2 = 0
-		for m := k; m > 0; m-- {
-			d2 = d2*zd2 + float64(m)*p.coeffs[m]
+func (p azpProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-13
+	yc := float64(y * p.w3)
+	q := p.w0 + float64(y*p.w4)
+	r := math.Sqrt(float64(x*x) + float64(yc*yc))
+	if r == 0.0 {
+		phi, theta = 0.0, 90.0
+	} else {
+		phi = atan2d(x, -yc)
+		s := r / q
+		t := s * p.mu / math.Sqrt(float64(s*s)+1.0)
+		s = atan2d(1.0, s)
+		if math.Abs(t) > 1.0 {
+			if math.Abs(t) > 1.0+tol {
+				return 0, 0, false
+			}
+			t = math.Copysign(90.0, t)
+		} else {
+			t = asind(t)
 		}
-		if d2 <= 0 {
-			found = true
+		a := s - t
+		b := s + t + 180.0
+		if a > 90.0 {
+			a -= 360.0
+		}
+		if b > 90.0 {
+			b -= 360.0
+		}
+		theta = math.Max(a, b)
+	}
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
+}
+
+func (p azpProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinphi, cosphi := sincosd(phi)
+	sinthe, costhe := sincosd(theta)
+	s := float64(p.w1 * cosphi)
+	t := (p.mu + sinthe) + float64(costhe*s)
+	if t == 0.0 {
+		return 0, 0, false
+	}
+	r := p.w0 * costhe / t
+	if theta < p.w5 {
+		return 0, 0, false
+	} else if p.w7 > 0.0 {
+		t = p.mu / math.Sqrt(1.0+float64(s*s))
+		if math.Abs(t) <= 1.0 {
+			s = atand(-s)
+			t = asind(t)
+			a := s - t
+			b := s + t + 180.0
+			if a > 90.0 {
+				a -= 360.0
+			}
+			if b > 90.0 {
+				b -= 360.0
+			}
+			if theta < math.Max(a, b) {
+				return 0, 0, false
+			}
+		}
+	}
+	return float64(r * sinphi), float64(-r * cosphi * p.w2), true
+}
+
+// SZP — slant zenithal perspective.
+//
+//	PV2_1 = mu      distance of the point of projection from the sphere
+//	                centre, in sphere radii (default 0)
+//	PV2_2 = phi_c   native longitude of the point of projection (default 0)
+//	PV2_3 = theta_c native latitude of the point of projection
+//	                (default 90)
+//
+// theta_c = 90 reduces to AZP with gamma = 0; mu = 0 to TAN.
+type szpProjection struct {
+	mu                             float64
+	w0, w1, w2, w3, w4, w5, w6, w7 float64
+	w8                             float64
+}
+
+func newSZP(pv map[wcs.PVKey]float64, latAxis int) (szpProjection, error) {
+	mu := pvFloat(pv, latAxis, 1, 0)
+	phic := pvFloat(pv, latAxis, 2, 0)
+	thetac := pvFloat(pv, latAxis, 3, 90)
+	p := szpProjection{mu: mu}
+	p.w0 = 1.0 / r2d
+	p.w3 = float64(mu*sind(thetac)) + 1.0
+	if p.w3 == 0.0 {
+		return p, errBadParam("SZP", "mu sin(theta_c) = -1")
+	}
+	p.w1 = float64(-mu * cosd(thetac) * sind(phic))
+	p.w2 = float64(mu * cosd(thetac) * cosd(phic))
+	p.w4 = float64(r2d * p.w1)
+	p.w5 = float64(r2d * p.w2)
+	p.w6 = float64(r2d * p.w3)
+	p.w7 = float64((p.w3-1.0)*p.w3) - 1.0
+	if math.Abs(p.w3-1.0) < 1.0 {
+		p.w8 = asind(1.0 - p.w3)
+	} else {
+		p.w8 = -90.0
+	}
+	return p, nil
+}
+
+func (szpProjection) Code() string    { return "SZP" }
+func (szpProjection) theta0() float64 { return 90 }
+
+func (p szpProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-13
+	xr := float64(x * p.w0)
+	yr := float64(y * p.w0)
+	r2 := float64(xr*xr) + float64(yr*yr)
+	x1 := (xr - p.w1) / p.w3
+	y1 := (yr - p.w2) / p.w3
+	xy := float64(xr*x1) + float64(yr*y1)
+	var z float64
+	if r2 < 1.0e-10 {
+		z = r2 / 2.0
+		theta = 90.0 - float64(r2d*math.Sqrt(r2/(1.0+xy)))
+	} else {
+		t := float64(x1*x1) + float64(y1*y1)
+		a := t + 1.0
+		b := xy - t
+		c := r2 - xy - xy + t - 1.0
+		d := float64(b*b) - float64(a*c)
+		if d < 0.0 {
+			return 0, 0, false
+		}
+		d = math.Sqrt(d)
+		sinth1 := (-b + d) / a
+		sinth2 := (-b - d) / a
+		sinthe := math.Max(sinth1, sinth2)
+		if sinthe > 1.0 {
+			if sinthe-1.0 < tol {
+				sinthe = 1.0
+			} else {
+				sinthe = math.Min(sinth1, sinth2)
+			}
+		}
+		if sinthe < -1.0 && sinthe+1.0 > -tol {
+			sinthe = -1.0
+		}
+		if sinthe > 1.0 || sinthe < -1.0 {
+			return 0, 0, false
+		}
+		theta = asind(sinthe)
+		z = 1.0 - sinthe
+	}
+	phi = atan2d(xr-float64(x1*z), -(yr - float64(y1*z)))
+	return phi, theta, prjbchk(2.0e-13, &phi, &theta)
+}
+
+func (p szpProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinphi, cosphi := sincosd(phi)
+	s := 1.0 - sind(theta)
+	t := p.w3 - s
+	if t == 0.0 {
+		return 0, 0, false
+	}
+	r := p.w6 * cosd(theta) / t
+	u := p.w4 * s / t
+	v := p.w5 * s / t
+	if theta < p.w8 {
+		return 0, 0, false
+	} else if math.Abs(p.mu) > 1.0 {
+		s := float64(p.w1*sinphi) - float64(p.w2*cosphi)
+		t := 1.0 / math.Sqrt(p.w7+float64(s*s))
+		if math.Abs(t) <= 1.0 {
+			s = atan2d(s, p.w3-1.0)
+			t = asind(t)
+			a := s - t
+			b := s + t + 180.0
+			if a > 90.0 {
+				a -= 360.0
+			}
+			if b > 90.0 {
+				b -= 360.0
+			}
+			if theta < math.Max(a, b) {
+				return 0, 0, false
+			}
+		}
+	}
+	return float64(r*sinphi) - u, float64(-r*cosphi) - v, true
+}
+
+// ZPN — zenithal polynomial.
+//
+//	R_theta = r0 sum_{m=0}^{29} PV2_m zeta^m,  zeta = (90 - theta) in radians
+//
+// (all PV2_m default 0; at least one must be non-zero). For degree >= 2
+// the projection is defined only out to the first zero of dR/dzeta (found
+// as in wcslib's zpnset); beyond it both directions reject. The inverse
+// is closed-form for degree 1 and 2 and weighted regula falsi otherwise.
+type zpnProjection struct {
+	pv     [30]float64
+	n      int     // degree: highest non-zero index
+	w0, w1 float64 // zeta and R/r0 at the first stationary point
+}
+
+func newZPN(pv map[wcs.PVKey]float64, latAxis int) (zpnProjection, error) {
+	var p zpnProjection
+	for m := 0; m < 30; m++ {
+		p.pv[m] = pvFloat(pv, latAxis, m, 0)
+	}
+	const tol = 1.0e-13
+	k := 29
+	for k >= 0 && p.pv[k] == 0.0 {
+		k--
+	}
+	if k < 0 {
+		return p, errBadParam("ZPN", "every coefficient PV%d_m is zero", latAxis)
+	}
+	p.n = k
+	if k < 2 {
+		p.w0 = wpi
+		return p, nil
+	}
+	d1 := p.pv[1]
+	if d1 <= 0.0 {
+		return p, errBadParam("ZPN", "PV%d_1 = %g must be > 0 for degree %d", latAxis, d1, k)
+	}
+	var zd, zd1, zd2, d, d2 float64
+	j := 0
+	for ; j < 180; j++ {
+		zd2 = float64(float64(j) * d2r)
+		d2 = 0.0
+		for m := k; m > 0; m-- {
+			d2 = float64(d2*zd2) + float64(float64(m)*p.pv[m])
+		}
+		if d2 <= 0.0 {
 			break
 		}
 		zd1 = zd2
 		d1 = d2
 	}
-
-	var zd, r float64
-	if !found {
-		// Derivative never went negative within [0, π] — whole
-		// hemisphere is valid.
-		zd = math.Pi
+	if j == 180 {
+		zd = wpi
 	} else {
-		// Refine the zero-of-derivative by secant iteration.
-		const tol = 1e-13
-		for j := 1; j <= 10; j++ {
+		for j = 1; j <= 10; j++ {
 			zd = zd1 - d1*(zd2-zd1)/(d2-d1)
-			d := 0.0
+			d = 0.0
 			for m := k; m > 0; m-- {
-				d = d*zd + float64(m)*p.coeffs[m]
+				d = float64(d*zd) + float64(float64(m)*p.pv[m])
 			}
 			if math.Abs(d) < tol {
 				break
 			}
-			if d < 0 {
-				zd2 = zd
-				d2 = d
+			if d < 0.0 {
+				zd2, d2 = zd, d
 			} else {
-				zd1 = zd
-				d1 = d
+				zd1, d1 = zd, d
 			}
 		}
 	}
-	// R at the inflection (upper R bound for inverse).
-	r = 0
+	r := 0.0
 	for m := k; m >= 0; m-- {
-		r = r*zd + p.coeffs[m]
+		r = float64(r*zd) + p.pv[m]
 	}
-	p.zdMax = zd
-	p.rMax = r
-	return nil
+	p.w0 = zd
+	p.w1 = r
+	return p, nil
 }
 
 func (zpnProjection) Code() string    { return "ZPN" }
-func (zpnProjection) Theta0() float64 { return math.Pi / 2 }
+func (zpnProjection) theta0() float64 { return 90 }
 
-// polyEval evaluates the ZPN polynomial R(ζ) via Horner's rule.
-func (p zpnProjection) polyEval(zeta float64) float64 {
-	v := p.coeffs[p.degree]
-	for i := p.degree - 1; i >= 0; i-- {
-		v = v*zeta + p.coeffs[i]
+func (p zpnProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-13
+	k := p.n
+	r := math.Sqrt(float64(x*x)+float64(y*y)) / r2d
+	if r != 0.0 {
+		phi = atan2d(x, -y)
 	}
-	return v
-}
-
-func (p zpnProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	zeta := math.Pi/2 - theta
-	r := p.polyEval(zeta)
-	return r * math.Sin(phi), -r * math.Cos(phi), true
-}
-
-func (p zpnProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	r := math.Hypot(x, y)
-	if r == 0 {
-		phi = 0
-	} else {
-		phi = atan2Safe(x, -y)
-	}
-
-	k := p.degree
 	var zd float64
-	const tol = 1e-13
-
 	switch {
 	case k < 1:
-		// Constant polynomial — no solution.
 		return 0, 0, false
-
 	case k == 1:
-		// Linear: R = pv[0] + pv[1]·ζ
-		zd = (r - p.coeffs[0]) / p.coeffs[1]
-
+		zd = (r - p.pv[0]) / p.pv[1]
 	case k == 2:
-		// Quadratic: pv[2]·ζ² + pv[1]·ζ + (pv[0] - r) = 0
-		a := p.coeffs[2]
-		b := p.coeffs[1]
-		c := p.coeffs[0] - r
-		d := b*b - 4*a*c
-		if d < 0 {
+		a := p.pv[2]
+		b := p.pv[1]
+		c := p.pv[0] - r
+		d := float64(b*b) - float64(4.0*a*c)
+		if d < 0.0 {
 			return 0, 0, false
 		}
 		d = math.Sqrt(d)
-		// Choose the root closest to the pole (smaller ζ).
-		zd1 := (-b + d) / (2 * a)
-		zd2 := (-b - d) / (2 * a)
-		if zd1 < zd2 {
-			zd = zd1
-		} else {
-			zd = zd2
-		}
+		zd1 := (-b + d) / (2.0 * a)
+		zd2 := (-b - d) / (2.0 * a)
+		zd = math.Min(zd1, zd2)
 		if zd < -tol {
-			// Try the other root.
-			if zd1 > zd2 {
-				zd = zd1
-			} else {
-				zd = zd2
-			}
+			zd = math.Max(zd1, zd2)
 		}
-		if zd < 0 {
+		if zd < 0.0 {
 			if zd < -tol {
 				return 0, 0, false
 			}
-			zd = 0
-		} else if zd > math.Pi {
-			if zd > math.Pi+tol {
+			zd = 0.0
+		} else if zd > wpi {
+			if zd > wpi+tol {
 				return 0, 0, false
 			}
-			zd = math.Pi
+			zd = wpi
 		}
-
 	default:
-		// Higher order: weighted false-position bracketing on
-		// [0, zdMax]. The bracket is valid because the polynomial
-		// is monotonic on this range by construction (zdMax is
-		// the first inflection point, located by setup()).
 		zd1 := 0.0
-		r1 := p.coeffs[0]
-		zd2 := p.zdMax
-		r2 := p.rMax
-
-		// Outside the valid monotonic range → no solution.
+		r1 := p.pv[0]
+		zd2 := p.w0
+		r2 := p.w1
 		if r < r1 {
 			if r < r1-tol {
 				return 0, 0, false
@@ -477,9 +378,6 @@ func (p zpnProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
 			}
 			zd = zd2
 		} else {
-			// Dissect the interval with false-position,
-			// clamping lambda to avoid stalls. wcslib caps
-			// the loop at 100 iterations.
 			for j := 0; j < 100; j++ {
 				lambda := (r2 - r) / (r2 - r1)
 				if lambda < 0.1 {
@@ -487,20 +385,21 @@ func (p zpnProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
 				} else if lambda > 0.9 {
 					lambda = 0.9
 				}
-				zd = zd2 - lambda*(zd2-zd1)
-				rt := p.polyEval(zd)
+				zd = zd2 - float64(lambda*(zd2-zd1))
+				rt := 0.0
+				for m := k; m >= 0; m-- {
+					rt = (float64(rt * zd)) + p.pv[m]
+				}
 				if rt < r {
 					if r-rt < tol {
 						break
 					}
-					r1 = rt
-					zd1 = zd
+					r1, zd1 = rt, zd
 				} else {
 					if rt-r < tol {
 						break
 					}
-					r2 = rt
-					zd2 = zd
+					r2, zd2 = rt, zd
 				}
 				if math.Abs(zd2-zd1) < tol {
 					break
@@ -508,7 +407,137 @@ func (p zpnProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
 			}
 		}
 	}
+	theta = 90.0 - float64(zd*r2d)
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
+}
 
-	theta = math.Pi/2 - zd
-	return phi, theta, true
+func (p zpnProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinphi, cosphi := sincosd(phi)
+	s := float64((90.0 - theta) * d2r)
+	r := 0.0
+	for m := p.n; m >= 0; m-- {
+		r = float64(r*s) + p.pv[m]
+	}
+	r *= r2d
+	if s > p.w0 {
+		return 0, 0, false
+	}
+	return float64(r * sinphi), float64(-r * cosphi), true
+}
+
+// AIR — Airy's zenithal. PV2_1 = theta_b, the latitude at which
+// the error is minimized, degrees (default 90). The inverse has no closed
+// form; it is solved by bracketing and weighted regula falsi as in wcslib.
+type airProjection struct {
+	w0, w1, w3, w4, w5, w6 float64
+}
+
+func newAIR(pv map[wcs.PVKey]float64, latAxis int) (airProjection, error) {
+	const tol = 1.0e-4
+	thetab := pvFloat(pv, latAxis, 1, 90)
+	var p airProjection
+	p.w0 = float64(2.0 * r2d)
+	var w2 float64
+	if thetab == 90.0 {
+		p.w1 = -0.5
+		w2 = 1.0
+	} else if thetab > -90.0 {
+		cosxi := cosd((90.0 - thetab) / 2.0)
+		p.w1 = lmLog(cosxi) * (cosxi * cosxi) / (1.0 - float64(cosxi*cosxi))
+		w2 = 0.5 - p.w1
+	} else {
+		return p, errBadParam("AIR", "theta_b = PV%d_1 = %g must be > -90", latAxis, thetab)
+	}
+	p.w3 = float64(p.w0 * w2)
+	p.w4 = tol
+	p.w5 = float64(w2 * tol)
+	p.w6 = r2d / w2
+	return p, nil
+}
+
+func (airProjection) Code() string    { return "AIR" }
+func (airProjection) theta0() float64 { return 90 }
+
+func (p airProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-12
+	r := math.Sqrt(float64(x*x)+float64(y*y)) / p.w0
+	if r != 0.0 {
+		phi = atan2d(x, -y)
+	}
+	var xi float64
+	if r == 0.0 {
+		xi = 0.0
+	} else if r < p.w5 {
+		xi = float64(r * p.w6)
+	} else {
+		x1, x2 := 1.0, 1.0
+		r1, r2 := 0.0, 0.0
+		k := 0
+		for ; k < 30; k++ {
+			x2 = x1 / 2.0
+			tanxi := math.Sqrt(1.0-float64(x2*x2)) / x2
+			r2 = -(lmLog(x2)/tanxi + float64(p.w1*tanxi))
+			if r2 >= r {
+				break
+			}
+			x1 = x2
+			r1 = r2
+		}
+		// Unreachable as a distinct decision (see "Guards that no input
+		// reaches" in projection.go); kept because wcslib has it.
+		if k == 30 {
+			return 0, 0, false
+		}
+		var cosxi float64
+		for k = 0; k < 100; k++ {
+			lambda := (r2 - r) / (r2 - r1)
+			if lambda < 0.1 {
+				lambda = 0.1
+			} else if lambda > 0.9 {
+				lambda = 0.9
+			}
+			cosxi = x2 - float64(lambda*(x2-x1))
+			tanxi := math.Sqrt(1.0-float64(cosxi*cosxi)) / cosxi
+			rt := -(lmLog(cosxi)/tanxi + float64(p.w1*tanxi))
+			if rt < r {
+				if r-rt < tol {
+					break
+				}
+				r1 = rt
+				x1 = cosxi
+			} else {
+				if rt-r < tol {
+					break
+				}
+				r2 = rt
+				x2 = cosxi
+			}
+		}
+		if k == 100 {
+			return 0, 0, false
+		}
+		xi = acosd(cosxi)
+	}
+	theta = 90.0 - float64(2.0*xi)
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
+}
+
+func (p airProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinphi, cosphi := sincosd(phi)
+	var r float64
+	if theta == 90.0 {
+		r = 0.0
+	} else if theta > -90.0 {
+		xi := d2r * (90.0 - theta) / 2.0
+		if xi < p.w4 {
+			r = float64(xi * p.w3)
+		} else {
+			cosxi := cosd((90.0 - theta) / 2.0)
+			tanxi := math.Sqrt(1.0-float64(cosxi*cosxi)) / cosxi
+			r = float64(-p.w0 * (lmLog(cosxi)/tanxi + float64(p.w1*tanxi)))
+		}
+	} else {
+		return 0, 0, false
+	}
+	return float64(r * sinphi), float64(-r * cosphi), true
 }

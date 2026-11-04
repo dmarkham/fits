@@ -1,0 +1,4 @@
+{"name": "tiny_2x2_abs", "nx": 2, "ny": 2, "nullcheck": 0, "nullvalue": 0, "qlevel": -0.5, "dither_method": 0, "row": 0, "fill": "fill_tiny", "in_sha256": "8510e54e25895f84ee67a0b50f602601c81eb6f33ff0d8a91a1656bcaaddec6e",
+ "stats": {"ngood": 4, "min": 1, "max": 2.5, "mean": 1.75, "sigma": 0.55901699437494745, "noise1": 0, "noise2": 0, "noise3": 0, "noise5": 0},
+ "quantize": {"return": 1, "bscale": 0.5, "bzero": 1, "iminval": 0, "imaxval": 3},
+ "out": [0,2,1,3]}

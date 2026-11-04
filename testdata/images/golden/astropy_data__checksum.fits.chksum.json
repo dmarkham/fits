@@ -1,0 +1,1 @@
+{"file":"checksum.fits","cfitsio":"4.7.0","hdus":[{"index":0,"datasum":3949456131,"hdusum":4294967295,"verify_datasum":1,"verify_hdusum":1},{"index":1,"datasum":2008423139,"hdusum":4294967295,"verify_datasum":1,"verify_hdusum":1}]}

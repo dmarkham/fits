@@ -123,3 +123,40 @@ func TestRoundUpBlocks(t *testing.T) {
 		}
 	}
 }
+
+// TestZeroFillTo: bytes between the end of the stream and the ZeroFillTo
+// offset read as zeros (a missing final FITS pad); beyond it reads fail.
+func TestZeroFillTo(t *testing.T) {
+	data := bytes.Repeat([]byte{0xAB}, Size+20)
+	r, err := NewReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadBlock(1); !errors.Is(err, ErrShortBlock) {
+		t.Fatalf("before ZeroFillTo: err %v, want ErrShortBlock", err)
+	}
+	r.ZeroFillTo(2 * Size)
+	b, err := r.ReadBlock(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range b {
+		want := byte(0)
+		if i < 20 {
+			want = 0xAB
+		}
+		if c != want {
+			t.Fatalf("byte %d = %#x, want %#x", i, c, want)
+		}
+	}
+	buf := make([]byte, 40)
+	if err := r.ReadRange(Size+10, buf); err != nil {
+		t.Fatal(err)
+	}
+	if buf[9] != 0xAB || buf[10] != 0 || buf[39] != 0 {
+		t.Fatalf("ReadRange across EOF: % x", buf)
+	}
+	if err := r.ReadRange(2*Size-4, make([]byte, 8)); !errors.Is(err, ErrShortBlock) {
+		t.Fatalf("read beyond ZeroFillTo: err %v, want ErrShortBlock", err)
+	}
+}

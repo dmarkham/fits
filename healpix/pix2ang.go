@@ -2,133 +2,128 @@ package healpix
 
 import "math"
 
-// Pix2Ang returns the (theta, phi) direction of the center of pixel pix
-// in the given ordering scheme.
+// Pix2Ang returns the (theta, phi) direction of the center of pixel pix.
 //
-//   - theta: colatitude in radians, 0 at north pole, π at south pole
+//   - theta: colatitude in radians, [0, π]
 //   - phi: longitude in radians, [0, 2π)
 //
-// Port of astrometry.net hp_to_xyz (healpix.c:1006).
+// Pixel centres are computed with the same double-precision formulas
+// healpy uses; theta and phi agree with healpy.pix2ang to within 1 ULP
+// (the libm acos/atan2 rounding difference), proven over every committed
+// golden. Panics on an invalid nside/scheme or a pixel outside
+// [0, 12·nside²).
 func Pix2Ang(nside int, pix int64, scheme Scheme) (theta, phi float64) {
-	vx, vy, vz := Pix2Vec(nside, pix, scheme)
-	// For z near ±1 (polar pixels), acos(z) loses precision because
-	// its derivative diverges at z=1. Use atan2(sin_theta, z) instead,
-	// which is stable everywhere. sin_theta = sqrt(vx²+vy²) = the
-	// cylindrical radius, which we already computed in Pix2Vec.
-	sintheta := math.Sqrt(vx*vx + vy*vy)
-	theta = math.Atan2(sintheta, vz)
-	phi = math.Atan2(vy, vx)
-	if phi < 0 {
-		phi += 2 * math.Pi
+	g := newGeom("Pix2Ang", nside, scheme)
+	g.checkPix("Pix2Ang", pix)
+	z, phi, sth, haveSth := g.pix2loc(pix, scheme)
+	if haveSth {
+		return math.Atan2(sth, z), phi
 	}
-	return theta, phi
+	return acos(z), phi
 }
 
-// Pix2Vec returns the (x, y, z) unit vector pointing to the center of
-// pixel pix in the given ordering scheme.
+// acos is arccos accurate to about 1 ULP over [-1, 1]. Go's math.Acos is
+// computed as π/2 - Asin(z), which loses several bits when the result is
+// small (|z| close to 1) — up to 9 ULP at the ring-1 centre of Nside 5
+// against healpy's glibc acos. For |z| > 0.5 the angle is instead taken
+// from atan2(sqrt((1-z)(1+z)), |z|), where 1-|z| is exact (Sterbenz).
+func acos(z float64) float64 {
+	az := math.Abs(z)
+	if az <= 0.5 {
+		return math.Acos(z)
+	}
+	t := math.Atan2(math.Sqrt(float64((1-az)*(1+az))), az)
+	if z < 0 {
+		return pi - t
+	}
+	return t
+}
+
+// Pix2Vec returns the unit vector (x, y, z) pointing to the center of
+// pixel pix. Components agree with healpy.pix2vec to within 2·2^-52
+// absolute. Panics like Pix2Ang.
 func Pix2Vec(nside int, pix int64, scheme Scheme) (vx, vy, vz float64) {
-	var xy int64
-	switch scheme {
-	case Nested:
-		xy = nestedToXY(pix, nside)
-	default:
-		xy = ringToXY(pix, nside)
+	g := newGeom("Pix2Vec", nside, scheme)
+	g.checkPix("Pix2Vec", pix)
+	z, phi, sth, haveSth := g.pix2loc(pix, scheme)
+	if !haveSth {
+		sth = math.Sqrt(float64((1 - z) * (1 + z)))
 	}
-	return xyToVec(xy, nside)
+	return float64(sth * math.Cos(phi)), float64(sth * math.Sin(phi)), z
 }
 
-// xyToVec converts an XY-scheme pixel index to a unit vector (pixel
-// center). Faithful port of astrometry.net hp_to_xyz (healpix.c:1006),
-// called with dx=0.5, dy=0.5 for pixel centers.
-func xyToVec(xy int64, nside int) (vx, vy, vz float64) {
-	hp := xyDecompose(xy, nside)
-	face := hp.Face
-	ns := float64(nside)
-
-	// Pixel-center position: xp + 0.5, yp + 0.5.
-	x := float64(hp.X) + 0.5
-	y := float64(hp.Y) + 0.5
-
-	equatorial := true
-	zfactor := 1.0
-
-	// Check polar/equatorial boundary (healpix.c:1023-1034).
-	// North polar faces (0-3): polar region is where x+y > nside.
-	// South polar faces (8-11): polar region is where x+y < nside.
-	if face <= 3 {
-		if x+y > ns {
-			equatorial = false
-			zfactor = 1.0
+// pix2loc returns z = cos(theta) and phi of the centre of pix. Near the
+// poles (|z| > 0.99) it also returns sth = sin(theta) computed without
+// cancellation, and haveSth = true.
+func (g geom) pix2loc(pix int64, scheme Scheme) (z, phi, sth float64, haveSth bool) {
+	ns := g.nside
+	if scheme == Ring {
+		switch {
+		case pix < g.ncap: // north polar cap
+			iring := (1 + isqrt(1+2*pix)) >> 1
+			iphi := (pix + 1) - 2*iring*(iring-1)
+			tmp := float64(float64(iring*iring) * g.fact2)
+			z = 1.0 - tmp
+			if z > 0.99 {
+				sth, haveSth = math.Sqrt(float64(tmp*(2.-tmp))), true
+			}
+			phi = (float64(iphi) - 0.5) * halfpi / float64(iring)
+		case pix < g.npix-g.ncap: // equatorial belt
+			nl4 := 4 * ns
+			ip := pix - g.ncap
+			tmp := ip / nl4
+			iring := tmp + ns
+			iphi := ip - nl4*tmp + 1
+			fodd := 0.5
+			if (iring+ns)&1 != 0 {
+				fodd = 1
+			}
+			z = float64(float64(2*ns-iring) * g.fact1)
+			phi = float64((float64(iphi) - fodd) * pi * 0.75 * g.fact1)
+		default: // south polar cap
+			ip := g.npix - pix
+			iring := (1 + isqrt(2*ip-1)) >> 1
+			iphi := 4*iring + 1 - (ip - 2*iring*(iring-1))
+			tmp := float64(float64(iring*iring) * g.fact2)
+			z = tmp - 1.0
+			if z < -0.99 {
+				sth, haveSth = math.Sqrt(float64(tmp*(2.-tmp))), true
+			}
+			phi = (float64(iphi) - 0.5) * halfpi / float64(iring)
 		}
+		return z, phi, sth, haveSth
 	}
-	if face >= 8 {
-		if x+y < ns {
-			equatorial = false
-			zfactor = -1.0
+
+	ix, iy, face := g.nest2xyf(pix)
+	jr := jrll[face]<<g.order - int64(ix) - int64(iy) - 1
+	var nr int64
+	switch {
+	case jr < ns:
+		nr = jr
+		tmp := float64(float64(nr*nr) * g.fact2)
+		z = 1 - tmp
+		if z > 0.99 {
+			sth, haveSth = math.Sqrt(float64(tmp*(2.-tmp))), true
 		}
+	case jr > 3*ns:
+		nr = ns*4 - jr
+		tmp := float64(float64(nr*nr) * g.fact2)
+		z = tmp - 1
+		if z < -0.99 {
+			sth, haveSth = math.Sqrt(float64(tmp*(2.-tmp))), true
+		}
+	default:
+		nr = ns
+		z = float64(float64(2*ns-jr) * g.fact1)
 	}
-
-	var z, phi float64
-
-	if equatorial {
-		// Equatorial path (healpix.c:1036-1060).
-		var zoff, phioff float64
-		x /= ns
-		y /= ns
-
-		if face <= 3 {
-			// North polar face, equatorial part.
-			phioff = 1.0
-			// zoff stays 0, face unchanged.
-		} else if face <= 7 {
-			// Equatorial face.
-			zoff = -1.0
-			face -= 4
-		} else {
-			// South polar face, equatorial part.
-			phioff = 1.0
-			zoff = -2.0
-			face -= 8
-		}
-
-		z = (2.0 / 3.0) * (x + y + zoff)
-		phi = (math.Pi / 4.0) * (x - y + phioff + 2*float64(face))
+	tmp := jpll[face]*nr + int64(ix) - int64(iy)
+	if tmp < 0 {
+		tmp += 8 * nr
+	}
+	if nr == ns {
+		phi = float64(0.75 * halfpi * float64(tmp) * g.fact1)
 	} else {
-		// Polar path (healpix.c:1062-1104).
-		if zfactor == -1 {
-			// South polar: swap x,y and mirror.
-			x, y = ns-y, ns-x
-		}
-
-		var phiT float64
-		if y == ns && x == ns {
-			phiT = 0
-		} else {
-			phiT = math.Pi * (ns - y) / (2.0 * ((ns - x) + (ns - y)))
-		}
-
-		// Solve for z from either equation depending on phi_t.
-		if phiT < math.Pi/4 {
-			z = 1.0 - sqr(math.Pi*(ns-x)/((2*phiT-math.Pi)*ns))/3.0
-		} else {
-			z = 1.0 - sqr(math.Pi*(ns-y)/(2*phiT*ns))/3.0
-		}
-		z *= zfactor
-
-		// Base face determines the phi offset.
-		if hp.Face >= 8 {
-			phi = math.Pi/2*float64(hp.Face-8) + phiT
-		} else {
-			phi = math.Pi/2*float64(hp.Face) + phiT
-		}
+		phi = (0.5 * halfpi * float64(tmp)) / float64(nr)
 	}
-
-	// Normalize phi to [0, 2π).
-	if phi < 0 {
-		phi += 2 * math.Pi
-	}
-
-	rad := math.Sqrt(1 - z*z)
-	sinPhi, cosPhi := math.Sincos(phi)
-	return rad * cosPhi, rad * sinPhi, z
+	return z, phi, sth, haveSth
 }

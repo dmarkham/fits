@@ -1,0 +1,17 @@
+# TAN centred close to the south celestial pole, no LONPOLE: delta_0 <
+# theta_0 = 90 so the default is LONPOLE = 180 (synthetic).
+NOTE pipeline: zenithal TAN at CRVAL2 = -89.5, default LONPOLE
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 45.0
+CRVAL2  = -89.5
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.005
+CDELT2  = 0.005

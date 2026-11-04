@@ -30,10 +30,11 @@ var ErrShortBlock = errors.New("fits/internal/block: short block")
 //
 // Reader is not safe for concurrent use by multiple goroutines.
 type Reader struct {
-	r          io.ReadSeeker
-	size       int64 // total stream length, -1 if unknown
-	cacheIdx   int64 // block index currently held in cache, -1 if empty
-	cache      [Size]byte
+	r        io.ReadSeeker
+	size     int64 // total stream length, -1 if unknown
+	zeroTo   int64 // reads in [size, zeroTo) return zero bytes (see ZeroFillTo)
+	cacheIdx int64 // block index currently held in cache, -1 if empty
+	cache    [Size]byte
 }
 
 // NewReader returns a new block Reader over r. If r also implements io.Seeker
@@ -54,10 +55,22 @@ func NewReader(r io.ReadSeeker) (*Reader, error) {
 // NewReader time.
 func (r *Reader) Size() int64 { return r.size }
 
+// ZeroFillTo makes reads of the bytes between the end of the stream and
+// offset end return zeros instead of ErrShortBlock. The FITS scanner uses
+// it for a file whose last data unit is complete but lacks its final block
+// padding (which is defined to be zeros): the pad then reads as what it
+// stands for. Reads beyond end still fail.
+func (r *Reader) ZeroFillTo(end int64) {
+	if end > r.zeroTo {
+		r.zeroTo = end
+	}
+	r.cacheIdx = -1
+}
+
 // BlockCount returns the number of complete 2880-byte blocks in the stream.
 // If the stream length is not an exact multiple of 2880 the remainder is
-// reported separately by the caller via Size() — the parser treats a partial
-// trailing block as garbage (plan decision 5.11).
+// reported separately by the caller via Size(); the scanner ignores a
+// partial block after the last HDU (counted by (*fits.File).TrailingBytes).
 func (r *Reader) BlockCount() int64 { return r.size / Size }
 
 // ReadBlock reads block index n (zero-based). It returns ErrShortBlock if the
@@ -70,18 +83,40 @@ func (r *Reader) ReadBlock(n int64) (*[Size]byte, error) {
 		return &r.cache, nil
 	}
 	off := n * Size
-	if _, err := r.r.Seek(off, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("block: seek to block %d: %w", n, err)
-	}
-	if _, err := io.ReadFull(r.r, r.cache[:]); err != nil {
+	if err := r.readAt(off, r.cache[:]); err != nil {
 		r.cacheIdx = -1
-		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		if errors.Is(err, ErrShortBlock) {
 			return nil, ErrShortBlock
 		}
 		return nil, fmt.Errorf("block: read block %d: %w", n, err)
 	}
 	r.cacheIdx = n
 	return &r.cache, nil
+}
+
+// readAt fills dst from absolute offset off, zero-filling the part that
+// lies in [size, zeroTo).
+func (r *Reader) readAt(off int64, dst []byte) error {
+	end := off + int64(len(dst))
+	have := dst
+	if end > r.size && end <= r.zeroTo {
+		n := max(r.size-off, 0)
+		have = dst[:n]
+		clear(dst[n:])
+	}
+	if len(have) == 0 {
+		return nil
+	}
+	if _, err := r.r.Seek(off, io.SeekStart); err != nil {
+		return fmt.Errorf("block: seek to %d: %w", off, err)
+	}
+	if _, err := io.ReadFull(r.r, have); err != nil {
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			return ErrShortBlock
+		}
+		return err
+	}
+	return nil
 }
 
 // ReadRange reads len(dst) bytes starting at absolute byte offset off.
@@ -91,11 +126,8 @@ func (r *Reader) ReadRange(off int64, dst []byte) error {
 	if off < 0 {
 		return fmt.Errorf("block: negative offset %d", off)
 	}
-	if _, err := r.r.Seek(off, io.SeekStart); err != nil {
-		return fmt.Errorf("block: seek to %d: %w", off, err)
-	}
-	if _, err := io.ReadFull(r.r, dst); err != nil {
-		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+	if err := r.readAt(off, dst); err != nil {
+		if errors.Is(err, ErrShortBlock) {
 			return ErrShortBlock
 		}
 		return fmt.Errorf("block: read at %d: %w", off, err)

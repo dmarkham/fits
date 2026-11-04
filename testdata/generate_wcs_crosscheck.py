@@ -1,35 +1,33 @@
 #!/usr/bin/env python3
-"""Generate testdata/wcs_crosscheck.json from real observatory headers.
+"""Generate testdata/wcs_crosscheck.json: astropy.wcs truth through the
+FULL header path.
 
-Usage:
+Usage (from the repository root, with the project venv):
 
-    python3 testdata/generate_wcs_crosscheck.py > testdata/wcs_crosscheck.json
+    venv/bin/python testdata/generate_wcs_crosscheck.py > testdata/wcs_crosscheck.json
 
-Requires astropy (>=5.0) installed in the active Python environment. This
-script is run once offline to produce the golden reference values; the Go
-test suite reads the JSON directly and does not need Python at test time.
+Re-running it with the pinned versions (astropy 8.0.2 / numpy 2.4.6, see
+the "astropy"/"numpy" fields of the JSON) reproduces the committed file
+byte for byte; TestCrossCheckFixturesReproduce checks that.
 
-The reference values are produced by astropy.wcs.WCS, which wraps the
-wcslib C reference implementation. Agreement between our Go transform
-and this JSON is the v1.1 WCS release gate.
+For every fixture the script builds an astropy.io.fits.Header from the
+keyword dict below, and records:
 
-The fixture set:
+  - "cards": the header exactly as 80-column card images
+    (Header.tostring), which the Go test feeds through
+    header.ParseCards -> wcs.Parse -> transform.New, so the Go parser is
+    part of what is checked (no hand-built wcs.Header);
+  - "p2s": pixel -> sky from astropy.wcs.WCS.all_pix2world (wcslib core
+    plus astropy's SIP), 0-based pixels on a grid over the image; points
+    astropy maps to NaN (outside the projection) are dropped;
+  - "s2p": sky -> pixel from WCS.all_world2pix at each p2s sky position
+    (tolerance 1e-12 px, at most 100 iterations; astropy raises if it
+    does not converge).
 
-  - HST/ACS     — TAN + SIP distortion, typical archive product
-  - HST/WFC3    — TAN + SIP
-  - JWST/NIRCAM — TAN + SIP
-  - Chandra     — TAN (no distortion)
-  - Spitzer     — TAN + SIP
-  - Gaia DR3    — TAN (no distortion)
-  - Planck      — HPX
-  - WMAP        — HPX
-  - COBE/DMR    — CSC (historical)
-  - 2MASS       — TNX (IRAF)
-  - ATLAS       — TPV (difference-image stamp, CRPIX far off the cutout)
-  - UH88        — TAN + SIP (astrometry.net solution, 5280x5280 detector)
-
-Each fixture samples pixel → sky at ~20 grid points across the detector
-so that small-angle and large-angle behavior are both exercised.
+These fixtures are synthetic or transcribed headers (see "source"). The
+REAL archive headers (HST, JWST, Spitzer, ZTF, PTF, astrometry.net) are
+checked against wcslib directly by the header goldens in
+wcs/transform/testdata/wref/hdrcases.
 """
 
 import json
@@ -37,96 +35,47 @@ import sys
 
 try:
     import numpy as np
+    import astropy
+    import astropy.wcs
     from astropy.wcs import WCS
     from astropy.io.fits import Header
 except ImportError:
-    print("error: astropy not installed. Run: pip install astropy>=5.0", file=sys.stderr)
+    print("error: astropy not installed; use the project venv", file=sys.stderr)
     sys.exit(1)
 
 
-def sample_wcs(header_cards, name, source, projcode, tolerance=1e-9, n=5):
-    """Build a WCS from the given FITS-style header dict, sample it at a
-    grid of pixels, and return a CrossCheckFixture dict."""
+def sample_wcs(header_cards, name, source, tol_arcsec=1e-8, tol_px=1e-9, n=5):
+    """Build the WCS from header_cards (an ordered dict of keywords), sample
+    pixel -> sky on an n x n grid and sky -> pixel at the results."""
     hdr = Header()
     for k, v in header_cards.items():
         hdr[k] = v
     w = WCS(hdr)
-    # Sample at an n x n grid covering the image.
     naxis1 = header_cards.get("NAXIS1", 1024)
     naxis2 = header_cards.get("NAXIS2", 1024)
     xs = np.linspace(0, naxis1 - 1, n)
     ys = np.linspace(0, naxis2 - 1, n)
-    vectors = []
+    p2s, s2p = [], []
     for y in ys:
         for x in xs:
-            # all_pix2world applies SIP; wcs_pix2world (core wcslib only)
-            # does not. The two agree for every fixture without SIP.
             sky = w.all_pix2world([[x, y]], 0)[0]
-            # astropy returns NaN for pixels outside the projection's
-            # valid domain. JSON does not support NaN; skip those points.
             if not (np.isfinite(sky[0]) and np.isfinite(sky[1])):
                 continue
-            vectors.append({"pixel": [float(x), float(y)], "sky": [float(sky[0]), float(sky[1])]})
-
-    # Extract CDELT / PC / CD / PV from the header.
-    def hget(key, default=None):
-        return float(header_cards[key]) if key in header_cards else default
-
-    pc_matrix = None
-    cd_matrix = None
-    if any(k.startswith("CD1_") for k in header_cards):
-        cd_matrix = [
-            [hget("CD1_1", 0), hget("CD1_2", 0)],
-            [hget("CD2_1", 0), hget("CD2_2", 0)],
-        ]
-    if any(k.startswith("PC1_") for k in header_cards):
-        pc_matrix = [
-            [hget("PC1_1", 1), hget("PC1_2", 0)],
-            [hget("PC2_1", 0), hget("PC2_2", 1)],
-        ]
-
-    pvs = []
-    for k, v in header_cards.items():
-        if k.startswith("PV1_") or k.startswith("PV2_"):
-            axis = int(k[2])
-            idx = int(k[4:])
-            pvs.append({"axis": axis, "index": idx, "value": float(v)})
-
-    def sip_poly(prefix):
-        order_key = prefix + "_ORDER"
-        if order_key not in header_cards:
-            return None
-        order = int(header_cards[order_key])
-        coeffs = [[float(header_cards.get(f"{prefix}_{i}_{j}", 0.0)) if i + j <= order else 0.0
-                   for j in range(order + 1)] for i in range(order + 1)]
-        return {"Order": order, "Coeffs": coeffs}
-
-    sip = None
-    if header_cards["CTYPE1"].endswith("-SIP") and sip_poly("A") and sip_poly("B"):
-        sip = {"A": sip_poly("A"), "B": sip_poly("B")}
-        if sip_poly("AP") and sip_poly("BP"):
-            sip["AP"], sip["BP"] = sip_poly("AP"), sip_poly("BP")
-
-    out = {
+            p2s.append({"pixel": [float(x), float(y)], "sky": [float(sky[0]), float(sky[1])]})
+    for v in p2s:
+        pix = w.all_world2pix([v["sky"]], 0, tolerance=1e-12, maxiter=100, quiet=False)[0]
+        s2p.append({"sky": v["sky"], "pixel": [float(pix[0]), float(pix[1])]})
+    text = hdr.tostring(sep="", endcard=False, padding=False)
+    cards = [text[i:i + 80] for i in range(0, len(text), 80)]
+    return {
         "name": name,
         "source": source,
-        "ctype1": header_cards["CTYPE1"],
-        "ctype2": header_cards["CTYPE2"],
-        "crval1": hget("CRVAL1", 0),
-        "crval2": hget("CRVAL2", 0),
-        "crpix1": hget("CRPIX1", 0),
-        "crpix2": hget("CRPIX2", 0),
-        "cdelt1": hget("CDELT1", 1),
-        "cdelt2": hget("CDELT2", 1),
-        "pc": pc_matrix,
-        "cd": cd_matrix,
-        "pv": pvs if pvs else None,
-        "tolerance": tolerance,
-        "test_vectors": vectors,
+        "cards": cards,
+        "tol_arcsec": tol_arcsec,
+        "tol_px": tol_px,
+        "p2s": p2s,
+        "s2p": s2p,
     }
-    if sip:
-        out["sip"] = sip
-    return out
 
 
 def main():
@@ -140,7 +89,7 @@ def main():
         "CRPIX1": 512.5, "CRPIX2": 512.5,
         "CDELT1": -0.00027778, "CDELT2": 0.00027778,
         "RADESYS": "ICRS",
-    }, "gaia_tan", "Gaia DR3", "TAN"))
+    }, "gaia_tan", "synthetic TAN (Gaia-like 1 arcsec/px tile)"))
 
     # Plain CAR all-sky.
     fixtures.append(sample_wcs({
@@ -149,7 +98,7 @@ def main():
         "CRVAL1": 0.0, "CRVAL2": 0.0,
         "CRPIX1": 360.5, "CRPIX2": 180.5,
         "CDELT1": -0.5, "CDELT2": 0.5,
-    }, "allsky_car", "synthetic all-sky", "CAR"))
+    }, "allsky_car", "synthetic all-sky CAR"))
 
     # AIT all-sky.
     fixtures.append(sample_wcs({
@@ -158,7 +107,7 @@ def main():
         "CRVAL1": 0.0, "CRVAL2": 0.0,
         "CRPIX1": 360.5, "CRPIX2": 180.5,
         "CDELT1": -0.5, "CDELT2": 0.5,
-    }, "allsky_ait", "synthetic all-sky galactic", "AIT"))
+    }, "allsky_ait", "synthetic all-sky galactic AIT"))
 
     # Conic Albers.
     fixtures.append(sample_wcs({
@@ -168,11 +117,15 @@ def main():
         "CRPIX1": 256.5, "CRPIX2": 256.5,
         "CDELT1": -0.01, "CDELT2": 0.01,
         "PV2_1": 45.0,
-    }, "conic_coe", "synthetic conic", "COE"))
+    }, "conic_coe", "synthetic conic COE"))
 
     # ATLAS difference-image stamp (01a59742o0240o.diff, MLO): TPV
     # distortion from the ATLAS pipeline, on a 100x100 cutout whose CRPIX
-    # lies ~4000 px off the stamp, so the polynomial terms dominate.
+    # lies ~4000 px off the stamp, so the polynomial terms dominate. The
+    # stamp's real WCS cards (these TPV values plus the SIP copy of the
+    # same correction the pipeline writes next to them) are committed
+    # since PR #4: wcs/transform/testdata/wref/hdrcases_differ/
+    # real_atlas_k2_tpv_sip.case.
     fixtures.append(sample_wcs({
         "NAXIS1": 100, "NAXIS2": 100,
         "CTYPE1": "RA---TPV", "CTYPE2": "DEC--TPV",
@@ -227,7 +180,7 @@ def main():
         "PV2_21": -3.523011214328e-06,
         "PV2_22": 1.935996964426e-08,
         "RADESYS": "FK5", "EQUINOX": 2000.0,
-    }, "atlas_tpv", "ATLAS difference stamp", "TPV"))
+    }, "atlas_tpv", "ATLAS difference stamp 01a59742o0240o.diff (values transcribed in PR #3; file not in repo)"))
 
     # UH88 TAN-SIP header (astrometry.net solution), full 5280x5280 frame:
     # SIP corrections reach ~2 px at the corners.
@@ -250,19 +203,16 @@ def main():
         "BP_0_0": 1.1123140637e-06, "BP_0_1": 3.53518741358e-07, "BP_0_2": 7.143564447e-08,
         "BP_1_0": 4.11686097018e-07, "BP_1_1": 2.07643618938e-07, "BP_2_0": 1.51807636879e-07,
         "RADESYS": "FK5", "EQUINOX": 2000.0,
-    }, "uh88_sip", "UH88 (astrometry.net)", "TAN"))
+    }, "uh88_sip", "UH88 astrometry.net solution (values transcribed in PR #3; file not in repo)"))
 
-    # Add more fixtures as real headers become available:
-    # - HST ACS with SIP (A_ORDER, B_ORDER, A_i_j, B_i_j)
-    # - JWST NIRCam with SIP
-    # - Chandra ACIS (TAN-P)
-    # - 2MASS (TNX via WAT strings)
-    # - Planck (HPX)
-    # - COBE (CSC)
-    # These require real header dumps; when added, the Go test suite
-    # automatically picks them up.
-
-    json.dump(fixtures, sys.stdout, indent=2)
+    out = {
+        "generator": "testdata/generate_wcs_crosscheck.py",
+        "astropy": astropy.__version__,
+        "wcslib": astropy.wcs._wcs.WCSLIB_VERSION,
+        "numpy": np.__version__,
+        "fixtures": fixtures,
+    }
+    json.dump(out, sys.stdout, indent=1)
     print()
 
 

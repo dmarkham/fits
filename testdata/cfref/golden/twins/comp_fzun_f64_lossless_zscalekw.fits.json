@@ -1,0 +1,32 @@
+{
+ "file": "comp_fzun_f64_lossless_zscalekw.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 11520,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 10,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                  -64 / number of bits per data pixel",
+    "NAXIS   =                    2 / number of data axes",
+    "NAXIS1  =                   40 / length of data axis 1",
+    "NAXIS2  =                   24 / length of data axis 2",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "ZSCALE  =                   2. / gen_fpack editkey",
+    "ZZERO   =                  10. / gen_fpack editkey"
+   ],
+   "image": {"bitpix": -64, "equivtype": -64, "compressed": false, "naxis": 2, "naxes": [40,24], "npix": 960, "bscale": 1, "bzero": 0,
+    "phys": {"n": 960, "sha256": "81e93023a745f9382a5933154ddc0f887bc56a3327b639016f802ca649982f9c", "pool": "f64"}
+   },
+   "errors": []
+  }
+ ]
+}

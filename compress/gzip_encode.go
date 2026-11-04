@@ -45,9 +45,11 @@ func (gzip1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) {
 var _ = zlib.DefaultCompression
 
 // GZIP_2 encoder — byte-shuffle the pixel bytes by significance
-// position (all 1st bytes, then all 2nd bytes, etc.) before zlib
-// compression. Symmetric counterpart of the GZIP_2 decoder; preserves
-// the exact on-disk bytes written by cfitsio.
+// position (all 1st bytes, then all 2nd bytes, etc.), then write them as
+// a gzip stream (compress/gzip, as the GZIP_1 encoder; cfitsio writes a
+// gzip stream too). Symmetric counterpart of the GZIP_2 decoder. The
+// inflated (shuffled) bytes equal cfitsio's; the DEFLATE stream itself
+// differs from zlib's, so compressed bytes are not byte-identical.
 type gzip2Encoder struct {
 	bytepix int
 }

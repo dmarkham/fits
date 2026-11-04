@@ -1,0 +1,16 @@
+# AIPS NCP with the reference point on the equator: cot(0) is infinite.
+# EXPECT-WCSLIB-ERROR: NCP blows up on the equator
+NOTE reject: ncp_equator
+GRID 1 256 3 1 256 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 256
+NAXIS2  = 256
+CTYPE1  = 'RA---NCP'
+CTYPE2  = 'DEC--NCP'
+CRVAL1  = 10.0
+CRVAL2  = 0.0
+CRPIX1  = 128.5
+CRPIX2  = 128.5
+CDELT1  = -0.01
+CDELT2  = 0.01

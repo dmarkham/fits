@@ -1,0 +1,23 @@
+{
+ "file": "continue.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 0},
+   {"n": 4, "key": "LONGSTR", "str": "first part second part third", "comment": "c1 c2 c3"},
+   {"n": 7, "key": "LONELY", "str": "abc", "comment": "no ampersand"},
+   {"n": 9, "key": "NUMPRE", "u64": 5},
+   {"n": 11, "key": "AMPEND", "str": "dangling &", "comment": "& but no CONTINUE follows"},
+   {"n": 12, "key": "NEXT", "u64": 1},
+   {"n": 13, "key": "AMPEMPTY", "str": "x&", "comment": ""},
+   {"n": 15, "key": "AMPCMT", "str": "y", "comment": "first only a comment"},
+   {"n": 17, "key": "CONTEQ", "str": "z&", "comment": ""},
+   {"n": 19, "key": "UNQ", "str": "uunquoted", "comment": ""},
+   {"n": 21, "key": "ESO OBS LONGNAME", "str": "hier part one hier part two", "comment": "hc1 hc2"},
+   {"n": 23, "key": "FULL", "str": "abcdef", "comment": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccmore"},
+   {"n": 25, "key": "QSPLIT", "str": "it''s", "comment": ""},
+   {"n": 27, "key": "FINAL", "str": "end", "comment": ""}
+  ]}
+ ]
+}

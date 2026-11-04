@@ -1,0 +1,20 @@
+# CROTA2 = -40 with |CDELT1| != |CDELT2| (lambda = CDELT2/CDELT1 enters the
+# off-diagonal terms) and a CROTA1 that must be ignored (only the latitude
+# axis's CROTA counts). Synthetic.
+NOTE pipeline: CROTA2 with unequal CDELT, CROTA1 ignored
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---SIN'
+CTYPE2  = 'DEC--SIN'
+CRVAL1  = 10.0
+CRVAL2  = -45.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.002
+CDELT2  = 0.0005
+CROTA1  = 11.0
+CROTA2  = -40.0

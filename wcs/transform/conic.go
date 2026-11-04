@@ -1,278 +1,291 @@
 package transform
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/dmarkham/fits/wcs"
 )
 
-// This file implements the conic projection family from Paper II §5.4.
-// All four conic projections share the same parameter set:
+// Conic projections, Paper II §5.4: COP, COE, COD, COO. All four take
 //
-//	PV2_1 = theta_a (midpoint of the two standard parallels, degrees)
-//	PV2_2 = eta    (half the spread between the standard parallels,
-//	                 degrees; default 0 for a single-parallel tangent case)
+//	PV2_1 = theta_a (REQUIRED; Paper II: no default) — the mean of the two
+//	        standard parallels, degrees
+//	PV2_2 = eta     (default 0) — half their separation, degrees
 //
-// The standard parallels are theta_1 = theta_a - eta and
-// theta_2 = theta_a + eta.
+// so the standard parallels are theta_1,2 = theta_a -+ eta, and the
+// fiducial point is (phi_0, theta_0) = (0, theta_a). With C the cone
+// constant and Y_0 the plane offset that puts the fiducial point at the
+// origin,
 //
-// All conic projections have theta_0 = theta_a (not 0). The formulas
-// share the following constants:
+//	x = R_theta sin(C phi),  y = -R_theta cos(C phi) + Y_0
 //
-//	C = sin(theta_a)             (cone constant)
-//	Y_0 = (180/pi) * cot(theta_a)  — in radians: cot(theta_a)
+// Ports of the wcslib 8.10 prj.c functions of the same names, in degrees
+// (see projection.go). Paper II's formulas, which these implement:
 //
-// Then:
-//
-//	x = R_theta * sin(C * phi)
-//	y = -R_theta * cos(C * phi) + Y_0
-//
-// with R_theta differing per projection.
+//	COP: C = sin(theta_a), R = r0 cos(eta) [cot(theta_a) - tan(theta - theta_a)],
+//	     Y_0 = r0 cos(eta) cot(theta_a) (the previous Go code dropped
+//	     cos(eta) from Y_0)
+//	COE: C = (sin theta_1 + sin theta_2)/2,
+//	     R = (r0/C) sqrt(1 + sin theta_1 sin theta_2 - 2C sin theta)
+//	COD: C = sin(theta_a) sin(eta)/eta, eta in radians (C = sin theta_a
+//	     for eta = 0), R = theta_a - theta + eta cot(eta) cot(theta_a)
+//	     in degrees (the previous Go code dropped eta cot(eta))
+//	COO: C = ln(cos theta_2/cos theta_1) / ln(tan((90-theta_2)/2)/tan((90-theta_1)/2)),
+//	     R = psi tan^C((90 - theta)/2), psi = r0 cos(theta_1)/(C tan^C((90-theta_1)/2))
 
-// conicBase holds the common parameters and provides helpers for the four
-// concrete conic projections.
-type conicBase struct {
-	thetaA float64 // reference parallel, radians
-	eta    float64 // spread, radians
-	C      float64 // cone constant = sin(thetaA)
-	Y0     float64 // cot(thetaA), radians
-}
-
-func newConicBase(pv map[wcs.PVKey]float64, latAxis int) (conicBase, error) {
-	ta := degToRad(pvFloat(pv, latAxis, 1, 0))
-	if ta == 0 {
-		return conicBase{}, fmt.Errorf("wcs/transform: conic projection requires PV%d_1 (theta_a) != 0", latAxis)
+func conicThetaA(code string, pv map[wcs.PVKey]float64, latAxis int) (thetaA, eta float64, err error) {
+	if !pvSet(pv, latAxis, 1) {
+		return 0, 0, errBadParam(code, "PV%d_1 (theta_a) is required", latAxis)
 	}
-	eta := degToRad(pvFloat(pv, latAxis, 2, 0))
-	C := math.Sin(ta)
-	return conicBase{
-		thetaA: ta,
-		eta:    eta,
-		C:      C,
-		Y0:     math.Cos(ta) / math.Sin(ta),
-	}, nil
+	return pvFloat(pv, latAxis, 1, 0), pvFloat(pv, latAxis, 2, 0), nil
 }
 
-// projectFromR takes an R_theta value and returns (x, y) using the shared
-// conic (x, y) formula.
-func (c conicBase) projectFromR(phi, rTheta float64) (x, y float64) {
-	cPhi := c.C * phi
-	s, co := math.Sincos(cPhi)
-	return rTheta * s, -rTheta*co + c.Y0
-}
-
-// inversePhi extracts phi from (x, y) and an already-known R_theta.
-func (c conicBase) inversePhi(x, y, rTheta float64) float64 {
-	if rTheta == 0 || c.C == 0 {
-		return 0
+// conicAlpha returns the cone angle alpha (C phi in the forward formula)
+// of plane point (x, dy) where dy = Y_0 - y, and the signed radius.
+func conicAlpha(x, dy float64, southern bool) (alpha, r float64) {
+	r = math.Sqrt(float64(x*x) + float64(dy*dy))
+	if southern {
+		r = -r
 	}
-	// x = R*sin(C*phi), y' = -R*cos(C*phi)  where y' = y - Y0.
-	yPrime := y - c.Y0
-	cPhi := math.Atan2(x/rTheta, -yPrime/rTheta)
-	return cPhi / c.C
-}
-
-// inverseR returns the R value given (x, y): the radial distance from the
-// cone's apex, preserving sign convention (R always positive for northern
-// conics, always negative for southern).
-func (c conicBase) inverseR(x, y float64) float64 {
-	yPrime := y - c.Y0
-	r := math.Hypot(x, yPrime)
-	// Sign: matches sign of -yPrime because the base formula y = Y0 - R*cos(C*phi).
-	// For small phi, cos(C*phi) ≈ 1, so y - Y0 ≈ -R, hence R ≈ -(y-Y0) = -yPrime.
-	// But we also need negative R for southern conics. cfitsio uses the
-	// convention R > 0 when C > 0 and handles southern separately. We mirror
-	// that: use hypot for magnitude, and treat the sign via C.
-	if c.C < 0 {
-		return -r
+	if r != 0.0 {
+		alpha = atan2d(x/r, dy/r)
 	}
-	return r
+	return alpha, r
 }
 
-// COP — conic perspective (Paper II §5.4.1).
-//
-//	R_theta = cos(eta) * [cot(theta_a) - tan(theta - theta_a)]
-type copProjection struct{ conicBase }
+// COP — conic perspective.
+type copProjection struct {
+	thetaA                 float64
+	w0, w1, w2, w3, w4, w5 float64
+}
 
-func newCOP(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
-	b, err := newConicBase(pv, latAxis)
+func newCOP(pv map[wcs.PVKey]float64, latAxis int) (copProjection, error) {
+	ta, eta, err := conicThetaA("COP", pv, latAxis)
 	if err != nil {
-		return nil, err
+		return copProjection{}, err
 	}
-	return copProjection{b}, nil
+	p := copProjection{thetaA: ta}
+	p.w0 = sind(ta)
+	if p.w0 == 0.0 {
+		return p, errBadParam("COP", "theta_a = 0")
+	}
+	p.w1 = 1.0 / p.w0
+	p.w3 = float64(r2d * cosd(eta))
+	if p.w3 == 0.0 {
+		return p, errBadParam("COP", "cos(eta) = 0")
+	}
+	p.w4 = 1.0 / p.w3
+	p.w5 = 1.0 / tand(ta)
+	p.w2 = float64(p.w3 * p.w5)
+	return p, nil
 }
 
 func (copProjection) Code() string      { return "COP" }
-func (p copProjection) Theta0() float64 { return p.thetaA }
+func (p copProjection) theta0() float64 { return p.thetaA }
 
-func (p copProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	diff := theta - p.thetaA
-	if math.Abs(diff) >= math.Pi/2 {
+func (p copProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	alpha, r := conicAlpha(x, p.w2-y, p.thetaA < 0.0)
+	phi = float64(alpha * p.w1)
+	theta = p.thetaA + atand(p.w5-float64(r*p.w4))
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
+}
+
+func (p copProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinalpha, cosalpha := sincosd(float64(p.w0 * phi))
+	t := theta - p.thetaA
+	s := cosd(t)
+	var r float64
+	if s == 0.0 {
 		return 0, 0, false
+	} else if math.Abs(theta) == 90.0 {
+		r = 0.0
+		if (theta < 0.0) != (p.thetaA < 0.0) {
+			return 0, 0, false
+		}
+	} else {
+		r = p.w2 - p.w3*sind(t)/s
+		if float64(r*p.w0) < 0.0 {
+			return 0, 0, false
+		}
 	}
-	r := math.Cos(p.eta) * (p.Y0 - math.Tan(diff))
-	x, y = p.projectFromR(phi, r)
-	return x, y, true
+	return float64(r * sinalpha), float64(-r*cosalpha) + p.w2, true
 }
 
-func (p copProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	r := p.inverseR(x, y)
-	phi = p.inversePhi(x, y, r)
-	diff := math.Atan(p.Y0 - r/math.Cos(p.eta))
-	theta = diff + p.thetaA
-	return phi, theta, true
-}
-
-// COE — conic equal-area / Albers (Paper II §5.4.2).
-//
-//	R_theta = 2/(C_coe) * sqrt(1 + sin(theta_1)*sin(theta_2) - (sin(theta_1)+sin(theta_2))*sin(theta))
-//
-// where C_coe = (sin(theta_1) + sin(theta_2)) / 2. The cone constant
-// differs from sin(theta_a) for COE; Paper II eq. 69.
+// COE — conic equal area.
 type coeProjection struct {
-	conicBase
-	c2    float64 // 2*C_coe = sin(theta_1) + sin(theta_2)
-	gamma float64 // sin(theta_1) + sin(theta_2) factor, cached
+	thetaA                         float64
+	w0, w1, w2, w3, w4, w5, w6, w7 float64
+	w8                             float64
 }
 
-func newCOE(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
-	b, err := newConicBase(pv, latAxis)
+func newCOE(pv map[wcs.PVKey]float64, latAxis int) (coeProjection, error) {
+	ta, eta, err := conicThetaA("COE", pv, latAxis)
 	if err != nil {
-		return nil, err
+		return coeProjection{}, err
 	}
-	s1 := math.Sin(b.thetaA - b.eta)
-	s2 := math.Sin(b.thetaA + b.eta)
-	// COE uses C = (sin(theta_1) + sin(theta_2)) / 2 as the cone constant.
-	c := (s1 + s2) / 2
-	b.C = c
-	p := coeProjection{conicBase: b, c2: s1 + s2, gamma: 1 + s1*s2}
-	// Y0 for COE is different: Paper II gives the radius at theta_a.
-	p.Y0 = math.Sqrt(p.gamma-p.c2*math.Sin(b.thetaA)) / c
+	p := coeProjection{thetaA: ta}
+	theta1 := ta - eta
+	theta2 := ta + eta
+	p.w0 = (sind(theta1) + sind(theta2)) / 2.0
+	if p.w0 == 0.0 {
+		return p, errBadParam("COE", "sin(theta_1) + sin(theta_2) = 0")
+	}
+	p.w1 = 1.0 / p.w0
+	p.w3 = r2d / p.w0
+	p.w4 = 1.0 + float64(sind(theta1)*sind(theta2))
+	p.w5 = float64(2.0 * p.w0)
+	p.w6 = float64(p.w3 * p.w3 * p.w4)
+	p.w7 = 1.0 / (2.0 * r2d * p.w3)
+	p.w8 = float64(p.w3 * math.Sqrt(p.w4+p.w5))
+	p.w2 = float64(p.w3 * math.Sqrt(p.w4-float64(p.w5*sind(ta))))
 	return p, nil
 }
 
 func (coeProjection) Code() string      { return "COE" }
-func (p coeProjection) Theta0() float64 { return p.thetaA }
+func (p coeProjection) theta0() float64 { return p.thetaA }
 
-func (p coeProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	u := p.gamma - p.c2*math.Sin(theta)
-	if u < 0 {
-		return 0, 0, false
+func (p coeProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-12
+	alpha, r := conicAlpha(x, p.w2-y, p.thetaA < 0.0)
+	if math.Abs(r-p.w8) < tol {
+		theta = -90.0
+	} else {
+		w := float64((p.w6 - float64(r*r)) * p.w7)
+		if math.Abs(w) > 1.0 {
+			if math.Abs(w-1.0) < tol {
+				theta = 90.0
+			} else if math.Abs(w+1.0) < tol {
+				theta = -90.0
+			} else {
+				return 0, 0, false
+			}
+		} else {
+			theta = asind(w)
+		}
 	}
-	r := math.Sqrt(u) / p.C
-	x, y = p.projectFromR(phi, r)
-	return x, y, true
+	phi = float64(alpha * p.w1)
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
 }
 
-func (p coeProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	r := p.inverseR(x, y)
-	phi = p.inversePhi(x, y, r)
-	arg := (p.gamma - (r*p.C)*(r*p.C)) / p.c2
-	if arg < -1 || arg > 1 {
-		return 0, 0, false
+func (p coeProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinalpha, cosalpha := sincosd(float64(p.w0 * phi))
+	var r float64
+	if theta == -90.0 {
+		r = p.w8
+	} else {
+		r = float64(p.w3 * math.Sqrt(p.w4-float64(p.w5*sind(theta))))
 	}
-	theta = math.Asin(arg)
-	return phi, theta, true
+	return float64(r * sinalpha), float64(-r*cosalpha) + p.w2, true
 }
 
-// COD — conic equidistant (Paper II §5.4.3).
-//
-//	R_theta = theta_a - theta + cot(theta_a)
-//
-// (The Y_0 offset in projectFromR is cot(theta_a); the extra theta_a
-// shift here combines into the full formula from Paper II eq. 73.)
-type codProjection struct{ conicBase }
+// COD — conic equidistant.
+type codProjection struct {
+	thetaA         float64
+	w0, w1, w2, w3 float64
+}
 
-func newCOD(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
-	b, err := newConicBase(pv, latAxis)
+func newCOD(pv map[wcs.PVKey]float64, latAxis int) (codProjection, error) {
+	ta, eta, err := conicThetaA("COD", pv, latAxis)
 	if err != nil {
-		return nil, err
+		return codProjection{}, err
 	}
-	// COD's cone constant is C = sin(theta_a) * sin(eta)/eta (from Paper II
-	// eq. 74), which simplifies to sin(theta_a) when eta = 0.
-	if b.eta != 0 {
-		b.C = math.Sin(b.thetaA) * math.Sin(b.eta) / b.eta
+	p := codProjection{thetaA: ta}
+	if eta == 0.0 {
+		p.w0 = float64(r2d * sind(ta) * d2r)
+	} else {
+		p.w0 = r2d * sind(ta) * sind(eta) / eta
 	}
-	return codProjection{b}, nil
+	if p.w0 == 0.0 {
+		return p, errBadParam("COD", "theta_a = 0")
+	}
+	p.w1 = 1.0 / p.w0
+	p.w2 = r2d * cosd(eta) * cosd(ta) / p.w0
+	p.w3 = p.w2 + ta
+	return p, nil
 }
 
 func (codProjection) Code() string      { return "COD" }
-func (p codProjection) Theta0() float64 { return p.thetaA }
+func (p codProjection) theta0() float64 { return p.thetaA }
 
-func (p codProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	r := p.thetaA - theta + p.Y0
-	x, y = p.projectFromR(phi, r)
-	return x, y, true
+func (p codProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	alpha, r := conicAlpha(x, p.w2-y, p.thetaA < 0.0)
+	phi = float64(alpha * p.w1)
+	theta = p.w3 - r
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
 }
 
-func (p codProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	r := p.inverseR(x, y)
-	phi = p.inversePhi(x, y, r)
-	theta = p.thetaA + p.Y0 - r
-	return phi, theta, true
+func (p codProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinalpha, cosalpha := sincosd(float64(p.w0 * phi))
+	r := p.w3 - theta
+	return float64(r * sinalpha), float64(-r*cosalpha) + p.w2, true
 }
 
-// COO — conic orthomorphic (Lambert conformal conic, Paper II §5.4.4).
-//
-//	R_theta = psi * tan^C(pi/4 - theta/2)
-//
-// where psi is a constant chosen so that the two standard parallels are
-// true scale. Conformal (angle-preserving). Used by aeronautical charts.
+// COO — conic orthomorphic (Lambert conformal conic). The apex of
+// the cone (theta = -90 for a northern cone, +90 for a southern one where
+// wcslib's own forward gives infinity) is not on the projection.
 type cooProjection struct {
-	conicBase
-	psi float64
+	thetaA             float64
+	w0, w1, w2, w3, w4 float64
 }
 
-func newCOO(pv map[wcs.PVKey]float64, latAxis int) (Projection, error) {
-	b, err := newConicBase(pv, latAxis)
+func newCOO(pv map[wcs.PVKey]float64, latAxis int) (cooProjection, error) {
+	ta, eta, err := conicThetaA("COO", pv, latAxis)
 	if err != nil {
-		return nil, err
+		return cooProjection{}, err
 	}
-	// Paper II gives:
-	//   C = ln(cos(theta_2)/cos(theta_1)) / ln(tan((pi/2 - theta_1)/2) / tan((pi/2 - theta_2)/2))
-	//   psi = cos(theta_1) / (C * tan^C((pi/2 - theta_1)/2))
-	// For eta = 0 (both parallels coincident at theta_a), the degenerate
-	// form is C = sin(theta_a), psi = cos(theta_a) * cot^sin(theta_a)(pi/4 - theta_a/2).
-	t1 := b.thetaA - b.eta
-	t2 := b.thetaA + b.eta
-	var c float64
-	if b.eta == 0 {
-		c = math.Sin(b.thetaA)
+	p := cooProjection{thetaA: ta}
+	theta1 := ta - eta
+	theta2 := ta + eta
+	tan1 := tand((90.0 - theta1) / 2.0)
+	cos1 := cosd(theta1)
+	if theta1 == theta2 {
+		p.w0 = sind(theta1)
 	} else {
-		c = math.Log(math.Cos(t2)/math.Cos(t1)) / math.Log(math.Tan((math.Pi/2-t2)/2)/math.Tan((math.Pi/2-t1)/2))
+		tan2 := tand((90.0 - theta2) / 2.0)
+		cos2 := cosd(theta2)
+		p.w0 = lmLog(cos2/cos1) / lmLog(tan2/tan1)
 	}
-	if c == 0 {
-		return nil, fmt.Errorf("wcs/transform: COO cone constant C = 0 (theta_a = 0?)")
+	if p.w0 == 0.0 {
+		return p, errBadParam("COO", "cone constant C = 0")
 	}
-	b.C = c
-	psi := math.Cos(t1) / (c * math.Pow(math.Tan((math.Pi/2-t1)/2), c))
-	// Override Y0 to the radius at theta_a.
-	b.Y0 = psi * math.Pow(math.Tan((math.Pi/2-b.thetaA)/2), c)
-	return cooProjection{conicBase: b, psi: psi}, nil
+	p.w1 = 1.0 / p.w0
+	p.w3 = r2d * (cos1 / p.w0) / lmPow(tan1, p.w0)
+	if p.w3 == 0.0 {
+		return p, errBadParam("COO", "psi = 0")
+	}
+	p.w2 = float64(p.w3 * lmPow(tand((90.0-ta)/2.0), p.w0))
+	p.w4 = 1.0 / p.w3
+	return p, nil
 }
 
 func (cooProjection) Code() string      { return "COO" }
-func (p cooProjection) Theta0() float64 { return p.thetaA }
+func (p cooProjection) theta0() float64 { return p.thetaA }
 
-func (p cooProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	t := math.Tan((math.Pi/2 - theta) / 2)
-	if t <= 0 {
-		return 0, 0, false
+func (p cooProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	alpha, r := conicAlpha(x, p.w2-y, p.thetaA < 0.0)
+	if r == 0.0 {
+		if p.w0 < 0.0 {
+			theta = -90.0
+		} else {
+			return 0, 0, false
+		}
+	} else {
+		theta = 90.0 - float64(2.0*atand(lmPow(float64(r*p.w4), p.w1)))
 	}
-	r := p.psi * math.Pow(t, p.C)
-	x, y = p.projectFromR(phi, r)
-	return x, y, true
+	phi = float64(alpha * p.w1)
+	return phi, theta, prjbchk(1.0e-13, &phi, &theta)
 }
 
-func (p cooProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	r := p.inverseR(x, y)
-	phi = p.inversePhi(x, y, r)
-	if r <= 0 {
-		theta = math.Pi / 2
-		return phi, theta, true
+func (p cooProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	sinalpha, cosalpha := sincosd(float64(p.w0 * phi))
+	var r float64
+	if theta == -90.0 {
+		r = 0.0
+		if p.w0 >= 0.0 {
+			return 0, 0, false
+		}
+	} else {
+		r = float64(p.w3 * lmPow(tand((90.0-theta)/2.0), p.w0))
 	}
-	t := math.Pow(r/p.psi, 1/p.C)
-	theta = math.Pi/2 - 2*math.Atan(t)
-	return phi, theta, true
+	return float64(r * sinalpha), float64(-r*cosalpha) + p.w2, true
 }

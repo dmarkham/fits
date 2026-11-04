@@ -1,0 +1,18 @@
+# Celestial CUNIT 'DEG' (FITS units are case sensitive).
+# EXPECT-WCSLIB-ERROR: Invalid symbol in EXPON context
+NOTE reject: cunit_upper
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CUNIT1  = 'DEG'
+CUNIT2  = 'DEG'

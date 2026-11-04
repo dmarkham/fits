@@ -1,0 +1,57 @@
+# DSS plate solution with every AMDX/AMDY term 1..13 non-zero (synthetic;
+# coefficients of the size of a real Palomar/UK Schmidt plate solution, the
+# 5th-degree term AMD13 included, so wcslib uses its degree-5 TPD form),
+# southern declination sign, no approximate WCS at all, and a pixel grid
+# reaching 5000 px (13 cm on the plate) from the cutout.
+# The grid stops at +-5000 px: at +-6000 px wcslib's iterative inverse of
+# the plate polynomial (dis.c disx2p, 30 steps of a separable secant
+# scheme) fails to converge at three corners (status 9) where Newton
+# iteration returns the grid point (4500, -6000) etc. exactly; that is a
+# documented difference (docs/VALIDATION.md) with its own case,
+# dss_far_outside_plate.
+NOTE DSS plate solution, all 13 terms, degree 5
+GRID 1 400 9 1 300 9
+GRID -5000 5000 9 -5000 5000 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 400
+NAXIS2  = 300
+CNPIX1  = 9120
+CNPIX2  = 4410
+XPIXELSZ= 25.28445
+YPIXELSZ= 25.28445
+PPO3    = 177500.0
+PPO6    = 177500.0
+PLTRAH  = 5
+PLTRAM  = 34
+PLTRAS  = 31.94
+PLTDECSN= '-       '
+PLTDECD = 22
+PLTDECM = 0
+PLTDECS = 52.2
+AMDX1   = 6.7165566279E+01
+AMDX2   = 1.8513587312E-02
+AMDX3   = -4.3815032712E+01
+AMDX4   = -1.2310232101E-05
+AMDX5   = 1.5281391001E-05
+AMDX6   = -2.2214129003E-05
+AMDX7   = -3.8711002135E-04
+AMDX8   = 2.4110110037E-06
+AMDX9   = -6.1911008122E-08
+AMDX10  = 2.2930028134E-06
+AMDX11  = 1.1102030201E-07
+AMDX12  = -1.0212017106E-08
+AMDX13  = 2.7311018101E-09
+AMDY1   = 6.7167031235E+01
+AMDY2   = -2.0129061902E-02
+AMDY3   = 2.1304011803E+01
+AMDY4   = -1.6513018011E-05
+AMDY5   = -2.1030413102E-05
+AMDY6   = 9.1001323019E-06
+AMDY7   = -4.1021120903E-04
+AMDY8   = 2.3810231019E-06
+AMDY9   = 4.4013011903E-08
+AMDY10  = 2.2401230109E-06
+AMDY11  = -2.0991230811E-08
+AMDY12  = 1.2903014403E-08
+AMDY13  = -3.1102041118E-09

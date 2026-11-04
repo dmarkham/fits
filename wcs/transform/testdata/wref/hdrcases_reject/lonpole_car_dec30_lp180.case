@@ -1,0 +1,23 @@
+# CAR at CRVAL2 = 30 with LONPOLE = 180 (synthetic). There is no native pole
+# latitude that puts the reference point at native (0, 0) with phi_p = 180
+# (wcslib celset: both solutions |latp| > 90), so the header is invalid;
+# the old code silently used delta_p = 120. With delta_0 >= theta_0
+# wcslib's default would be 0; an explicit 180 must be rejected, not replaced.
+# EXPECT-WCSLIB-ERROR: No valid solution for latp
+NOTE reject: lonpole_car_dec30_lp180
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+SKYGRID 90 110 5 15 45 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 100.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 180.0

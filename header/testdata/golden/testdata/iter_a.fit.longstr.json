@@ -1,0 +1,27 @@
+{
+ "file": "iter_a.fit",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 12},
+   {"n": 5, "key": "NAXIS2", "u64": 10000},
+   {"n": 6, "key": "PCOUNT", "u64": 0},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 3},
+   {"n": 9, "key": "TTYPE1", "str": "Counts", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "J", "comment": "data format of field: 4-byte INTEGER"},
+   {"n": 11, "key": "TTYPE2", "str": "Time", "comment": "label for field   2"},
+   {"n": 12, "key": "TFORM2", "str": "E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 13, "key": "TTYPE3", "str": "Rate", "comment": "label for field   3"},
+   {"n": 14, "key": "TFORM3", "str": "E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 15, "key": "EXTNAME", "str": "rate", "comment": "name of this binary table extension"}
+  ]}
+ ]
+}

@@ -1,0 +1,19 @@
+# CAR (theta0 = 0) with LONPOLE = 90, so |phip - phi0| = 90 and celset's
+# z = 0, but CRVAL2 = 30: no native pole puts the fiducial point at
+# (phi0, theta0) and wcslib refuses the header. Synthetic.
+# EXPECT-WCSLIB-ERROR: lat0 == 0 is required for |phip - phi0| = 90 and theta0 == 0
+NOTE reject: celpole_z0_lat30
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 90.0

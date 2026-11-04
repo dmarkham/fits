@@ -1,0 +1,1 @@
+{"name": "hcomp_s8", "type": "s8", "naxes": [40, 25], "algo": "HCOMPRESS_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 2, "gen_seed": 5010, "in_sha256": "cd381c7b5aca3285c484e2caa80147ae7707d1b966ef1bfc1e6fdf8dcc3457ed"}

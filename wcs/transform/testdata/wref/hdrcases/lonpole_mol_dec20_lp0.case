@@ -1,0 +1,18 @@
+# MOL with CRVAL2 = 20 and LONPOLE = 0 (synthetic, audit probe
+# h/lp_MOL_20_0.0.hdr). Grid inside the Mollweide ellipse.
+NOTE pipeline: MOL with LONPOLE = 0
+GRID 150 362 9 150 362 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---MOL'
+CTYPE2  = 'DEC--MOL'
+CRVAL1  = 60.0
+CRVAL2  = 20.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.2
+CDELT2  = 0.2
+LONPOLE = 0.0

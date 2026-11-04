@@ -1,0 +1,31 @@
+{
+ "file": "comp_fzun_real_with_nan.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 5760,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 9,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                  -64 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                   12",
+    "NAXIS2  =                   12",
+    "EXTEND  =                    T",
+    "HISTORY Image was compressed by CFITSIO using scaled integer quantization:",
+    "HISTORY   q = 4.000000 / quantized level scaling parameter",
+    "HISTORY 'SUBTRACTIVE_DITHER_1' / Pixel Quantization Algorithm"
+   ],
+   "image": {"bitpix": -64, "equivtype": -64, "compressed": false, "naxis": 2, "naxes": [12,12], "npix": 144, "bscale": 1, "bzero": 0,
+    "phys": {"n": 144, "sha256": "9e04e7917ff54bba13a82d40e58a75f7a5f865ccba69f0b7d12dfba47b941cbd", "pool": "f64"}
+   },
+   "errors": []
+  }
+ ]
+}

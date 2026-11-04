@@ -1,0 +1,15 @@
+# Helioecliptic HLON/HLAT pair with ZEA (synthetic).
+NOTE frame_hlon_zea
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'HLON-ZEA'
+CTYPE2  = 'HLAT-ZEA'
+CDELT1  = -0.001
+CDELT2  = 0.001

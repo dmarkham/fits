@@ -1,0 +1,116 @@
+SIMPLE  =                    T / file does conform to FITS standard
+BITPIX  =                  -32 / Bits per pixel
+NAXIS   =                    2 / Number of axes
+NAXIS1  =                 2048 / Axis length
+NAXIS2  =                 4096 / Axis length
+ORIGIN  = 'NOAO-IRAF FITS Image Kernel July 2003' / FITS file originator
+EXTNAME = 'ccd1    '           / Extension name
+INHERIT =                    T / Inherits global header
+OBJECT  = 'NGC4594 '           / Name of the object observed
+DATE    = '2011-07-15T08:48:17' / Date FITS file was generated
+IRAF-TLM= '2011-07-15T08:48:17' / Time of last modification
+IMAGEID =                    1 / Image identification
+
+CCDNAME = 'SITe #7298FBR06-01 (NOAO 14)' / CCD name
+AMPNAME = 'SITe #7298FBR06-01 (NOAO 14), lower right (Amp12)' / Amplifier name
+BUNIT   = 'counts/s'           / photoelectrons per second
+GAIN    =                  3.1 / gain expected for amp 112 (e-/ADU)
+RDNOISE =                  7.0 / read noise expected for amp 112 (e-)
+SATURATE=                36000 / Maximum good data value (ADU)
+DQMASK  = 'K4M06A_20060223_7cff42d-R-kp4m20060226T094108_bpm[ccd1]' / Data quali
+CCDSUM  = '1 1     '           / CCD pixel summing
+DETSEC  = '[1:2048,1:4096]'    / Detector section
+
+
+EQUINOX =                2000. / Equinox of WCS
+CTYPE1  = 'RA---TNX'           / Coordinate type
+CTYPE2  = 'DEC--TNX'           / Coordinate type
+CRVAL1  =     190.124125000005 / Coordinate reference value
+CRVAL2  =            -11.54375 / Coordinate reference value
+CRPIX1  =     4198.15891977998 / Coordinate reference pixel
+CRPIX2  =     4113.02631504081 / Coordinate reference pixel
+CD1_1   =  4.07412364763527E-7 / Coordinate matrix
+CD2_1   =  -7.1262272917059E-5 / Coordinate matrix
+CD1_2   =  -7.1657869772149E-5 / Coordinate matrix
+CD2_2   =  6.52250257636026E-7 / Coordinate matrix
+WAT0_001= 'system=image'       / Coordinate system
+WAT1_001= 'wtype=tnx axtype=ra lngcor = "3. 4. 4. 1. -4.899049749020767E-4 0.29'
+WAT1_002= '37830448527188 0.1505431415330189 0.299087978999259 -0.0018735273326'
+WAT1_003= '25568 0.004402487440899917 0.02435675523245788 -0.05218531830803252 '
+WAT1_004= '0.002451543458426138 0.113614548422375 -0.05340762461544769 -1.51235'
+WAT1_005= '5604758252 0.02337098419736341 -0.5080628239332775 -0.76985441776116'
+WAT2_001= 'wtype=tnx axtype=dec latcor = "3. 4. 4. 1. -4.899049749020767E-4 0.2'
+WAT2_002= '937830448527188 0.1505431415330189 0.299087978999259 -0.003302765405'
+WAT2_003= '347894 0.004695554946603481 0.02941870687789958 -0.08881194856230273'
+WAT2_004= ' 0.01737461627820834 0.01969228916347701 -0.4581868052936601 1.21229'
+WAT2_005= '8277087715 0.01444916007560419 -0.0382047565737498 1.559051347808284'
+BIASFIL = 'K4M06A_20060223_7cff42d-kp4m20060226T104752Z[ccd1]' / Bias reference
+FLATFIL = 'K4M06A_20060421_7cfcd04-R-kp4m20060422T035747F[ccd1]' / Dome flat ref
+XTALKCOR= 'Jul 14 20:05 Crosstalk is 0.00162*im02'
+XTALKBPM= 'K4M06A_20060223_7cff42d-ftrR-ngt-mefkp4m20060226T094108_xtm_im01.pl'
+BPMCCD  = 'BPM_1163201133-kp4mccd1_bpm.pl' /
+DQOVMIN =               2418.5 / min in overscan region
+DQOVMAX =              2424.46 / max in overscan region
+DQOVMEAN=             2421.483 / mean in overscan region
+DQOVSIG =             2.640298 / sigma in overscan region
+DQOVSMEA=             2421.485 / mean in collapsed overscan strip
+DQOVSSIG=             1.016908 / sigma in collapsed overscan strip
+SATPROC = 'Jul 14 20:06 Sat: 36000. ADU (111600. e-), grw=1'
+BLDPROC = 'Jul 14 20:06 Bleed: 8210.43 ADU (25452.3 e-), len=15, grw=1'
+TRIM    = 'Jul 14 20:06 Trim is [65:2112,1:4096]'
+FIXPIX  = 'Jul 14 20:06 Fix BPM_1163201133-kp4mccd1_bpm.pl + sat + bleed' /
+OVERSCAN= 'Jul 14 20:06 Overscan is [1:50,1:4096], function=minmax'
+CCDMEAN =             17.53066
+CCDMEANT=            995151335
+CCDPROC = 'Jul 14 22:55 CCD processing done'
+DQGLMEAN=              17.5341
+DQGLSIG =            0.3872512
+CATALOG = 'K4M06A_20060223_7cff42d-R-kp4m20060226T094108-ccd1_cat.txt'
+OBJMASK = 'K4M06A_20060223_7cff42d-R-kp4m20060226T094108-ccd1_obm[pl]'
+AVSKY   =             17.52715
+AVSIG   =            0.3637241
+SKYIM   = 'K4M06A_20060223_7cff42d-R-kp4m20060226T094108-ccd1_sky' / Sky map
+SIGIM   = 'K4M06A_20060223_7cff42d-R-kp4m20060226T094108-ccd1_sig' / Sigma map
+SEEINGP1=                 6.53 / [pix] seeing
+DPTHADU1=               14.208 / Photometric depth (BUNIT)
+DQSKFRC =                0.995 / Frac of pixels which are sky
+DQOBMXA =                2253. / Max num of pixels in one object
+SKY     = '17.5272   0.002085' / Mean and StdDev of sky (BUNIT)
+SKYADU1 =              17.5272 / Mean sky (BUNIT)
+SKYXGRAD=             -0.00638 / Sky X gradient (BUNIT/pix)
+SKYYGRAD=             -0.18422 / Sky Y gradient (BUNIT/pix)
+SIG     = '0.363724   2.488E-4' / Mean and StdDev of sky sigma (BUNIT)
+SKYNOIS1=             0.363724 / Mean sky noise (BUNIT)
+SIGXGRAD=             -0.00578 / Sky sigma X gradient (BUNIT/pix)
+SIGYGRAD=             -0.00514 / Sky sigma Y gradient (BUNIT/pix)
+WAT1_006= '52 9.260161533220012 -0.03600725624007664 0.4399476752943274 2.36384'
+WAT1_007= '6434292662 -16.69702487276127 "'
+WAT2_006= ' -5.888478267765256 -0.1304082731428435 7.880397058985419E-4 -2.4589'
+WAT2_007= '74675395815 9.446408490497318 "'
+MAGZERO1=             23.87501
+MAGZSIG1=            0.2056729
+MAGZERR1=           0.02423878
+MAGZNAV1=                   73
+SEEING1 =                 1.69 / [arcsec] seeing
+SKYMAG1 =                17.76 / [mag/arcsec^2] sky brightness
+PHTDPTH1=                20.92 / [mag] photometric depth
+SFT     = 'K4M06A_20060223_7cff42d-R-ccd1_sft' /
+SFLATCOR= 'Jul 14 22:55 Sky flat is K4M06A_20060223_7cff42d-R-ccd1_sft, scal' /
+SFLATFIL= 'K4M06A_20060223_7cff42d-R-sft[ccd1]' / Sky flat reference file
+RSPORD  = '00401   '
+RA1     = '12:41:05.78'        / Mosaic CCD center
+DEC1    = '-11:19:06.6'        / Mosaic CCD center
+CENRA1  =             190.2741 / Mosaic CCD center
+COR1RA1 =             190.4213 / Mosaic CCD corner
+COR2RA1 =             190.4235 / Mosaic CCD corner
+COR3RA1 =             190.1234 / Mosaic CCD corner
+COR4RA1 =             190.1236 / Mosaic CCD corner
+CENDEC1 =             -11.3185 / Mosaic CCD center
+COR1DEC1=             -11.2483 / Mosaic CCD corner
+COR2DEC1=             -11.3931 / Mosaic CCD corner
+COR3DEC1=             -11.3913 / Mosaic CCD corner
+COR4DEC1=              -11.245 / Mosaic CCD corner
+HISTORY Image was compressed by CFITSIO using scaled integer quantization:
+HISTORY   q = 4.000000 / quantized level scaling parameter
+HISTORY 'SUBTRACTIVE_DITHER_1' / Pixel Quantization Algorithm
+END

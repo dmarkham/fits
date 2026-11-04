@@ -1,0 +1,1 @@
+{"name": "hcomp_s8_adversarial", "type": "s8", "naxes": [40, 25], "algo": "HCOMPRESS_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 0, "gen_seed": 5042, "in_sha256": "e971caeb68b87c3e8e35efee7f919104199d3ed881817e2554b935bea1fd760e"}

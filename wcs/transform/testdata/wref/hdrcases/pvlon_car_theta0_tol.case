@@ -1,0 +1,18 @@
+# PV1_2 = theta_0 = 90.00000000005: above 90 by less than wcslib's celset
+# tolerance (1e-10), so it is clamped to 90, not refused (cel.c). Its twin
+# hdrcases_reject/pvlon_car_theta0_90p5 is refused. Synthetic.
+NOTE pipeline: theta_0 just above 90 within the celset tolerance is clamped
+GRID 1 512 9 1 512 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = 90.00000000005

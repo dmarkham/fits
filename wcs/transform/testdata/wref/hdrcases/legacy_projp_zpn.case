@@ -1,0 +1,17 @@
+# Defunct PROJPn keywords on ZPN (synthetic): PROJP1, PROJP3 -> PV2_1, PV2_3.
+NOTE legacy_projp_zpn
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'RA---ZPN'
+CTYPE2  = 'DEC--ZPN'
+CDELT1  = -0.001
+CDELT2  = 0.001
+PROJP1  = 1.0
+PROJP3  = 0.3

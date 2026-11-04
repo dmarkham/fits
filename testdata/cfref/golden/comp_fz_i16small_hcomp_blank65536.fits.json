@@ -1,0 +1,71 @@
+{
+ "file": "comp_fz_i16small_hcomp_blank65536.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 6,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                   16 / number of bits per data pixel",
+    "NAXIS   =                    0 / number of data axes",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 28,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / 8-bit bytes",
+    "NAXIS   =                    2 / 2-dimensional binary table",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                    1 / number of rows in table",
+    "PCOUNT  =                  368 / size of special data area",
+    "GCOUNT  =                    1 / one data group (required keyword)",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'    / label for field   1",
+    "TFORM1  = '1PB(368)'           / data format of field: variable length array",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTILE1  =                   40 / size of tiles to be compressed",
+    "ZTILE2  =                    6 / size of tiles to be compressed",
+    "ZCMPTYPE= 'HCOMPRESS_1'        / compression algorithm",
+    "ZNAME1  = 'SCALE   '           / HCOMPRESS scale factor",
+    "ZVAL1   =        0.0000000E+00 / HCOMPRESS scale factor",
+    "ZNAME2  = 'SMOOTH  '           / HCOMPRESS smooth option",
+    "ZVAL2   =                    0 / HCOMPRESS smooth option",
+    "EXTNAME = 'COMPRESSED_IMAGE'",
+    "ZSIMPLE =                    T / file does conform to FITS standard",
+    "ZBITPIX =                   16 / number of bits per data pixel",
+    "ZNAXIS  =                    2 / number of data axes",
+    "ZNAXIS1 =                   40 / length of data axis 1",
+    "ZNAXIS2 =                    6 / length of data axis 2",
+    "ZEXTEND =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "BLANK   =                65536 / gen_fpack setkey"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": true, "naxis": 2, "naxes": [40,6], "npix": 240, "bscale": 1, "bzero": 0, "blank": 65536,
+    "phys": {"n": 240, "sha256": "3b4a1ead40fbf72c528ddd5f0d617ca3210ce357d5f650abb34877a44880d1be", "pool": "f64"},
+    "i64": {"n": 240, "sha256": "b0f45ae64a13abe8f44e5b8bc58fd5f7b5b6271de50a54f436be86c701b0a03b", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

@@ -1,0 +1,30 @@
+{
+ "file": "comp_fz_u8_gzip2_w2_edge.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 8},
+   {"n": 5, "key": "NAXIS2", "u64": 2},
+   {"n": 6, "key": "PCOUNT", "u64": 132},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 1},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1PB(66)", "comment": "data format of field: variable length array"},
+   {"n": 12, "key": "ZTILE1", "u64": 40},
+   {"n": 13, "key": "ZTILE2", "u64": 1},
+   {"n": 14, "key": "ZCMPTYPE", "str": "GZIP_2", "comment": "compression algorithm"},
+   {"n": 15, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": ""},
+   {"n": 17, "key": "ZBITPIX", "u64": 8},
+   {"n": 18, "key": "ZNAXIS", "u64": 2},
+   {"n": 19, "key": "ZNAXIS1", "u64": 40},
+   {"n": 20, "key": "ZNAXIS2", "u64": 2}
+  ]}
+ ]
+}

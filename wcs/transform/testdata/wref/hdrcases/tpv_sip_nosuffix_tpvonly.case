@@ -1,0 +1,25 @@
+# hdrcases_differ/tpv_sip_nosuffix without its SIP cards: the answer a
+# 'RA---TPV' header with SIP keywords and no '-SIP' suffix must give
+# (its SIP set is ignored, as astropy 8.0.2 ignores it). Synthetic.
+NOTE pipeline: TPV alone (tpv_sip_nosuffix without its SIP cards)
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+PV1_1   = 1.0
+PV1_4   = 1e-3
+PV1_5   = -5e-4
+PV2_1   = 1.0
+PV2_6   = 2e-3
+PV2_4   = 4e-4

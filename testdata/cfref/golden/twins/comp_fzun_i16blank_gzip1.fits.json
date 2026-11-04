@@ -1,0 +1,32 @@
+{
+ "file": "comp_fzun_i16blank_gzip1.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 5760,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 9,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                   16 / number of bits per data pixel",
+    "NAXIS   =                    2 / number of data axes",
+    "NAXIS1  =                   40 / length of data axis 1",
+    "NAXIS2  =                   24 / length of data axis 2",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "BLANK   =               -32768 / null value"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 2, "naxes": [40,24], "npix": 960, "bscale": 1, "bzero": 0, "blank": -32768,
+    "phys": {"n": 960, "sha256": "58c718ee9c5f9cf09f50816c0e51d03a7c661e87a6a0b3f552a3915a815dad45", "pool": "f64"},
+    "i64": {"n": 960, "sha256": "e0c468cd3855b56c3034fe04749406d4e6d87ef81481e8dca258379a820a577b", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

@@ -1,0 +1,1 @@
+{"astropy":"8.0.2","columns":[{"col":1,"hdu":1,"kind":"float","name":"a","rows":[["0x1.43ef9db22d0e5p+3"],["0x1.4cccccccccccdp+2"],["0x1.f3851eb851eb8p+3"],["nan"],["0x1.5900000000000p+8"]],"tnull":"*"},{"col":2,"hdu":1,"kind":"int","name":"b","rows":[[37],[23],[17],[0],[345]],"tnull":"*"}],"hdus":["PrimaryHDU","TableHDU"],"numpy":"2.4.6"}

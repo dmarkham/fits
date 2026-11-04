@@ -1,0 +1,19 @@
+# TAN with PV1_1 = phi_0 = 30 and no offset flag (PV1_0 absent): phi_0
+# moves the fiducial point's native longitude and so rotates the sky about
+# the reference point (wcslib celset). Synthetic.
+NOTE pipeline: PV1_1 (phi_0) without offset on TAN
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 120.0
+CRVAL2  = 50.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.01
+CDELT2  = 0.01
+PV1_1   = 30.0

@@ -38,10 +38,10 @@ func TestTPVRoundTrip(t *testing.T) {
 func TestTPVRadialTerms(t *testing.T) {
 	tpv := &TPV{Lon: 1, Lat: 2}
 	// Identity linear baseline + small r and r³ radial distortion.
-	tpv.Axis1[1] = 1.0  // xi
-	tpv.Axis2[1] = 1.0  // eta (PV2_1)
-	tpv.Axis1[3] = 1e-3 // r in the x output
-	tpv.Axis2[3] = 1e-3 // r in the y output
+	tpv.Axis1[1] = 1.0   // xi
+	tpv.Axis2[1] = 1.0   // eta (PV2_1)
+	tpv.Axis1[3] = 1e-3  // r in the x output
+	tpv.Axis2[3] = 1e-3  // r in the y output
 	tpv.Axis1[11] = 1e-5 // r³ in the x output
 	tpv.Axis2[11] = 1e-5 // r³ in the y output
 
@@ -75,12 +75,12 @@ func TestTPVRadialTerms(t *testing.T) {
 func TestTPVAxis2TermOrder(t *testing.T) {
 	tpv := &TPV{Lon: 1, Lat: 2}
 	tpv.Axis1[1] = 1.0
-	tpv.Axis1[2] = 0.5  // eta
-	tpv.Axis1[4] = 0.25 // xi²
+	tpv.Axis1[2] = 0.5   // eta
+	tpv.Axis1[4] = 0.25  // xi²
 	tpv.Axis1[8] = 0.125 // xi²·eta
 	tpv.Axis2[1] = 1.0
-	tpv.Axis2[2] = 0.5  // xi
-	tpv.Axis2[4] = 0.25 // eta²
+	tpv.Axis2[2] = 0.5   // xi
+	tpv.Axis2[4] = 0.25  // eta²
 	tpv.Axis2[8] = 0.125 // eta²·xi
 
 	xi, eta := 0.3, -0.2
@@ -168,15 +168,12 @@ func TestParseTPVAbsent(t *testing.T) {
 	}
 }
 
-// TestTNXParse constructs a synthetic TNX WAT header and parses it. Uses
-// a simple polynomial (surface type 3) with identity-like coefficients
-// and verifies the parser round-trips the key fields.
+// TestTNXParse parses an in-memory WAT card (no raw bytes: the Value is
+// used verbatim) and checks the surface fields. Full cross terms, 3x3, so
+// exactly 9 coefficients.
 func TestTNXParse(t *testing.T) {
 	h := header.New()
-	// wtype=tnx axtype=ra lngcor = "3. 3. 3. 0. -1 1 -1 1  0 0 0 0 0 0 0 0 0"
-	// That is: simple polynomial (3), xorder=3, yorder=3, cross=0 (none),
-	// domain [-1,1] × [-1,1], then 9 zero coefficients.
-	watValue := `wtype=tnx axtype=ra projection=tan lngcor = "3. 3. 3. 0. -1 1 -1 1  0 0 0 0 0 0 0 0 0"`
+	watValue := `wtype=tnx axtype=ra projection=tan lngcor = "3. 3. 3. 1. -1 1 -1 1  0 0 0 0 0 0 0 0 0"`
 	h.Set("WAT1_001", watValue, "")
 
 	tnx, err := ParseTNX(h)
@@ -186,14 +183,17 @@ func TestTNXParse(t *testing.T) {
 	if tnx == nil {
 		t.Fatal("expected TNX, got nil")
 	}
-	if tnx.Lon.Type != 3 {
-		t.Fatalf("surface type: %d", tnx.Lon.Type)
+	if tnx.Lon.Type != 3 || tnx.Lon.Cross != 1 || len(tnx.Lon.Coeffs) != 9 {
+		t.Fatalf("surface: %+v", tnx.Lon)
 	}
 	if tnx.Lon.XOrder != 3 || tnx.Lon.YOrder != 3 {
 		t.Fatalf("order: %d %d", tnx.Lon.XOrder, tnx.Lon.YOrder)
 	}
 	if tnx.Lon.XMin != -1 || tnx.Lon.XMax != 1 {
 		t.Fatalf("x domain: [%v, %v]", tnx.Lon.XMin, tnx.Lon.XMax)
+	}
+	if tnx.Lat.present {
+		t.Fatal("latcor parsed from a header that has none")
 	}
 }
 
@@ -246,5 +246,35 @@ func TestTNXAbsent(t *testing.T) {
 	}
 	if tnx != nil {
 		t.Fatal("expected nil for header without WAT")
+	}
+}
+
+// TestTPVRadialJacobian: the analytic partial derivatives of the TPV radial
+// terms, checked against the closed form d(c r^p)/dxi = c p r^(p-2) xi
+// (and the same for eta), with the slot -> power map taken from the TPV
+// registry (PVi_3 = r, PVi_11 = r^3, PVi_23 = r^5, PVi_39 = r^7). Newton
+// iteration with a wrong Jacobian can still converge to the right root,
+// so the header goldens alone do not pin these derivatives.
+func TestTPVRadialJacobian(t *testing.T) {
+	for _, tc := range []struct{ slot, p int }{{3, 1}, {11, 3}, {23, 5}, {39, 7}} {
+		for _, pt := range [][2]float64{{0.3, -0.2}, {-1.1, 0.7}, {0.05, 0.02}} {
+			var coefs [40]float64
+			const c = 0.37
+			coefs[tc.slot] = c
+			xi, eta := pt[0], pt[1]
+			r := math.Sqrt(xi*xi + eta*eta)
+			wantV := c * math.Pow(r, float64(tc.p))
+			wantX := c * float64(tc.p) * math.Pow(r, float64(tc.p-2)) * xi
+			wantE := c * float64(tc.p) * math.Pow(r, float64(tc.p-2)) * eta
+			v, dx, de := evalTPVWithJacobian(&coefs, xi, eta)
+			for _, q := range []struct {
+				name      string
+				got, want float64
+			}{{"value", v, wantV}, {"d/dxi", dx, wantX}, {"d/deta", de, wantE}} {
+				if math.Abs(q.got-q.want) > 1e-14*math.Abs(q.want) {
+					t.Errorf("PV_%d (r^%d) at (%g, %g): %s = %.17g, closed form %.17g", tc.slot, tc.p, xi, eta, q.name, q.got, q.want)
+				}
+			}
+		}
 	}
 }

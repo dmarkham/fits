@@ -1,0 +1,26 @@
+# Plain TAN, CD matrix with a 10 degree rotation (synthetic, hand-written).
+# Pixel grid covers the image and 256 px beyond each edge; sky points add
+# positions 90 deg and 180 deg from the tangent point, which TAN cannot
+# project (theta <= 0) and both sides must reject.
+NOTE smoke: TAN + rotated CD, no distortion, default LONPOLE (180)
+GRID -255 768 12 -255 768 12
+PIX 256.5 256.5
+SKY 263.633 -22.014
+SKY 173.633 0.0
+SKY 83.633 -67.986
+SKY 83.633 22.014
+SKYGRID 80 87 8 18 26 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 83.633
+CRVAL2  = 22.014
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -9.8480775E-04
+CD1_2   = 1.7364818E-04
+CD2_1   = 1.7364818E-04
+CD2_2   = 9.8480775E-04

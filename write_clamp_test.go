@@ -1,30 +1,29 @@
 package fits
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
 	"github.com/dmarkham/fits/header"
 )
 
-// TestWriteImage_ClampIntegerBSCALE verifies that WriteImage clamps
-// values to the target integer type's range when BSCALE/BZERO inverse
-// scaling would produce out-of-range results.
-func TestWriteImage_ClampIntegerBSCALE(t *testing.T) {
+// TestWriteImage_IntegerBZERORoundTrip: int16 data written with a caller
+// BZERO = 32768 (raw = v - 32768) round-trips when read into a type that
+// holds the physical range [0, 65535] (int16 itself is refused: it cannot
+// hold 65535). A value whose raw form leaves the stored range is refused
+// with ErrNumOverflow, never clamped (TestWriteImageOverflowMatchesCfitsio;
+// here: -1, whose raw form is -32769).
+func TestWriteImage_IntegerBZERORoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "clamp_test.fits")
 
-	// Write int16 data with BSCALE=1, BZERO=32768 (the unsigned-16
-	// convention). Physical values 0..65535 → on-disk -32768..32767.
-	// A physical value of 70000 exceeds uint16 max — the inverse
-	// scaling (70000 - 32768) / 1 = 37232 which exceeds int16 max
-	// (32767). Without clamping this wraps; with clamping it saturates.
 	hdr := header.New()
 	hdr.Set("BSCALE", 1.0, "")
 	hdr.Set("BZERO", 32768.0, "")
 
 	shape := []int64{4}
-	data := []int16{0, 100, 32767, 32767} // all in int16 range
+	data := []int16{0, 100, 32767, 32767}
 
 	f, err := Create(path)
 	if err != nil {
@@ -44,14 +43,26 @@ func TestWriteImage_ClampIntegerBSCALE(t *testing.T) {
 	}
 	defer fr.Close()
 	h, _ := fr.HDU(0)
-	got, err := ReadPixels[int16](h.(*ImageHDU))
+	if _, err := ReadPixels[int16](h.(*ImageHDU)); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("ReadPixels[int16] on physical range [0, 65535]: err %v, want ErrTypeMismatch", err)
+	}
+	got, err := ReadPixels[int32](h.(*ImageHDU))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := range data {
-		if got[i] != data[i] {
+		if got[i] != int32(data[i]) {
 			t.Errorf("pixel %d: got %d want %d", i, got[i], data[i])
 		}
+	}
+
+	f2, err := Create(filepath.Join(dir, "overflow.fits"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f2.Close()
+	if _, err := WriteImage(f2, hdr, shape, []int16{0, 100, -1, 32767}); !errors.Is(err, ErrNumOverflow) || f2.NumHDU() != 0 {
+		t.Errorf("WriteImage of -1 with BZERO 32768: err %v, %d HDUs; want ErrNumOverflow and none", err, f2.NumHDU())
 	}
 }
 

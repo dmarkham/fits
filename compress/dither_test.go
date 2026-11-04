@@ -5,47 +5,8 @@ import (
 	"testing"
 )
 
-// TestFitsRandomsInvariant verifies the Park-Miller seed invariant from
-// cfitsio's fits_init_randoms. The cfitsio source asserts that after
-// exactly 10000 iterations the internal seed equals 1043618065 — if
-// our port doesn't produce the same final seed the whole dither path
-// is silently wrong.
-func TestFitsRandomsInvariant(t *testing.T) {
-	r := FitsRandoms()
-	if len(r) != NRandom {
-		t.Fatalf("len(FitsRandoms) = %d, want %d", len(r), NRandom)
-	}
-	// Verify the invariant by re-running the algorithm.
-	const a = 16807.0
-	const m = 2147483647.0
-	seed := 1.0
-	for i := 0; i < NRandom; i++ {
-		temp := a * seed
-		seed = temp - m*float64(int64(temp/m))
-	}
-	if int(seed) != 1043618065 {
-		t.Fatalf("cfitsio invariant: expected seed = 1043618065, got %d", int(seed))
-	}
-}
-
-// TestFitsRandomsFirstValues checks that the first few values match what
-// the Park-Miller generator should produce. This guards against any
-// porting error in the loop body.
-func TestFitsRandomsFirstValues(t *testing.T) {
-	r := FitsRandoms()
-	// Compute expected values independently.
-	const a = 16807.0
-	const m = 2147483647.0
-	seed := 1.0
-	for i := 0; i < 5; i++ {
-		temp := a * seed
-		seed = temp - m*float64(int64(temp/m))
-		expected := float32(seed / m)
-		if r[i] != expected {
-			t.Errorf("FitsRandoms[%d] = %v, expected %v", i, r[i], expected)
-		}
-	}
-}
+// The FitsRandoms table is checked against libcfitsio itself in
+// randoms_cref_test.go (TestFitsRandomsMatchCfitsio).
 
 // TestDequantizeNoDither: no random offset, plain linear reconstruction.
 func TestDequantizeNoDither(t *testing.T) {

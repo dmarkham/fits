@@ -3,7 +3,7 @@
 //
 // Binary-table TFORM (§7.3.2, Table 18):
 //
-//	 rTa[(dims)]
+//	rTa[(dims)]
 //
 // where r is an optional repeat count, T is a single-letter type code, and
 // "a" is only present for variable-length array descriptors (P/Q), e.g.:
@@ -14,7 +14,7 @@
 //
 // ASCII-table TFORM (§7.2.3, Table 15):
 //
-//	 Tw[.d]
+//	Tw[.d]
 //
 // where T is one of A, I, F, E, D, w is the field width, and d is the number
 // of fraction digits (for F, E, D).
@@ -52,6 +52,10 @@ type BinaryForm struct {
 	Raw    string     // original TFORM string
 	Repeat int64      // leading repeat count; defaults to 1 if absent
 	Type   BinaryType // single-letter type code
+	// Width is the substring width w of the "rAw" form (the cell holds
+	// Repeat/Width strings of Width characters). It is 0 when the TFORM has
+	// no w, which means one string of Repeat characters.
+	Width int64
 	// For P/Q descriptors: inner element type and optional max-length hint.
 	VarType   BinaryType // element type inside the VLA (only for P/Q)
 	VarMaxLen int64      // max length hint from "(n)" suffix, 0 if absent
@@ -98,8 +102,11 @@ func (b BinaryType) Valid() bool {
 // ErrBadTForm is returned when a TFORM value cannot be parsed.
 var ErrBadTForm = errors.New("fits/internal/tform: malformed TFORM")
 
-// ParseBinary parses a binary-table TFORMn value. Leading whitespace is
-// tolerated; trailing whitespace is stripped.
+// ParseBinary parses a binary-table TFORMn value: rT, rAw, rPT(max) or
+// rQT(max). Leading and trailing blanks are tolerated; any other character
+// that is not part of the grammar is an error (a TFORM such as "10E5" or
+// "1PE(4)x" is rejected rather than silently read as "10E" / "1PE(4)").
+// For P and Q the repeat count must be 0 or 1 (§7.3.5).
 func ParseBinary(s string) (BinaryForm, error) {
 	form := BinaryForm{Raw: s}
 	trimmed := strings.TrimSpace(s)
@@ -114,44 +121,64 @@ func ParseBinary(s string) (BinaryForm, error) {
 	if i > 0 {
 		n, err := strconv.ParseInt(trimmed[:i], 10, 64)
 		if err != nil {
-			return form, fmt.Errorf("%w: repeat count: %v", ErrBadTForm, err)
+			return form, fmt.Errorf("%w: %q: repeat count: %v", ErrBadTForm, s, err)
 		}
 		form.Repeat = n
 	} else {
 		form.Repeat = 1
 	}
 	if i >= len(trimmed) {
-		return form, fmt.Errorf("%w: missing type code", ErrBadTForm)
+		return form, fmt.Errorf("%w: %q: missing type code", ErrBadTForm, s)
 	}
 	form.Type = BinaryType(trimmed[i])
 	if !form.Type.Valid() {
-		return form, fmt.Errorf("%w: unknown type code %q", ErrBadTForm, trimmed[i])
+		return form, fmt.Errorf("%w: %q: unknown type code %q", ErrBadTForm, s, trimmed[i])
 	}
 	i++
-	// P/Q descriptors carry an inner type and an optional "(maxlen)" hint.
-	if form.Type == BinPArrayDesc32 || form.Type == BinQArrayDesc64 {
+	switch form.Type {
+	case BinPArrayDesc32, BinQArrayDesc64:
+		// P/Q descriptors carry an inner type and an optional "(maxlen)" hint.
+		if form.Repeat > 1 {
+			return form, fmt.Errorf("%w: %q: P/Q repeat count must be 0 or 1", ErrBadTForm, s)
+		}
 		if i >= len(trimmed) {
-			return form, fmt.Errorf("%w: P/Q missing element type", ErrBadTForm)
+			return form, fmt.Errorf("%w: %q: P/Q missing element type", ErrBadTForm, s)
 		}
 		form.VarType = BinaryType(trimmed[i])
 		if !form.VarType.Valid() || form.VarType == BinPArrayDesc32 || form.VarType == BinQArrayDesc64 {
-			return form, fmt.Errorf("%w: invalid VLA element type %q", ErrBadTForm, trimmed[i])
+			return form, fmt.Errorf("%w: %q: invalid VLA element type %q", ErrBadTForm, s, trimmed[i])
 		}
 		i++
-		// Optional "(n)" max length.
 		if i < len(trimmed) && trimmed[i] == '(' {
 			j := strings.IndexByte(trimmed[i:], ')')
 			if j < 0 {
-				return form, fmt.Errorf("%w: unterminated VLA max-length", ErrBadTForm)
+				return form, fmt.Errorf("%w: %q: unterminated VLA max-length", ErrBadTForm, s)
 			}
 			inner := trimmed[i+1 : i+j]
 			n, err := strconv.ParseInt(strings.TrimSpace(inner), 10, 64)
-			if err != nil {
-				return form, fmt.Errorf("%w: bad VLA max-length %q", ErrBadTForm, inner)
+			if err != nil || n < 0 {
+				return form, fmt.Errorf("%w: %q: bad VLA max-length %q", ErrBadTForm, s, inner)
 			}
 			form.VarMaxLen = n
 			i += j + 1
 		}
+	case BinChar:
+		// Optional substring width "rAw".
+		j := i
+		for j < len(trimmed) && trimmed[j] >= '0' && trimmed[j] <= '9' {
+			j++
+		}
+		if j > i {
+			w, err := strconv.ParseInt(trimmed[i:j], 10, 64)
+			if err != nil || w <= 0 {
+				return form, fmt.Errorf("%w: %q: bad substring width", ErrBadTForm, s)
+			}
+			form.Width = w
+			i = j
+		}
+	}
+	if i != len(trimmed) {
+		return form, fmt.Errorf("%w: %q: unexpected %q after the type code", ErrBadTForm, s, trimmed[i:])
 	}
 	return form, nil
 }
@@ -176,7 +203,10 @@ type ASCIIForm struct {
 	Fraction int // fraction digits; 0 for A, I
 }
 
-// ParseASCII parses an ASCII-table TFORMn value.
+// ParseASCII parses an ASCII-table TFORMn value: Aw, Iw, Fw.d, Ew.d or
+// Dw.d (§7.2.2, Table 15). The width must be positive. A and I take no
+// fraction; for F, E and D a missing ".d" means d = 0. Anything else is an
+// error.
 func ParseASCII(s string) (ASCIIForm, error) {
 	form := ASCIIForm{Raw: s}
 	trimmed := strings.TrimSpace(s)
@@ -187,31 +217,44 @@ func ParseASCII(s string) (ASCIIForm, error) {
 	switch form.Type {
 	case AsciiChar, AsciiInt, AsciiFloatF, AsciiFloatE, AsciiFloatD:
 	default:
-		return form, fmt.Errorf("%w: unknown ASCII type %q", ErrBadTForm, trimmed[0])
+		return form, fmt.Errorf("%w: %q: unknown ASCII type %q", ErrBadTForm, s, trimmed[0])
 	}
 	rest := trimmed[1:]
-	// Split on '.' for F/E/D. For A/I there is no fraction.
-	wStr, fStr, _ := strings.Cut(rest, ".")
-	if wStr == "" {
-		return form, fmt.Errorf("%w: missing width", ErrBadTForm)
-	}
-	w, err := strconv.Atoi(strings.TrimSpace(wStr))
-	if err != nil {
-		return form, fmt.Errorf("%w: bad width %q: %v", ErrBadTForm, wStr, err)
+	wStr, fStr, hasDot := strings.Cut(rest, ".")
+	w, err := parseDigits(wStr)
+	if err != nil || w <= 0 {
+		return form, fmt.Errorf("%w: %q: bad width %q", ErrBadTForm, s, wStr)
 	}
 	form.Width = w
-	if fStr != "" {
-		f, err := strconv.Atoi(strings.TrimSpace(fStr))
+	if hasDot {
+		if form.Type == AsciiChar || form.Type == AsciiInt {
+			return form, fmt.Errorf("%w: %q: %c takes no fraction digits", ErrBadTForm, s, form.Type)
+		}
+		f, err := parseDigits(fStr)
 		if err != nil {
-			return form, fmt.Errorf("%w: bad fraction %q: %v", ErrBadTForm, fStr, err)
+			return form, fmt.Errorf("%w: %q: bad fraction %q", ErrBadTForm, s, fStr)
 		}
 		form.Fraction = f
 	}
 	return form, nil
 }
 
+// parseDigits parses a non-empty run of decimal digits.
+func parseDigits(s string) (int, error) {
+	if s == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, fmt.Errorf("not a digit: %q", s[i])
+		}
+	}
+	return strconv.Atoi(s)
+}
+
 // ParseDim parses a TDIMn value "(n1,n2,...,nk)" into a []int64 of axes.
-// Leading and trailing whitespace is tolerated.
+// Leading and trailing whitespace is tolerated. Every axis must be a
+// non-negative integer and there must be at least one.
 func ParseDim(s string) ([]int64, error) {
 	t := strings.TrimSpace(s)
 	if !strings.HasPrefix(t, "(") || !strings.HasSuffix(t, ")") {
@@ -221,11 +264,11 @@ func ParseDim(s string) ([]int64, error) {
 	parts := strings.Split(inner, ",")
 	out := make([]int64, 0, len(parts))
 	for _, p := range parts {
-		n, err := strconv.ParseInt(strings.TrimSpace(p), 10, 64)
+		n, err := parseDigits(strings.TrimSpace(p))
 		if err != nil {
-			return nil, fmt.Errorf("fits/internal/tform: bad TDIM axis %q", p)
+			return nil, fmt.Errorf("fits/internal/tform: bad TDIM axis %q in %q", p, s)
 		}
-		out = append(out, n)
+		out = append(out, int64(n))
 	}
 	return out, nil
 }

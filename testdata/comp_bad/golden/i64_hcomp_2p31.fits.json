@@ -1,0 +1,66 @@
+{
+ "file": "i64_hcomp_2p31.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 6,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                    8 / number of bits per data pixel",
+    "NAXIS   =                    0 / number of data axes",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 23,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / 8-bit bytes",
+    "NAXIS   =                    2 / 2-dimensional binary table",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                    2 / number of rows in table",
+    "PCOUNT  =                  499 / size of special data area",
+    "GCOUNT  =                    1 / one data group (required keyword)",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'    / label for field   1",
+    "TFORM1  = '1PB(264)'           / data format of field: variable length array",
+    "EXTNAME = 'COMPRESSED_IMAGE'   / name of this binary table extension",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTILE1  =                   12 / size of tiles to be compressed",
+    "ZTILE2  =                    4 / size of tiles to be compressed",
+    "ZCMPTYPE= 'HCOMPRESS_1'        / compression algorithm",
+    "ZNAME1  = 'SCALE   '           / HCOMPRESS scale factor",
+    "ZVAL1   =                    0 / HCOMPRESS scale factor",
+    "ZNAME2  = 'SMOOTH  '           / HCOMPRESS smooth option",
+    "ZVAL2   =                    0 / HCOMPRESS smooth option",
+    "ZBITPIX =                   64 / number of bits per data pixel",
+    "ZNAXIS  =                    2 / number of data axes",
+    "ZNAXIS1 =                   12 / length of data axis 1",
+    "ZNAXIS2 =                    8 / length of data axis 2"
+   ],
+   "image": {"bitpix": 64, "equivtype": 64, "compressed": true, "naxis": 2, "naxes": [12,8], "npix": 96, "bscale": 1, "bzero": 0,
+    "phys": {"n": 96, "sha256": "4ad6dca9fca24bc097e001e9649bbd9f5134327f76a01e49af07747bd01aa739", "pool": "f64"},
+    "i64": {"n": 96, "sha256": "508fe86260b305e40115d3687b350912a919c907376f71816bc94fb4f0306ed0", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

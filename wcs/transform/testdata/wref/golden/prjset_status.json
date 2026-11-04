@@ -1,0 +1,26 @@
+{
+"wcslib_version": "8.10",
+"cases": [
+{"name": "azp_mu_m1", "code": "AZP", "pv": [[1, -1]], "prjset_status": 2},
+{"name": "azp_gamma90", "code": "AZP", "pv": [[1, 2], [2, 90]], "prjset_status": 2},
+{"name": "szp_w3_zero", "code": "SZP", "pv": [[1, -1], [2, 0], [3, 90]], "prjset_status": 2},
+{"name": "zpn_all_zero", "code": "ZPN", "pv": [], "prjset_status": 2},
+{"name": "zpn_deg3_pv1_zero", "code": "ZPN", "pv": [[1, 0], [3, 0.1]], "prjset_status": 2},
+{"name": "air_thetab_m90", "code": "AIR", "pv": [[1, -90]], "prjset_status": 2},
+{"name": "cyp_lambda0", "code": "CYP", "pv": [[1, 1], [2, 0]], "prjset_status": 2},
+{"name": "cyp_mu_plus_lambda0", "code": "CYP", "pv": [[1, -1], [2, 1]], "prjset_status": 2},
+{"name": "cea_lambda0", "code": "CEA", "pv": [[1, 0]], "prjset_status": 2},
+{"name": "cea_lambda1p5", "code": "CEA", "pv": [[1, 1.5]], "prjset_status": 2},
+{"name": "cop_no_pv1", "code": "COP", "pv": [], "prjset_status": 2},
+{"name": "cop_ta0", "code": "COP", "pv": [[1, 0]], "prjset_status": 2},
+{"name": "coe_no_pv1", "code": "COE", "pv": [], "prjset_status": 2},
+{"name": "cod_no_pv1", "code": "COD", "pv": [], "prjset_status": 2},
+{"name": "coo_no_pv1", "code": "COO", "pv": [], "prjset_status": 2},
+{"name": "bon_no_pv1", "code": "BON", "pv": [], "prjset_status": 2},
+{"name": "hpx_h0", "code": "HPX", "pv": [[1, 0], [2, 3]], "prjset_status": 2},
+{"name": "hpx_k_m1", "code": "HPX", "pv": [[1, 4], [2, -1]], "prjset_status": 2},
+{"name": "bon_t0_ok", "code": "BON", "pv": [[1, 0]], "prjset_status": 0},
+{"name": "cea_lambda1_ok", "code": "CEA", "pv": [[1, 1]], "prjset_status": 0},
+{"name": "zpn_pv0_only_ok", "code": "ZPN", "pv": [[0, 0.5]], "prjset_status": 0}
+]
+}

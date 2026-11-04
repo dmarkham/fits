@@ -1,0 +1,95 @@
+SIMPLE  =                    T / file does conform to FITS standard
+BITPIX  =                   16 / number of bits per data pixel
+NAXIS   =                    2 / number of data axes
+NAXIS1  =                  400 / length of data axis 1
+NAXIS2  =                  400 / length of data axis 2
+EXTEND  =                    T / FITS dataset may contain extensions
+COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy
+COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H
+BSCALE  =                    1 / Scale factor for unsigned short
+BZERO   =                32768 / Zero shift for unsigned short
+EXTNAME = 'im13    '           / Extension name
+INHERIT =                    T / Inherits global header
+EXTVER  =                   13 / Extension version
+IMAGEID =                   13 / Image identification
+OBSID   = 'ct4m.20060728T020921' / Observation ID
+
+OBJECT  = 'test 5  '           / Observation title
+OBSTYPE = 'object  '           / Observation type
+EXPTIME =               30.000 / Exposure time in secs
+DARKTIME=               38.825 / Total elapsed time in secs
+PREFLASH=             0.000000 / Preflash time (sec)
+FILTER  = 'z SDSS c6020      ' / Filter name(s)
+
+RA      = '17:46:48.95'        / RA of observation (hr)
+DEC     = '-30:09:37.90'       / DEC of observation (deg)
+RADECEQ =                2000. / Default equinox
+DATE-OBS= '2006-07-28T02:09:22.0' / Date of observation start (UTC approximate)
+TIME-OBS= '02:09:21.957'       / Time of observation start
+MJD-OBS =       53944.08983747 / MJD of observation start
+LSTHDR  = '17:48:28.1        ' / LST of header creation
+
+CCDNAME = 'SITe #98421FABR07-02 (NOAO 31)' / CCD name
+AMPNAME = 'SITe #98421FABR07-02 (NOAO 31), upper left (Amp21)' / Amplifier name
+GAIN    =                  2.4 / gain expected for amp 421 (e-/ADU)
+RDNOISE =                  5.3 / read noise expected for amp 421 (e-)
+SATURATE=                42000 / Maximum good data value (ADU)
+CONTROLR= 'Mosaic Arcon'       / Controller identification
+CONHWV  = 'ACEB004_AMP21'      / Controller hardware version
+AMPINTEG=                 3600 / (ns) Double Correlated Sample time
+READTIME=                14400 / (ns) unbinned pixel read time
+ARCONWD = 'Obs Thu Jul 27 17:40:02 2006' / Date waveforms last compiled
+ARCONGI =                    2 / Gain selection (index into Gain Table)
+ARCONG  =                  2.4 / gain expected for amp 421 (e-/ADU)
+BPM     = 'mscdb$noao/Mosaic2/CAL0102/bpm7_0102' / Bad pixel mask
+CCDSIZE = '[1:2048,1:4096]'    / CCD size
+CCDSUM  = '1 1     '           / CCD pixel summing
+CCDSEC  = '[1:1024,1:4096]'    / CCD section
+AMPSEC  = '[1:1024,4096:1]'    / Amplifier section
+DATASEC = '[25:1048,1:4096]'   / Data section
+DETSEC  = '[4097:5120,4097:8192]' / Detector section
+BIASSEC = '[1063:1112,1:4096]' / Bias section
+TRIMSEC = '[25:1048,1:4096]'   / Trim section
+
+ATM1_1  =                   1. / CCD to amplifier transformation
+ATM2_2  =                  -1. / CCD to amplifier transformation
+ATV1    =                   0. / CCD to amplifier transformation
+ATV2    =               4097.0 / CCD to amplifier transformation
+LTM1_1  =                  1.0 / CCD to image transformation
+LTM2_2  =                  1.0 / CCD to image transformation
+LTV1    =                 24.0 / CCD to image transformation
+LTV2    =                  0.0 / CCD to image transformation
+DTM1_1  =                   1. / CCD to detector transformation
+DTM2_2  =                   1. / CCD to detector transformation
+DTV1    =                4096. / CCD to detector transformation
+DTV2    =                4096. / CCD to detector transformation
+
+WCSASTRM= 'ct4m.20020927T000540 (USNO N I c6005) by F. Valdes 2002-10-24' / WCS
+EQUINOX =                2000. / Equinox of WCS
+WCSDIM  =                    2 / WCS dimensionality
+CTYPE1  = 'RA---TNX'           / Coordinate type
+CTYPE2  = 'DEC--TNX'           / Coordinate type
+CRVAL1  =            266.70396 / Coordinate reference value
+CRVAL2  =           -30.160528 / Coordinate reference value
+CRPIX1  = -1.602527230000000E+02 / Coordinate reference pixel
+CRPIX2  = -1.277984030000000E+02 / Coordinate reference pixel
+CD1_1   =       -2.7078566e-07 / Coordinate matrix
+CD2_1   =        7.4507954e-05 / Coordinate matrix
+CD1_2   =        7.4138771e-05 / Coordinate matrix
+CD2_2   =       -1.7422786e-07 / Coordinate matrix
+WAT0_001= 'system=image'       / Coordinate system
+WAT1_001= 'wtype=tnx axtype=ra lngcor = "1. 4. 4. 2. 0.001557694712335736 0.305'
+WAT1_002= '7102603054315 0.005633525451388214 0.1588647710905971 -2.72411800297'
+WAT1_003= '7662E-4 -5.016761279169355E-5 -6.340301962177909E-4 -1.0797192943864'
+WAT1_004= '45E-4 1.534942429540643E-5 -2.213747676057557E-4 2.327260049467782E-'
+WAT1_005= '5 -4.002114665208721E-5 -4.983803710224544E-5 8.510395910450919E-6 "'
+WAT2_001= 'wtype=tnx axtype=dec latcor = "1. 4. 4. 2. 0.001557694712335736 0.30'
+WAT2_002= '57102603054315 0.005633525451388214 0.1588647710905971 -5.7496618045'
+WAT2_003= '44368E-5 2.798727771824332E-5 -8.197621587790417E-5 -4.7555453405034'
+WAT2_004= '02E-6 -5.527174083684728E-5 -3.848408247593560E-4 -1.042206172116658'
+WAT2_005= 'E-4 -9.938238339522108E-5 1.44544039115055E-5 -1.55190291513441E-5 "'
+
+CHECKSUM= 'DW85GT64DT64DT64'    /  ASCII 1's complement checksum
+DATASUM = '440084922 '          /  checksum of data records
+CHECKVER= 'COMPLEMENT'          /  FITS checksum version
+END

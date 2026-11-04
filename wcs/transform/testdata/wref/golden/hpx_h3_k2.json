@@ -1,0 +1,4 @@
+{"name": "hpx_h3_k2", "code": "HPX", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 3], [2, 2]],
+"prjset": {"phi0": 0, "theta0": 0, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 3, 2, null]},
+"forward": 555, "inverse": 1484, "roundtrip": 555, "payload": "hpx_h3_k2.bin", "payload_bytes": 61054}

@@ -1,0 +1,4 @@
+{"name": "coo_ta45_eta10", "code": "COO", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 45], [2, 10]],
+"prjset": {"phi0": 0, "theta0": 45, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 45, 10, null]},
+"forward": 603, "inverse": 1193, "roundtrip": 552, "payload": "coo_ta45_eta10.bin", "payload_bytes": 63288}

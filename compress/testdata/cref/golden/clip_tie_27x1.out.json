@@ -1,0 +1,4 @@
+{"name": "clip_tie_27x1", "nx": 27, "ny": 1, "nullcheck": 0, "nullvalue": 0, "qlevel": 4, "dither_method": 0, "row": 0, "fill": "fill_clip_tie", "in_sha256": "5639c710a16146249fad3302c4f561ac5162150a99257d688af2d57ba2ed4f14",
+ "stats": {"ngood": 27, "min": 0, "max": 26, "mean": 12.518518518518519, "sigma": 12.991080616445668, "noise1": 0, "noise2": 0, "noise3": 15.737012200000001, "noise5": 13.8219744},
+ "quantize": {"return": 1, "bscale": 3.4554936000000001, "bzero": 0, "iminval": 0, "imaxval": 8},
+ "out": [8,8,8,8,8,8,8,8,8,8,8,8,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}

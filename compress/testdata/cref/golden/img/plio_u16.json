@@ -1,0 +1,1 @@
+{"name": "plio_u16", "type": "u16", "naxes": [40, 25], "algo": "PLIO_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 1, "gen_seed": 5023, "in_sha256": "835711e7b67d7e0863eba41bf97b9333160e0aad40a4ef7c4cfaac6f1ad43612"}

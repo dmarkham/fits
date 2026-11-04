@@ -11,147 +11,295 @@ import (
 	"github.com/dmarkham/fits/internal/bitpix"
 )
 
-// CompressFloatOptions configures a tile-compressed float image
-// write. Fields have sensible defaults so the zero value is usable
-// for the common case (RICE_1, whole-row tiles, qlevel=4,
-// SUBTRACTIVE_DITHER_1).
+// The writers in this file produce the same compressed images as
+// cfitsio's own writer (fits_img_compress, the path fpack uses): for
+// every case in compress/testdata/cref/golden/img (and img64, BITPIX -64)
+// the RICE_1,
+// HCOMPRESS_1 and PLIO_1 tiles are byte-identical to cfitsio's, GZIP
+// tiles inflate to identical bytes, and ZSCALE/ZZERO and the compression
+// keywords are equal (TestCompressedWriterMatchesCfitsio). Every
+// algorithm x pixel type x dither x tiling the writers accept is also
+// checked end to end with fitsverify, the cfitsio library, funpack and
+// astropy (TestCompressedWriterInterop). Inputs cfitsio refuses are
+// refused here too, with an error. Where this writer deliberately
+// differs from cfitsio it says so on the option concerned: HCOMPRESS_1
+// tiles with a thin edge are refused instead of enlarged, PLIO_1 uint16
+// and 64-bit integers are refused, a caller BLANK on float input and a
+// caller SIMPLE that is not logical are refused, no default EXTNAME is
+// added, caller compression keywords and duplicate keywords are dropped,
+// and a real pixel equal to FLOATNULLVALUE stays a value.
+
+// CompressFloatOptions configures a tile-compressed float32 or float64
+// image write. The zero value is usable: RICE_1, whole-row tiles, quantize
+// level 4, SUBTRACTIVE_DITHER_1 with ZDITHER0 = 1 -- the same defaults as
+// cfitsio/fpack (except that the dither seed is fixed, not clock-based).
 type CompressFloatOptions struct {
-	// Algorithm is the compression method. Must be one of RICE_1,
-	// GZIP_1, GZIP_2, or NoCompress — HCOMPRESS_1 and PLIO_1 do not
-	// support float input in the compressed image convention.
-	// Default: RICE_1.
+	// Algorithm is the compression method: RICE_1, GZIP_1 or GZIP_2.
+	// Default: RICE_1. HCOMPRESS_1 and PLIO_1 are refused for float
+	// input by this writer, and NOCOMPRESS is never written (cfitsio and
+	// funpack cannot read it).
 	Algorithm compress.Algorithm
 
 	// TileShape picks per-tile dimensions, same convention as
 	// CompressOptions.TileShape. Default: whole-row tiles.
 	TileShape []int64
 
-	// BlockSize is the RICE_1 block size. Default 32.
+	// BlockSize is the RICE_1 block size. Default 32 (what cfitsio
+	// writes).
 	BlockSize int
 
-	// QLevel is the quantization level. Positive values set the
-	// step as sigma/QLevel; negative values use an absolute step of
-	// -QLevel. Default 4.0.
+	// QLevel is the quantization level. Positive values set the step
+	// as sigma/QLevel (sigma = cfitsio's per-tile noise estimate);
+	// negative values use an absolute step of -QLevel. Default 4, or 16
+	// when NoDither is set (cfitsio's defaults). NaN and -Inf are refused
+	// with an error (no quantization step: cfitsio accepts them and every
+	// pixel then reads back NaN); +Inf gives a zero step, so every tile is
+	// stored losslessly (GZIP_COMPRESSED_DATA), as in cfitsio.
 	QLevel float32
 
-	// DitherMethod selects SUBTRACTIVE_DITHER_1 (default),
-	// SUBTRACTIVE_DITHER_2 (zero-preserving), or NoDither.
+	// DitherMethod selects SUBTRACTIVE_DITHER_1 or SUBTRACTIVE_DITHER_2
+	// (exact zeros preserved). compress.NoDither is the zero value of
+	// this field and therefore means "default" (SUBTRACTIVE_DITHER_1);
+	// use NoDither below to write without dithering.
 	DitherMethod compress.DitherMethod
 
-	// ZDither0 is the per-image dither seed written as the ZDITHER0
-	// keyword. Default 1.
+	// NoDither writes ZQUANTIZ = 'NO_DITHER': plain quantization with no
+	// random offsets (cfitsio's quantize method NO_DITHER). It cannot be
+	// combined with a DitherMethod.
+	NoDither bool
+
+	// ZDither0 is the dither seed written as the ZDITHER0 keyword, 1 to
+	// 10000. Default 1. Tile i (1-based) is dithered from row
+	// i + ZDither0 - 1 of cfitsio's random sequence, as in cfitsio.
+	// Ignored (and no ZDITHER0 written) with NoDither.
 	ZDither0 int
 
-	// NullValue is the float sentinel for null pixels. Default: -1e30.
-	// The writer substitutes NaN inputs with this value before
-	// quantization, and the quantizer emits NullValueInt32 at those
-	// positions. The sentinel is also written as the ZBLANK header.
+	// Pixels are taken the way cfitsio's writer reads them (fnan in
+	// fffr4r4): NaN, +Inf and -Inf are always stored as nulls -- the
+	// ZBLANK integer in quantized tiles, NaN in unquantizable
+	// (GZIP_COMPRESSED_DATA) tiles -- and every reader gives NaN back;
+	// +-0 and denormals (all-zero exponent) are stored as +0, also in
+	// GZIP_COMPRESSED_DATA tiles. When Nullcheck is true, pixels equal
+	// to NullValue are nulls too (and come back as NaN), compared with the
+	// raw value as fits_write_imgnull compares them (a denormal NullValue
+	// nulls the pixels equal to it). NullValue 0 means the default, -1e30,
+	// so 0 itself cannot be the null value. NullValue is for the float32
+	// writer; the float64 writer refuses a non-zero NullValue (it takes
+	// NullValue64) and the float32 writer a non-zero NullValue64.
+	//
+	// Whatever null value the quantizer is handed internally, a real pixel
+	// is never turned into a null: with Nullcheck off a real -1e30 (the
+	// default NullValue) in a tile with NaNs stays a value (golden
+	// rice_f32_nan_realnull_t40x5).
+	//
+	// One deliberate difference from fits_img_compress: in a tile that has
+	// nulls, it also treats a real pixel equal to its internal sentinel
+	// FLOATNULLVALUE (-9.11912e-36) as a null (golden
+	// rice_f32_floatnullvalue_t40x5); this writer keeps it as a value. In
+	// a GZIP_COMPRESSED_DATA (lossless) tile cfitsio's fits_read_img and
+	// astropy read it back exactly; in a quantized tile it is quantized
+	// like any value, and the tiles are the ones cfitsio writes when the
+	// image is written with fits_write_imgnull and null value -1e30
+	// (golden imgw/, TestCompressedWriterFloatNullValueQuantizedMatchesCfitsio).
+	// funpack writes its output with FLOATNULLVALUE as the null value, so
+	// that one value comes back NaN from funpack
+	// (TestFloatNullValuePixelStaysValue).
 	NullValue float32
-
-	// Nullcheck, if true, enables null detection. If false, NaN in
-	// the input will produce undefined quantized output — the caller
-	// is asserting there are no nulls. Default false.
 	Nullcheck bool
+
+	// NullValue64 is the null value of AppendCompressedFloat64Image (with
+	// Nullcheck; 0 means -1e30). Proven against fits_write_imgnull (golden
+	// imgw/rice_f64_nullval_m999_t40x5).
+	NullValue64 float64
 }
 
-// CompressOptions configures a tile-compressed image write. Fields have
-// sensible defaults so the zero value is usable for the common case
-// (RICE_1, whole-row tiles, lossless).
+// CompressOptions configures a tile-compressed integer image write.
+// The zero value is usable: RICE_1, cfitsio's default tiling, lossless.
 type CompressOptions struct {
-	// Algorithm is the compression method. Defaults to RICE_1.
+	// Algorithm is the compression method: RICE_1 (default), GZIP_1,
+	// GZIP_2, HCOMPRESS_1 or PLIO_1. NOCOMPRESS is refused: cfitsio and
+	// funpack cannot read it. PLIO_1 takes pixels in 0..2^24-1 and is
+	// refused for uint16 (cfitsio and astropy disagree on that storage)
+	// and, in practice, uint32 (stored as v-2^31, as in cfitsio).
 	Algorithm compress.Algorithm
 
 	// TileShape is the per-tile dimensions in the same order as the
-	// image's logical shape (first axis varies fastest). A zero or nil
-	// value picks the cfitsio default: ZTILE1 = NAXIS1, ZTILE2..n = 1
-	// (whole-row tiles).
+	// image's logical shape (first axis varies fastest). A dimension
+	// longer than its image axis is written as given (ZTILEn > NAXISn;
+	// the tiles along that axis are then the whole axis), as cfitsio
+	// does. Nil or empty
+	// picks cfitsio's default: whole-row tiles (ZTILE1 = NAXIS1, the
+	// rest 1), and for HCOMPRESS_1 NAXIS1 x (NAXIS2 if it is at most 30,
+	// else 16 rows or the first of 24, 20, 30, 28, 26, 22, 18, 14 that
+	// leaves no last tile of fewer than 4 rows, else 17).
+	//
+	// HCOMPRESS_1 needs an image of two or more axes and 2-D tiles over
+	// the first two axes (ZTILE3.. = 1), each at least 4 pixels, with no
+	// edge tile thinner than 4 pixels; other shapes are refused (cfitsio
+	// would silently enlarge the tile instead). The default rule is
+	// checked against cfitsio for every NAXIS2 from 4 to 2000 and the
+	// 26/22/18/17-row fallbacks (TestHcompressDefaultTileMatchesCfitsio).
 	TileShape []int64
 
-	// BlockSize is the RICE_1 block size. Default 32.
+	// BlockSize is the RICE_1 block size. Default 32 (what cfitsio
+	// writes).
 	BlockSize int
 
-	// HCompressScale is the HCOMPRESS_1 quantization scale. 0 = lossless.
+	// HCompressScale is the absolute HCOMPRESS_1 digitization scale
+	// (cfitsio: fits_set_hcomp_scale with a negative value). 0 is
+	// lossless. Written as ZVAL1 = -scale like cfitsio. Negative values
+	// are refused (cfitsio's noise-relative scale is not supported).
+	// Lossy decoding can overshoot the pixel type's range near its
+	// limits (e.g. 256 for uint8); funpack then fails with "datatype
+	// conversion overflow", exactly as for cfitsio-written files.
 	HCompressScale int
 
-	// ZDither0 is the dither seed (for float images compressed via
-	// RICE_1 or GZIP with quantize_level > 0). Default 1.
+	// ZDither0 is unused for integer images (kept for compatibility).
 	ZDither0 int
 }
 
-// AppendCompressedImage writes a new tile-compressed image HDU to the
-// destination file. For integer BITPIX the compression is lossless. For
-// float BITPIX callers should use AppendCompressedFloat32Image /
-// AppendCompressedFloat64Image which handle quantization explicitly.
+// intStorage describes how an integer Go type is stored in a compressed
+// image, exactly as cfitsio stores it (imcomp_init_table and
+// imcomp_convert_tile_t* in imcompress.c).
+type intStorage struct {
+	bp       bitpix.BITPIX // ZBITPIX
+	bzero    float64       // BZERO written to the header (0 = none)
+	unsigned bool          // the type is stored with an offset
+}
+
+// AppendCompressedImage writes a new tile-compressed image HDU holding
+// integer pixels (uint8, int8, int16, uint16, int32, uint32). The
+// compression is lossless except for HCOMPRESS_1 with HCompressScale > 1.
+// Float32 and float64 images use AppendCompressedFloat32Image and
+// AppendCompressedFloat64Image (passing them here is an error). int64/uint64
+// are refused: cfitsio cannot write compressed BITPIX 64 images (fpack:
+// "Bad image datatype").
 //
-// This is the write counterpart of the read-side CompressedImageHDU.
-// The resulting HDU is a binary table with ZIMAGE=T and is
-// automatically recognized by Open() when re-reading the file.
+// Unsigned and signed-byte types are stored the way cfitsio stores them:
+// uint16 as ZBITPIX 16 with BZERO = 32768, uint32 as ZBITPIX 32 with
+// BZERO = 2147483648, int8 as ZBITPIX 8 with BZERO = -128 (BSCALE = 1).
+// A caller header may not carry any other BSCALE/BZERO: cfitsio refuses
+// scaled writes to compressed images, and this writer stores the given
+// values unscaled.
+//
+// hdr may be nil or a header copied from an uncompressed image. Its
+// structural keywords are replaced; SIMPLE, EXTEND, BLOCKED, CHECKSUM and
+// DATASUM are stored as ZSIMPLE, ZEXTEND, ZBLOCKED, ZHECKSUM and
+// ZDATASUM and every other card is copied, as cfitsio's
+// imcomp_copy_img2comp does (golden img/rice_i16_hdr). Unlike cfitsio no
+// default EXTNAME = 'COMPRESSED_IMAGE' is added, and (also unlike
+// cfitsio, which copies them) compression keywords already in hdr
+// (ZBITPIX, ZCMPTYPE, ZTILEn, ...) are dropped and a keyword is never
+// written twice: the first card wins, so a header with both EXTEND and
+// ZEXTEND yields one ZEXTEND (fitsverify-clean, TestCompressedWriterInterop
+// i16_rice_caller_zkeys).
+//
+// Caller cards are copied with header.AddCard. A card read from a file is
+// written as its bytes. An edited Cards() copy (Key/Type/Value/Comment
+// changed) is written from its fields under the upper-cased keyword, and
+// is left out like any caller card for a keyword the writer computes
+// itself. An unedited lowercase-keyword (non-HIERARCH) card makes the
+// writer return an error wrapping header.ErrInvalidKeyword: cfitsio and
+// astropy read such a card differently.
+//
+// The resulting HDU is a binary table with ZIMAGE = T that Open()
+// recognizes as a *CompressedImageHDU.
 func AppendCompressedImage[T Numeric](f *File, hdr *header.Header, shape []int64, data []T, opts CompressOptions) (*CompressedImageHDU, error) {
 	if err := f.writeAssertMode(); err != nil {
 		return nil, err
 	}
-	// Validate.
-	if len(shape) == 0 {
-		return nil, fmt.Errorf("fits: AppendCompressedImage: empty shape")
+	npix, err := checkCompressedShape("AppendCompressedImage", shape, len(data))
+	if err != nil {
+		return nil, err
 	}
-	var npix int64 = 1
-	for _, n := range shape {
-		if n <= 0 {
-			return nil, fmt.Errorf("fits: AppendCompressedImage: non-positive axis %d", n)
-		}
-		npix *= n
+	var st intStorage
+	var zero T
+	switch any(zero).(type) {
+	case uint8:
+		st = intStorage{bp: bitpix.Int8}
+	case int8:
+		st = intStorage{bp: bitpix.Int8, bzero: -128, unsigned: true}
+	case int16:
+		st = intStorage{bp: bitpix.Int16}
+	case uint16:
+		st = intStorage{bp: bitpix.Int16, bzero: 32768, unsigned: true}
+	case int32:
+		st = intStorage{bp: bitpix.Int32}
+	case uint32:
+		st = intStorage{bp: bitpix.Int32, bzero: 2147483648, unsigned: true}
+	case int64, uint64:
+		return nil, fmt.Errorf("fits: AppendCompressedImage: %T pixels: cfitsio cannot write or read tile-compressed 64-bit integer images", zero)
+	case float64:
+		return nil, fmt.Errorf("fits: AppendCompressedImage: float64 pixels: use AppendCompressedFloat64Image")
+	default:
+		return nil, fmt.Errorf("fits: AppendCompressedImage: integer type required, got %T (use AppendCompressedFloat32Image for float32)", zero)
 	}
-	if int64(len(data)) != npix {
-		return nil, fmt.Errorf("fits: AppendCompressedImage: data length %d != product of shape %d", len(data), npix)
-	}
-
-	// Determine on-disk BITPIX from T.
-	bp := pickBitpix[T]()
-	if !bp.Valid() || bp.IsFloat() {
-		var zero T
-		return nil, fmt.Errorf("fits: AppendCompressedImage: integer type required, got %T", zero)
+	if err := checkCallerScaling("AppendCompressedImage", hdr, st.bzero, false); err != nil {
+		return nil, err
 	}
 
 	algo := opts.Algorithm
 	if algo == compress.Unknown {
 		algo = compress.RICE1
 	}
-	tileShape := opts.TileShape
-	if len(tileShape) == 0 {
-		tileShape = make([]int64, len(shape))
-		tileShape[0] = shape[0]
-		for i := 1; i < len(shape); i++ {
-			tileShape[i] = 1
-		}
+	switch algo {
+	case compress.RICE1, compress.GZIP1, compress.GZIP2, compress.HCOMPRESS1, compress.PLIO1:
+	case compress.NoCompress:
+		return nil, errNoCompressWrite("AppendCompressedImage")
+	default:
+		return nil, fmt.Errorf("fits: AppendCompressedImage: unsupported algorithm %s", algo)
 	}
-	if len(tileShape) != len(shape) {
-		return nil, fmt.Errorf("fits: AppendCompressedImage: tile shape has %d axes, image has %d", len(tileShape), len(shape))
+	if opts.HCompressScale < 0 {
+		return nil, fmt.Errorf("fits: AppendCompressedImage: HCompressScale %d < 0 (only absolute scales are supported)", opts.HCompressScale)
 	}
-	zdither0 := opts.ZDither0
-	if zdither0 == 0 {
-		zdither0 = 1
+	tileShape, err := resolveTileShape("AppendCompressedImage", algo, shape, opts.TileShape)
+	if err != nil {
+		return nil, err
 	}
 	blockSize := opts.BlockSize
 	if blockSize <= 0 {
 		blockSize = 32
 	}
 
-	// Serialize the image into big-endian FITS byte order.
-	elemSize := bp.Size()
-	imgBytes := make([]byte, npix*int64(elemSize))
-	serializeTileInts(imgBytes, data, bp)
-
-	// Partition into tiles and encode each.
-	tileCounts := make([]int64, len(shape))
-	totalTiles := int64(1)
-	for i := range shape {
-		tileCounts[i] = (shape[i] + tileShape[i] - 1) / tileShape[i]
-		totalTiles *= tileCounts[i]
+	// Serialize into the stored (offset) integers, big-endian.
+	elemSize := st.bp.Size()
+	encElem := elemSize
+	if _, isU16 := any(zero).(uint16); isU16 && algo == compress.PLIO1 {
+		// cfitsio stores PLIO_1 uint16 tiles as the raw value and its
+		// reader subtracts 32768 from BZERO for PLIO only; astropy 8.0.2
+		// applies BZERO as written and reads every pixel 32768 too high,
+		// even in cfitsio's own files. No layout reads the same in both.
+		return nil, fmt.Errorf("fits: AppendCompressedImage: PLIO_1 with uint16 pixels is not written: cfitsio and astropy decode that storage differently (use int16, int32 or uint8 masks)")
+	}
+	imgBytes := make([]byte, npix*int64(encElem))
+	for i, v := range data {
+		x := anyToInt64(v)
+		switch {
+		case elemSize == 1:
+			if st.unsigned { // int8: flip the sign bit (v + 128)
+				imgBytes[i] = byte(x) ^ 0x80
+			} else {
+				imgBytes[i] = byte(x)
+			}
+		case elemSize == 2:
+			if st.unsigned { // uint16: v - 32768
+				bigendian.PutInt16(imgBytes[i*2:], int16(uint16(x)^0x8000))
+			} else {
+				bigendian.PutInt16(imgBytes[i*2:], int16(x))
+			}
+		default:
+			if st.unsigned { // uint32: v - 2^31
+				bigendian.PutInt32(imgBytes[i*4:], int32(uint32(x)^0x80000000))
+			} else {
+				bigendian.PutInt32(imgBytes[i*4:], int32(x))
+			}
+		}
 	}
 
+	tileCounts, totalTiles := countTiles(shape, tileShape)
 	encoder, err := compress.SelectEncoder(algo, compress.Params{
 		"BLOCKSIZE": int64(blockSize),
-		"BYTEPIX":   int64(elemSize),
+		"BYTEPIX":   int64(encElem),
 		"SCALE":     int64(opts.HCompressScale),
 	})
 	if err != nil {
@@ -166,159 +314,339 @@ func AppendCompressedImage[T Numeric](f *File, hdr *header.Header, shape []int64
 		for _, n := range box.size {
 			tileNpix *= n
 		}
-		tileRaw := make([]byte, tileNpix*int64(elemSize))
-		extractTileBytes(imgBytes, tileRaw, shape, box, elemSize)
-		// HCOMPRESS needs the 2D shape before Encode.
-		if setter, ok := encoder.(interface{ SetShape(nx, ny int) }); ok && len(box.size) >= 2 {
+		tileRaw := make([]byte, tileNpix*int64(encElem))
+		extractTileBytes(imgBytes, tileRaw, shape, box, encElem)
+		if setter, ok := encoder.(interface{ SetShape(nx, ny int) }); ok {
 			// cfitsio's HCOMPRESS has ny = fastest axis, nx = slow.
 			setter.SetShape(int(box.size[1]), int(box.size[0]))
 		}
-		compressed := make([]byte, max64(int64(len(tileRaw))*2+256, 1024))
-		n, err := encoder.Encode(tileRaw, compressed, int(tileNpix), elemSize)
+		payload, err := encodeTile(encoder, tileRaw, int(tileNpix), encElem)
 		if err != nil {
-			// On overflow, fall back to NOCOMPRESS for this tile by
-			// storing the raw bytes in COMPRESSED_DATA. A more cfitsio-
-			// faithful implementation would use the UNCOMPRESSED_DATA
-			// fallback column, but a single-column fallback is adequate
-			// for round-trip fidelity.
-			if err == compress.ErrBufferTooSmall {
-				compressed = make([]byte, len(tileRaw)*4+1024)
-				n, err = encoder.Encode(tileRaw, compressed, int(tileNpix), elemSize)
-			}
-			if err != nil {
-				return nil, fmt.Errorf("fits: AppendCompressedImage: tile %d: %w", t, err)
-			}
+			return nil, fmt.Errorf("fits: AppendCompressedImage: tile %d: %w", t+1, err)
 		}
-		tilePayloads[t] = compressed[:n]
-
-		for d := range shape {
-			tileIdx[d]++
-			if tileIdx[d] < tileCounts[d] {
-				break
-			}
-			tileIdx[d] = 0
-		}
+		tilePayloads[t] = payload
+		nextTile(tileIdx, tileCounts)
 	}
 
-	// Emit the wrapping BINTABLE HDU. The table has a single VLA column
-	// COMPRESSED_DATA with the per-tile payloads.
-	return emitCompressedHDU(f, hdr, shape, tileShape, bp, algo, blockSize, opts.HCompressScale, zdither0, tilePayloads, "", nil)
+	return emitCompressedHDU(f, hdr, shape, tileShape, compressedHDUParams{
+		bp: st.bp, algo: algo, blockSize: blockSize, bytePix: elemSize,
+		hscale: opts.HCompressScale, bzero: st.bzero,
+	}, tilePayloads, nil)
 }
 
-// AppendCompressedFloat32Image writes a float32 image HDU with tile
-// compression. The pixel values are quantized to int32 per tile
-// (using cfitsio's fits_quantize_float algorithm, ported to Go), then
-// the integer tiles are fed through the chosen integer compression
-// algorithm (RICE_1, GZIP_1, GZIP_2, or NoCompress).
-//
-// This is lossy compression: the precision of reconstructed pixels is
-// approximately sigma/QLevel, where sigma is the per-tile noise
-// estimate. Tiles that cannot be quantized (e.g. constant-value
-// regions) automatically fall back to gzip compression of the raw
-// float bytes via the GZIP_COMPRESSED_DATA column, recovering those
-// pixels bit-exactly on read.
-//
-// The resulting HDU is a BINTABLE with ZIMAGE=T, ZQUANTIZ set to the
-// dither method name, plus per-tile ZSCALE / ZZERO columns. Open()
-// transparently decompresses it back to float32 on read.
-func AppendCompressedFloat32Image(f *File, hdr *header.Header, shape []int64, data []float32, opts CompressFloatOptions) (*CompressedImageHDU, error) {
-	if err := f.writeAssertMode(); err != nil {
-		return nil, err
+// encodeTile runs one tile through the encoder, growing the output
+// buffer until it fits.
+func encodeTile(enc compress.Encoder, raw []byte, nelem, elemSize int) ([]byte, error) {
+	size := max64(int64(len(raw))*2+256, 1024)
+	for {
+		buf := make([]byte, size)
+		n, err := enc.Encode(raw, buf, nelem, elemSize)
+		if err == nil {
+			return buf[:n], nil
+		}
+		if err != compress.ErrBufferTooSmall || size > int64(len(raw))*64+1<<20 {
+			return nil, err
+		}
+		size *= 4
 	}
+}
+
+// maxCompressDim is cfitsio's MAX_COMPRESS_DIM: fits_img_compress refuses
+// an image of more axes (status 212, golden img/rice_i16_7d), and funpack
+// and fitsverify reject such a file.
+const maxCompressDim = 6
+
+func checkCompressedShape(fn string, shape []int64, ndata int) (int64, error) {
 	if len(shape) == 0 {
-		return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: empty shape")
+		return 0, fmt.Errorf("fits: %s: empty shape", fn)
+	}
+	if len(shape) > maxCompressDim {
+		return 0, fmt.Errorf("fits: %s: %d axes; tile compression takes at most %d (cfitsio MAX_COMPRESS_DIM)", fn, len(shape), maxCompressDim)
 	}
 	var npix int64 = 1
 	for _, n := range shape {
 		if n <= 0 {
-			return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: non-positive axis %d", n)
+			return 0, fmt.Errorf("fits: %s: non-positive axis %d", fn, n)
 		}
 		npix *= n
 	}
-	if int64(len(data)) != npix {
-		return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: data length %d != product of shape %d", len(data), npix)
+	if int64(ndata) != npix {
+		return 0, fmt.Errorf("fits: %s: %w: data length %d != product of shape %d", fn, ErrShapeMismatch, ndata, npix)
 	}
+	return npix, nil
+}
 
-	// Resolve options with defaults.
+// checkCallerScaling refuses caller BSCALE/BZERO other than the storage
+// convention of the pixel type (BZERO = bzero, BSCALE = 1), a BLANK for a
+// floating-point image, and a SIMPLE that is not a logical value.
+//
+// BLANK: the FITS standard (4.0, sect. 4.4.2.5) allows it only for integer
+// BITPIX. cfitsio's writer copies a caller BLANK into the ZBITPIX -32
+// header, and with no ZBLANK (a tile without NaNs) cfitsio, funpack and
+// astropy then all take BLANK as the null value of the quantized integers:
+// real pixels whose integer equals it decode as NaN (golden
+// rice_f32_blank_hdr, TestFloatBLANKNullsRealPixels). Refused, not dropped:
+// the caller's header claims a null value the data cannot carry.
+//
+// SIMPLE: written as ZSIMPLE, which must be T or F; a value the writer
+// would have to replace is refused rather than silently rewritten.
+func checkCallerScaling(fn string, hdr *header.Header, bzero float64, isFloat bool) error {
+	if hdr == nil {
+		return nil
+	}
+	if isFloat && hdr.Has("BLANK") {
+		return fmt.Errorf("fits: %s: BLANK is not allowed in a floating-point image header (FITS 4.0 sect. 4.4.2.5): readers would take it as the null value of the quantized integers and null real pixels; remove it (NaN marks nulls in float images)", fn)
+	}
+	if hdr.Has("SIMPLE") {
+		if _, err := hdr.Bool("SIMPLE"); err != nil {
+			return fmt.Errorf("fits: %s: SIMPLE in the header is not a logical value (%v); it is written as ZSIMPLE, which must be T or F", fn, err)
+		}
+	}
+	if hdr.Has("BSCALE") {
+		v, err := hdr.Float("BSCALE")
+		if err != nil || v != 1 {
+			return fmt.Errorf("fits: %s: BSCALE in the header is not supported for compressed writes (cfitsio refuses scaled compressed writes)", fn)
+		}
+	}
+	if hdr.Has("BZERO") {
+		v, err := hdr.Float("BZERO")
+		if err != nil || v != bzero {
+			return fmt.Errorf("fits: %s: BZERO in the header must be %g for this pixel type (got %v); scaled compressed writes are not supported", fn, bzero, v)
+		}
+	}
+	return nil
+}
+
+func errNoCompressWrite(fn string) error {
+	return fmt.Errorf("fits: %s: NOCOMPRESS is not written: cfitsio and funpack cannot read ZCMPTYPE = 'NOCOMPRESS' (\"unknown compression algorithm\"); use GZIP_1 or RICE_1", fn)
+}
+
+// resolveTileShape applies cfitsio's default tiling and validates the
+// tile shape for the algorithm.
+func resolveTileShape(fn string, algo compress.Algorithm, shape, req []int64) ([]int64, error) {
+	n := len(shape)
+	if algo == compress.HCOMPRESS1 && n < 2 {
+		return nil, fmt.Errorf("fits: %s: HCOMPRESS_1 cannot be used with 1-dimensional images", fn)
+	}
+	tile := make([]int64, n)
+	if len(req) == 0 {
+		tile[0] = shape[0]
+		for i := 1; i < n; i++ {
+			tile[i] = 1
+		}
+		if algo == compress.HCOMPRESS1 {
+			tile[1] = hcompressDefaultRows(shape[1])
+		}
+	} else {
+		if len(req) != n {
+			return nil, fmt.Errorf("fits: %s: tile shape has %d axes, image has %d", fn, len(req), n)
+		}
+		for i, v := range req {
+			if v <= 0 {
+				return nil, fmt.Errorf("fits: %s: non-positive tile axis %d", fn, v)
+			}
+			// A tile longer than the axis is kept as requested (ZTILEn >
+			// NAXISn), as cfitsio writes it (golden rice_i16_11x8_t100x3).
+			tile[i] = v
+		}
+	}
+	if algo == compress.HCOMPRESS1 {
+		for i := 2; i < n; i++ {
+			if tile[i] != 1 {
+				return nil, fmt.Errorf("fits: %s: HCOMPRESS_1 tiles must be 2-D over the first two axes (ZTILE%d = %d)", fn, i+1, tile[i])
+			}
+		}
+		for i := 0; i < 2; i++ {
+			if tile[i] < 4 {
+				return nil, fmt.Errorf("fits: %s: HCOMPRESS_1 minimum tile dimension is 4 pixels (ZTILE%d = %d)", fn, i+1, tile[i])
+			}
+			if r := shape[i] % tile[i]; r > 0 && r < 4 {
+				return nil, fmt.Errorf("fits: %s: HCOMPRESS_1 last tile along axis %d would have %d < 4 pixels; choose another tile size", fn, i+1, r)
+			}
+		}
+	}
+	return tile, nil
+}
+
+// hcompressDefaultRows is cfitsio's default HCOMPRESS tile height
+// (imcomp_init_table): the whole image up to 30 rows, else 16 rows or
+// the first alternative that leaves the last tile at least 4 rows.
+func hcompressDefaultRows(naxis2 int64) int64 {
+	if naxis2 <= 30 {
+		return naxis2
+	}
+	for _, h := range []int64{16, 24, 20, 30, 28, 26, 22, 18, 14} {
+		if naxis2%h == 0 || naxis2%h > 3 {
+			return h
+		}
+	}
+	return 17
+}
+
+func countTiles(shape, tileShape []int64) ([]int64, int64) {
+	tileCounts := make([]int64, len(shape))
+	total := int64(1)
+	for i := range shape {
+		tileCounts[i] = (shape[i] + tileShape[i] - 1) / tileShape[i]
+		total *= tileCounts[i]
+	}
+	return tileCounts, total
+}
+
+func nextTile(idx, counts []int64) {
+	for d := range idx {
+		idx[d]++
+		if idx[d] < counts[d] {
+			return
+		}
+		idx[d] = 0
+	}
+}
+
+// AppendCompressedFloat32Image writes a float32 image HDU with tile
+// compression. Each tile is quantized to int32 with a pure-Go port of
+// cfitsio's fits_quantize_float (bit-exact, compress/testdata/cref), then
+// compressed with RICE_1, GZIP_1 or GZIP_2, exactly as cfitsio does.
+//
+// This is lossy: the reconstructed pixels differ from the input by up to
+// about half a quantization step (sigma/QLevel). Tiles that cannot be
+// quantized (constant tiles, too few pixels, a range too wide for int32)
+// are stored losslessly as gzipped raw floats in a GZIP_COMPRESSED_DATA
+// column, as cfitsio does. So are tiles on which cfitsio's quantizer
+// arithmetic overflows (a zero point beyond int64 steps, a pixel beyond
+// int32 or on the null sentinel; see compress.QuantizeFloat32), which
+// cfitsio writes as wrong pixels (TestQuantizerOverflowStoredLosslessly). NaN and +-Inf pixels are stored as nulls and
+// read back as NaN; +-0 and denormals are stored as +0 (see
+// CompressFloatOptions).
+//
+// The resulting HDU is a BINTABLE with ZIMAGE = T, ZQUANTIZ naming the
+// dither method, and per-tile ZSCALE / ZZERO columns.
+func AppendCompressedFloat32Image(f *File, hdr *header.Header, shape []int64, data []float32, opts CompressFloatOptions) (*CompressedImageHDU, error) {
+	return appendCompressedFloat(f, "AppendCompressedFloat32Image", hdr, shape, data, opts)
+}
+
+// AppendCompressedFloat64Image is AppendCompressedFloat32Image for float64
+// pixels: a ZBITPIX -64 image, each tile quantized to int32 with a port of
+// cfitsio's fits_quantize_double, exactly as fits_img_compress (fpack)
+// writes a BITPIX -64 image (golden compress/testdata/cref/golden/img64,
+// TestCompressedWriterFloat64MatchesCfitsio). Unquantizable tiles are
+// stored losslessly as gzipped raw float64 in GZIP_COMPRESSED_DATA. Pixels
+// are classified as for float32 (NaN and +-Inf are nulls; +-0 and
+// denormals are stored as +0); with Nullcheck the null value is
+// NullValue64 (0 means -1e30), not NullValue. A real pixel equal to
+// cfitsio's DOUBLENULLVALUE (-9.1191291391491e-36) in a tile with nulls
+// stays a value (fits_img_compress nulls it, as it does FLOATNULLVALUE).
+func AppendCompressedFloat64Image(f *File, hdr *header.Header, shape []int64, data []float64, opts CompressFloatOptions) (*CompressedImageHDU, error) {
+	return appendCompressedFloat(f, "AppendCompressedFloat64Image", hdr, shape, data, opts)
+}
+
+// floatPixel is the pixel type of the quantizing writer.
+type floatPixel interface{ float32 | float64 }
+
+// appendCompressedFloat is the float32 / float64 writer: the C code
+// (imcomp_convert_tile_tfloat / _tdouble, fits_quantize_float / _double,
+// imcomp_float2nan / imcomp_double2nan) is the same with the pixel width
+// changed.
+func appendCompressedFloat[T floatPixel](f *File, fn string, hdr *header.Header, shape []int64, data []T, opts CompressFloatOptions) (*CompressedImageHDU, error) {
+	var zero T
+	_, is64 := any(zero).(float64)
+	width := int64(4)
+	if is64 {
+		width = 8
+	}
+	if err := f.writeAssertMode(); err != nil {
+		return nil, err
+	}
+	if _, err := checkCompressedShape(fn, shape, len(data)); err != nil {
+		return nil, err
+	}
+	if err := checkCallerScaling(fn, hdr, 0, true); err != nil {
+		return nil, err
+	}
 	algo := opts.Algorithm
 	if algo == compress.Unknown {
 		algo = compress.RICE1
 	}
 	switch algo {
-	case compress.RICE1, compress.GZIP1, compress.GZIP2, compress.NoCompress:
+	case compress.RICE1, compress.GZIP1, compress.GZIP2:
+	case compress.NoCompress:
+		return nil, errNoCompressWrite(fn)
 	default:
-		return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: algorithm %s does not support float quantization", algo)
+		return nil, fmt.Errorf("fits: %s: algorithm %s is not supported for float input (use RICE_1, GZIP_1 or GZIP_2)", fn, algo)
 	}
-	tileShape := opts.TileShape
-	if len(tileShape) == 0 {
-		tileShape = make([]int64, len(shape))
-		tileShape[0] = shape[0]
-		for i := 1; i < len(shape); i++ {
-			tileShape[i] = 1
-		}
-	}
-	if len(tileShape) != len(shape) {
-		return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: tile shape has %d axes, image has %d", len(tileShape), len(shape))
-	}
-	qlevel := opts.QLevel
-	if qlevel == 0 {
-		qlevel = 4.0
+	tileShape, err := resolveTileShape(fn, algo, shape, opts.TileShape)
+	if err != nil {
+		return nil, err
 	}
 	dither := opts.DitherMethod
-	if dither == compress.NoDither && (algo == compress.RICE1 || algo == compress.GZIP1 || algo == compress.GZIP2) {
+	switch {
+	case opts.NoDither && dither != compress.NoDither:
+		return nil, fmt.Errorf("fits: %s: NoDither and DitherMethod %d are mutually exclusive", fn, dither)
+	case opts.NoDither:
+	case dither == compress.NoDither:
 		dither = compress.SubtractiveDither1
+	case dither != compress.SubtractiveDither1 && dither != compress.SubtractiveDither2:
+		return nil, fmt.Errorf("fits: %s: unknown DitherMethod %d", fn, dither)
+	}
+	qlevel := opts.QLevel
+	if qlevel != qlevel || math.IsInf(float64(qlevel), -1) {
+		// NaN: delta NaN; -Inf: delta +Inf and zero point 0*Inf = NaN.
+		// cfitsio does not check (its range tests are false for NaN) and
+		// writes tiles that read back all NaN; refuse instead.
+		return nil, fmt.Errorf("fits: %s: QLevel %v has no quantization step (NaN or -Inf)", fn, qlevel)
+	}
+	if qlevel == 0 {
+		if opts.NoDither {
+			qlevel = 16
+		} else {
+			qlevel = 4
+		}
 	}
 	zdither0 := opts.ZDither0
 	if zdither0 == 0 {
 		zdither0 = 1
 	}
+	if zdither0 < 1 || zdither0 > compress.NRandom {
+		return nil, fmt.Errorf("fits: %s: ZDither0 %d out of range 1..%d", fn, zdither0, compress.NRandom)
+	}
 	blockSize := opts.BlockSize
 	if blockSize <= 0 {
 		blockSize = 32
 	}
-	nullvalue := opts.NullValue
-	if nullvalue == 0 {
-		nullvalue = -1e30
-	}
-
-	// Substitute NaN with sentinel if the caller said nulls are
-	// possible. We mutate a copy of the input so the caller's slice
-	// is untouched.
-	var working []float32
-	if opts.Nullcheck {
-		working = make([]float32, len(data))
-		copy(working, data)
-		compress.SubstituteNaN32(working, nullvalue)
+	var nullvalue T
+	if is64 {
+		if opts.NullValue != 0 {
+			return nil, fmt.Errorf("fits: %s: NullValue %v is the float32 null value; the float64 writer takes NullValue64", fn, opts.NullValue)
+		}
+		nullvalue = T(opts.NullValue64)
 	} else {
-		working = data
+		if opts.NullValue64 != 0 {
+			return nil, fmt.Errorf("fits: %s: NullValue64 %v is the float64 null value; the float32 writer takes NullValue", fn, opts.NullValue64)
+		}
+		nullvalue = T(opts.NullValue)
+	}
+	if nullvalue == 0 {
+		nullvalue = T(-1e30)
 	}
 
-	// Partition into tiles.
-	tileCounts := make([]int64, len(shape))
-	totalTiles := int64(1)
-	for i := range shape {
-		tileCounts[i] = (shape[i] + tileShape[i] - 1) / tileShape[i]
-		totalTiles *= tileCounts[i]
-	}
-
-	// Pick the integer encoder. Every tile will be encoded through it.
-	// BYTEPIX is always 4 for int32 quantized data.
+	tileCounts, totalTiles := countTiles(shape, tileShape)
 	encoder, err := compress.SelectEncoder(algo, compress.Params{
 		"BLOCKSIZE": int64(blockSize),
 		"BYTEPIX":   int64(4),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: %w", err)
+		return nil, fmt.Errorf("fits: %s: %w", fn, err)
 	}
 
 	tilePayloads := make([][]byte, totalTiles)
 	zscale := make([]float64, totalTiles)
 	zzero := make([]float64, totalTiles)
-	// gzipFallback is lazily allocated the first time a tile can't
-	// be quantized. If it stays nil, no GZIP_COMPRESSED_DATA column
-	// is written.
+	// gzipFallback is allocated the first time a tile can't be
+	// quantized; if it stays nil, no GZIP_COMPRESSED_DATA column is
+	// written (as cfitsio adds the column on first use).
 	var gzipFallback [][]byte
 	gzipEncoder, _ := compress.SelectEncoder(compress.GZIP1, nil)
+	anyNulls := false
 
 	tileIdx := make([]int64, len(shape))
 	for t := int64(0); t < totalTiles; t++ {
@@ -327,109 +655,217 @@ func AppendCompressedFloat32Image(f *File, hdr *header.Header, shape []int64, da
 		for _, n := range box.size {
 			tileNpix *= n
 		}
-		tileFloat := make([]float32, tileNpix)
-		extractTileFloat32(working, tileFloat, shape, box)
+		tileFloat := make([]T, tileNpix)
+		extractTile(data, tileFloat, shape, box)
 
-		// Quantize this tile. tile row for PRNG is 1-based.
+		// Classify pixels the way cfitsio reads a float tile before
+		// compressing it (fits_read_subset with a null value, i.e.
+		// fffr4r4's fnan test): an all-ones exponent (NaN, +Inf, -Inf)
+		// is a null; an all-zero exponent (+-0 and denormals) is read as
+		// +0. Proven by goldens rice_f32_inf_* and
+		// gzip2_f32_inf_fallback_t40x5. On request, pixels equal to
+		// NullValue are nulls, compared with the raw value as
+		// fits_write_imgnull does (so a denormal NullValue nulls its
+		// pixels; golden imgw/rice_f32_nullval_denorm_t40x5).
+		isNull := make([]bool, tileNpix)
+		nulls := 0
+		for i, v := range tileFloat {
+			if opts.Nullcheck && v == nullvalue {
+				isNull[i] = true
+				nulls++
+				continue
+			}
+			switch floatClass(v) {
+			case classNull:
+				isNull[i] = true
+				nulls++
+			case classZero:
+				tileFloat[i] = 0
+			}
+		}
+		// cfitsio quantizes with nullcheck only for tiles that contain
+		// nulls, after replacing them with a sentinel. Its value cannot
+		// reach the output (the quantizer skips null pixels), so pick
+		// one that no real pixel of this tile equals.
+		quantIn := tileFloat
+		sentinel := nullvalue
+		if nulls > 0 {
+			anyNulls = true
+			sentinel = absentSentinel(tileFloat, isNull, nullvalue)
+			quantIn = make([]T, tileNpix)
+			for i, v := range tileFloat {
+				if isNull[i] {
+					quantIn[i] = sentinel
+				} else {
+					quantIn[i] = v
+				}
+			}
+		}
+
+		// cfitsio imcomp_convert_tile_tfloat: irow = row + dither_seed - 1
+		// (row is the 1-based tile number); 0 means "do not dither".
+		var irow int64
+		if !opts.NoDither {
+			irow = t + 1 + int64(zdither0) - 1
+		}
 		idata := make([]int32, tileNpix)
-		qres, ok := compress.QuantizeFloat32(t+1, tileFloat,
-			box.size[0], tileNpixProduct(box.size[1:]), opts.Nullcheck, nullvalue,
-			qlevel, dither, idata)
+		var qres compress.QuantizeResult
+		var ok bool
+		switch q := any(quantIn).(type) {
+		case []float32:
+			qres, ok = compress.QuantizeFloat32(irow, q,
+				box.size[0], tileNpixProduct(box.size[1:]), nulls > 0, any(sentinel).(float32),
+				qlevel, dither, idata)
+		case []float64:
+			qres, ok = compress.QuantizeFloat64(irow, q,
+				box.size[0], tileNpixProduct(box.size[1:]), nulls > 0, any(sentinel).(float64),
+				qlevel, dither, idata)
+		}
 		if !ok {
-			// GZIP_COMPRESSED_DATA fallback: serialize the raw
-			// float32 tile in FITS big-endian order, replace any
-			// null sentinels with NaN bits, gzip the result.
+			// GZIP_COMPRESSED_DATA fallback: the raw float32/float64 tile
+			// in FITS big-endian order with nulls as the all-ones NaN
+			// pattern (cfitsio imcomp_float2nan / imcomp_double2nan),
+			// gzipped. ZSCALE/ZZERO stay 0 for this row, as cfitsio
+			// leaves them.
 			if gzipFallback == nil {
 				gzipFallback = make([][]byte, totalTiles)
 			}
-			// Make a mutable copy so we don't corrupt the user's data.
-			tileCopy := make([]float32, tileNpix)
-			copy(tileCopy, tileFloat)
-			if opts.Nullcheck {
-				compress.ReplaceSentinelWithNaNBits(tileCopy, nullvalue)
-			}
-			rawBE := make([]byte, tileNpix*4)
+			rawBE := make([]byte, tileNpix*width)
 			for i := int64(0); i < tileNpix; i++ {
-				bits := math.Float32bits(tileCopy[i])
-				bigendian.PutUint32(rawBE[i*4:], bits)
+				putFloatBE(rawBE[i*width:], tileFloat[i], isNull[i])
 			}
-			gzBuf := make([]byte, max64(int64(len(rawBE))*2+256, 1024))
-			n, err := gzipEncoder.Encode(rawBE, gzBuf, int(tileNpix), 4)
-			if err == compress.ErrBufferTooSmall {
-				gzBuf = make([]byte, len(rawBE)*4+1024)
-				n, err = gzipEncoder.Encode(rawBE, gzBuf, int(tileNpix), 4)
-			}
+			gz, err := encodeTile(gzipEncoder, rawBE, int(tileNpix), int(width))
 			if err != nil {
-				return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: tile %d gzip fallback: %w", t, err)
+				return nil, fmt.Errorf("fits: %s: tile %d gzip fallback: %w", fn, t+1, err)
 			}
-			gzipFallback[t] = gzBuf[:n]
-			// COMPRESSED_DATA row stays nil (empty VLA); reader
-			// picks this up and routes to the gzip fallback column.
-			tilePayloads[t] = nil
-			// Identity ZSCALE/ZZERO — unused for fallback tiles
-			// but the columns must have one value per row.
-			zscale[t] = 1
-			zzero[t] = 0
-			// advance tile index and continue
-			for d := range shape {
-				tileIdx[d]++
-				if tileIdx[d] < tileCounts[d] {
-					break
-				}
-				tileIdx[d] = 0
-			}
+			gzipFallback[t] = gz
+			tilePayloads[t] = nil // empty COMPRESSED_DATA cell
+			nextTile(tileIdx, tileCounts)
 			continue
 		}
 		zscale[t] = qres.BScale
 		zzero[t] = qres.BZero
 
-		// Serialize int32 to FITS big-endian bytes.
 		tileRaw := make([]byte, tileNpix*4)
 		for i := int64(0); i < tileNpix; i++ {
 			bigendian.PutInt32(tileRaw[i*4:], idata[i])
 		}
-
-		// Encode.
-		compressed := make([]byte, max64(int64(len(tileRaw))*2+256, 1024))
-		n, err := encoder.Encode(tileRaw, compressed, int(tileNpix), 4)
-		if err == compress.ErrBufferTooSmall {
-			compressed = make([]byte, len(tileRaw)*4+1024)
-			n, err = encoder.Encode(tileRaw, compressed, int(tileNpix), 4)
-		}
+		payload, err := encodeTile(encoder, tileRaw, int(tileNpix), 4)
 		if err != nil {
-			return nil, fmt.Errorf("fits: AppendCompressedFloat32Image: tile %d: %w", t, err)
+			return nil, fmt.Errorf("fits: %s: tile %d: %w", fn, t+1, err)
 		}
-		tilePayloads[t] = compressed[:n]
-
-		for d := range shape {
-			tileIdx[d]++
-			if tileIdx[d] < tileCounts[d] {
-				break
-			}
-			tileIdx[d] = 0
-		}
+		tilePayloads[t] = payload
+		nextTile(tileIdx, tileCounts)
 	}
 
 	quantExtra := &floatQuantExtra{
 		zscale:       zscale,
 		zzero:        zzero,
-		zblank:       compress.NullValueInt32,
 		gzipFallback: gzipFallback,
 	}
-	quantizeName := ditherMethodName(dither)
-	return emitCompressedHDU(f, hdr, shape, tileShape, bitpix.Float32, algo, blockSize, 0, zdither0, tilePayloads, quantizeName, quantExtra)
+	if anyNulls {
+		quantExtra.zblank = compress.NullValueInt32
+	}
+	params := compressedHDUParams{
+		bp: floatBitpix(is64), algo: algo, blockSize: blockSize, bytePix: 4,
+		quantize: ditherMethodName(dither, opts.NoDither),
+	}
+	if !opts.NoDither {
+		params.zdither0 = zdither0
+	}
+	return emitCompressedHDU(f, hdr, shape, tileShape, params, tilePayloads, quantExtra)
+}
+
+// absentSentinel returns a value equal to no non-null pixel of tile,
+// starting from want and stepping down.
+func absentSentinel[T floatPixel](tile []T, isNull []bool, want T) T {
+	s := want
+	for {
+		clash := false
+		for i, v := range tile {
+			if !isNull[i] && v == s {
+				clash = true
+				break
+			}
+		}
+		if !clash {
+			return s
+		}
+		switch p := any(&s).(type) {
+		case *float32:
+			*p = math.Nextafter32(*p, float32(math.Inf(-1)))
+		case *float64:
+			*p = math.Nextafter(*p, math.Inf(-1))
+		}
+	}
+}
+
+// Pixel classes of cfitsio's fnan / dnan tests (fitsio2.h), applied when
+// fits_img_compress reads a tile with a null value: an all-ones exponent
+// (NaN, +-Inf) is a null, an all-zero exponent (+-0, denormals) is read
+// as 0.
+const (
+	classValue = iota
+	classNull
+	classZero
+)
+
+func floatClass[T floatPixel](v T) int {
+	var exp, mask uint64
+	switch x := any(v).(type) {
+	case float32:
+		mask = 0x7F800000
+		exp = uint64(math.Float32bits(x)) & mask
+	case float64:
+		mask = 0x7FF0000000000000
+		exp = math.Float64bits(x) & mask
+	}
+	switch exp {
+	case mask:
+		return classNull
+	case 0:
+		return classZero
+	}
+	return classValue
+}
+
+// putFloatBE writes v big-endian (4 or 8 bytes), or the all-ones NaN
+// pattern for a null.
+func putFloatBE[T floatPixel](b []byte, v T, null bool) {
+	switch x := any(v).(type) {
+	case float32:
+		bits := math.Float32bits(x)
+		if null {
+			bits = 0xFFFFFFFF
+		}
+		bigendian.PutUint32(b, bits)
+	case float64:
+		bits := math.Float64bits(x)
+		if null {
+			bits = 0xFFFFFFFFFFFFFFFF
+		}
+		bigendian.PutUint64(b, bits)
+	}
+}
+
+func floatBitpix(is64 bool) bitpix.BITPIX {
+	if is64 {
+		return bitpix.Float64
+	}
+	return bitpix.Float32
 }
 
 // ditherMethodName renders the compression dither method as the
 // ZQUANTIZ keyword string.
-func ditherMethodName(m compress.DitherMethod) string {
+func ditherMethodName(m compress.DitherMethod, noDither bool) string {
+	if noDither {
+		return "NO_DITHER"
+	}
 	switch m {
-	case compress.SubtractiveDither1:
-		return "SUBTRACTIVE_DITHER_1"
 	case compress.SubtractiveDither2:
 		return "SUBTRACTIVE_DITHER_2"
 	}
-	return "NO_DITHER"
+	return "SUBTRACTIVE_DITHER_1"
 }
 
 // tileNpixProduct multiplies all dimensions of a tile-size tail slice
@@ -448,10 +884,10 @@ func tileNpixProduct(dims []int64) int64 {
 	return p
 }
 
-// extractTileFloat32 copies a tile's region from the full float32
+// extractTile copies a tile's region from the full float32
 // image into a dense row-major tile buffer. Mirrors extractTileBytes
 // but works directly on float32 slices.
-func extractTileFloat32(img, tile []float32, shape []int64, region tileRegion) {
+func extractTile[T any](img, tile []T, shape []int64, region tileRegion) {
 	n := len(shape)
 	imgStride := make([]int64, n)
 	var s int64 = 1
@@ -493,24 +929,6 @@ func extractTileFloat32(img, tile []float32, shape []int64, region tileRegion) {
 		}
 		if d == n {
 			break
-		}
-	}
-}
-
-// serializeTileInts converts a generic integer slice to FITS big-endian
-// bytes. Helper shared with the tile extractor.
-func serializeTileInts[T Numeric](dst []byte, data []T, bp bitpix.BITPIX) {
-	elemSize := bp.Size()
-	for i, v := range data {
-		switch elemSize {
-		case 1:
-			dst[i] = byte(anyToInt64(v))
-		case 2:
-			bigendian.PutInt16(dst[i*2:], int16(anyToInt64(v)))
-		case 4:
-			bigendian.PutInt32(dst[i*4:], int32(anyToInt64(v)))
-		case 8:
-			bigendian.PutInt64(dst[i*8:], anyToInt64(v))
 		}
 	}
 }
@@ -590,75 +1008,148 @@ func extractTileBytes(imgBuf, tileBuf []byte, shape []int64, region tileRegion, 
 
 // floatQuantExtra carries the per-tile float-quantization columns that
 // accompany COMPRESSED_DATA when a float image is written. nil means
-// "integer image, no quantization columns". All three slices, if set,
-// must have length == totalTiles.
+// "integer image, no quantization columns". All slices, if set, must
+// have length == totalTiles.
 type floatQuantExtra struct {
 	zscale []float64 // per-tile bscale, written as ZSCALE column
 	zzero  []float64 // per-tile bzero,  written as ZZERO  column
 	// gzipFallback carries raw-float gzip payloads for tiles that
-	// could not be quantized (constant or out-of-range). If nil, no
-	// GZIP_COMPRESSED_DATA column is emitted. Tiles with a nil inner
-	// slice used the normal COMPRESSED_DATA column.
+	// could not be quantized. If nil, no GZIP_COMPRESSED_DATA column is
+	// emitted. Tiles with a nil inner slice used COMPRESSED_DATA.
 	gzipFallback [][]byte
 	// zblank, if non-zero, is emitted as the ZBLANK header keyword —
-	// the integer sentinel stored where input pixels were null.
+	// the integer stored where input pixels were null.
 	zblank int32
 }
 
+// compressedHDUParams are the header-level parameters of a compressed
+// image HDU.
+type compressedHDUParams struct {
+	bp        bitpix.BITPIX // ZBITPIX
+	algo      compress.Algorithm
+	blockSize int     // RICE_1 ZVAL1
+	bytePix   int     // RICE_1 ZVAL2
+	hscale    int     // HCOMPRESS_1 absolute scale
+	bzero     float64 // BZERO for unsigned storage (0 = none)
+	quantize  string  // ZQUANTIZ ("" = integer image)
+	zdither0  int     // ZDITHER0 (0 = not written)
+}
+
 // emitCompressedHDU writes the binary-table wrapper containing the
-// compressed tile payloads. Uses AppendBinaryTable under the hood with
-// a single VLA column COMPRESSED_DATA, plus optional ZSCALE/ZZERO
-// per-tile columns and a GZIP_COMPRESSED_DATA fallback column for
-// float tile compression.
-func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, bp bitpix.BITPIX,
-	algo compress.Algorithm, blockSize, hscale, zdither0 int,
-	payloads [][]byte, quantize string, quantExtra *floatQuantExtra) (*CompressedImageHDU, error) {
+// compressed tile payloads: a COMPRESSED_DATA VLA column (1PI for
+// PLIO_1, 1PB otherwise), plus ZSCALE/ZZERO and an optional
+// GZIP_COMPRESSED_DATA column for float tile compression.
+func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, p compressedHDUParams,
+	payloads [][]byte, quantExtra *floatQuantExtra) (*CompressedImageHDU, error) {
 
 	// Build Z* keywords. They go into hdr (merged with any user keywords).
-	zhdr := header.New()
-	zhdr.Set("ZIMAGE", true, "extension contains compressed image")
-	zhdr.Set("ZTENSION", "IMAGE", "Image extension")
-	zhdr.Set("ZBITPIX", int64(bp), "data type of original image")
-	zhdr.Set("ZNAXIS", int64(len(shape)), "dimension of original image")
+	zb := newHeaderBuilder()
+	zb.set("ZIMAGE", true, "extension contains compressed image")
+	simple, primary := callerSimple(hdr)
+	if primary {
+		// A primary-HDU header: cfitsio records SIMPLE as ZSIMPLE and
+		// writes no ZTENSION (imcomp_copy_img2comp).
+		zb.set("ZSIMPLE", simple, "file does conform to FITS standard")
+	} else {
+		zb.set("ZTENSION", "IMAGE", "Image extension")
+	}
+	zb.set("ZBITPIX", int64(p.bp), "data type of original image")
+	zb.set("ZNAXIS", int64(len(shape)), "dimension of original image")
 	for i, n := range shape {
-		zhdr.Set("ZNAXIS"+strconv.Itoa(i+1), n, "length of original image axis")
+		zb.set("ZNAXIS"+strconv.Itoa(i+1), n, "length of original image axis")
 	}
-	zhdr.Set("ZPCOUNT", int64(0), "")
-	zhdr.Set("ZGCOUNT", int64(1), "")
+	if !primary { // an extension has PCOUNT/GCOUNT; a primary HDU does not
+		zb.set("ZPCOUNT", int64(0), "")
+		zb.set("ZGCOUNT", int64(1), "")
+	}
 	for i, n := range tileShape {
-		zhdr.Set("ZTILE"+strconv.Itoa(i+1), n, "size of tiles to be compressed")
+		zb.set("ZTILE"+strconv.Itoa(i+1), n, "size of tiles to be compressed")
 	}
-	zhdr.Set("ZCMPTYPE", algo.String(), "compression algorithm")
-	// Algorithm-specific parameters.
-	zidx := 1
-	switch algo {
+	zb.set("ZCMPTYPE", p.algo.String(), "compression algorithm")
+	// Algorithm-specific parameters, as cfitsio writes them.
+	switch p.algo {
 	case compress.RICE1:
-		zhdr.Set("ZNAME"+strconv.Itoa(zidx), "BLOCKSIZE", "compression block size")
-		zhdr.Set("ZVAL"+strconv.Itoa(zidx), int64(blockSize), "pixels per block")
-		zidx++
-		zhdr.Set("ZNAME"+strconv.Itoa(zidx), "BYTEPIX", "bytes per pixel")
-		zhdr.Set("ZVAL"+strconv.Itoa(zidx), int64(bp.Size()), "bytes per pixel")
+		zb.set("ZNAME1", "BLOCKSIZE", "compression block size")
+		zb.set("ZVAL1", int64(p.blockSize), "pixels per block")
+		zb.set("ZNAME2", "BYTEPIX", "bytes per pixel (1, 2, 4, or 8)")
+		zb.set("ZVAL2", int64(p.bytePix), "bytes per pixel (1, 2, 4, or 8)")
 	case compress.HCOMPRESS1:
-		zhdr.Set("ZNAME"+strconv.Itoa(zidx), "SCALE", "HCOMPRESS scale factor")
-		zhdr.Set("ZVAL"+strconv.Itoa(zidx), int64(hscale), "HCOMPRESS scale factor")
-		zidx++
-		zhdr.Set("ZNAME"+strconv.Itoa(zidx), "SMOOTH", "HCOMPRESS smooth option")
-		zhdr.Set("ZVAL"+strconv.Itoa(zidx), int64(0), "HCOMPRESS smooth option")
+		// cfitsio records the requested scale; a negative value means
+		// "absolute", which is what HCompressScale is.
+		zb.set("ZNAME1", "SCALE", "HCOMPRESS scale factor")
+		// -0.0 would be written as "-0."; cfitsio writes 0.
+		zval1 := 0.0
+		if p.hscale != 0 {
+			zval1 = -float64(p.hscale)
+		}
+		zb.set("ZVAL1", zval1, "HCOMPRESS scale factor")
+		zb.set("ZNAME2", "SMOOTH", "HCOMPRESS smooth option")
+		zb.set("ZVAL2", int64(0), "HCOMPRESS smooth option")
 	}
-	if quantize != "" {
-		zhdr.Set("ZQUANTIZ", quantize, "quantization method")
-		zhdr.Set("ZDITHER0", int64(zdither0), "dither offset")
+	if p.quantize != "" {
+		zb.set("ZQUANTIZ", p.quantize, "quantization method")
+		if p.zdither0 != 0 {
+			zb.set("ZDITHER0", int64(p.zdither0), "dithering offset when quantizing floats")
+		}
 	}
 	if quantExtra != nil && quantExtra.zblank != 0 {
-		zhdr.Set("ZBLANK", int64(quantExtra.zblank), "null pixel value")
+		zb.set("ZBLANK", int64(quantExtra.zblank), "null value in the compressed integer array")
+	}
+	if p.bzero != 0 {
+		// The cards cfitsio writes (integer literals, its comments); the
+		// header encoder refuses a comment that does not fit the card.
+		comment := map[float64]string{
+			-128:       "offset data range to that of signed byte",
+			32768:      "offset data range to that of unsigned short",
+			2147483648: "offset data range to that of unsigned long",
+		}[p.bzero]
+		zb.set("BZERO", int64(p.bzero), comment)
+		zb.set("BSCALE", int64(1), "default scaling factor")
 	}
 	// Merge caller-supplied keywords (ignore any that would clash with
-	// the structural set).
+	// the structural set; BSCALE/BZERO were validated by the caller).
+	// Keywords that describe the uncompressed HDU and are illegal or
+	// wrong in a BINTABLE are renamed the way cfitsio's
+	// imcomp_copy_img2comp renames them: EXTEND -> ZEXTEND, BLOCKED ->
+	// ZBLOCKED, CHECKSUM -> ZHECKSUM, DATASUM -> ZDATASUM (SIMPLE ->
+	// ZSIMPLE above); XTENSION is replaced by ZTENSION. The structural
+	// image keywords (BITPIX, NAXISn, PCOUNT, GCOUNT) are dropped by
+	// AppendBinaryTable. Proven by golden img/rice_i16_hdr.
 	if hdr != nil {
 		for _, c := range hdr.Cards() {
-			if !isCompressedZKey(c.Key) {
-				zhdr.Add(c.Key, c.Value, c.Comment)
+			key := c.Key
+			switch key {
+			case "SIMPLE", "XTENSION", "BSCALE", "BZERO":
+				continue
+			case "EXTEND":
+				key = "ZEXTEND"
+			case "BLOCKED":
+				key = "ZBLOCKED"
+			case "CHECKSUM":
+				key = "ZHECKSUM"
+			case "DATASUM":
+				key = "ZDATASUM"
 			}
+			if isCompressedZKey(key) {
+				continue
+			}
+			// No duplicate keywords (fitsverify warns on them): the first
+			// card for a key wins, e.g. a caller header with both EXTEND
+			// and ZEXTEND keeps one ZEXTEND. Commentary cards repeat.
+			if key != "COMMENT" && key != "HISTORY" && key != "" && zb.h.Has(key) {
+				continue
+			}
+			// Through the builder (core-header rule): a card read from a
+			// file keeps its bytes; a renamed one gets only its key field
+			// rewritten, as cfitsio overwrites the name in the card; a card
+			// the encoder cannot represent fails the call.
+			if key != c.Key {
+				c.Key = key
+				if c.Raw != ([header.CardWidth]byte{}) {
+					copy(c.Raw[:8], fmt.Sprintf("%-8s", key))
+				}
+			}
+			zb.add(c)
 		}
 	}
 
@@ -666,15 +1157,15 @@ func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, bp
 	// the 16-bit token, not a raw byte. Every other algorithm stores
 	// its opaque byte stream in a 1PB (uint8 VLA) column.
 	var cols []ColumnData
-	if algo == compress.PLIO1 {
+	if p.algo == compress.PLIO1 {
 		tokenRows := make([][]int16, len(payloads))
-		for i, p := range payloads {
-			if len(p)%2 != 0 {
-				return nil, fmt.Errorf("fits: PLIO_1 payload length %d not even", len(p))
+		for i, b := range payloads {
+			if len(b)%2 != 0 {
+				return nil, fmt.Errorf("fits: PLIO_1 payload length %d not even", len(b))
 			}
-			toks := make([]int16, len(p)/2)
+			toks := make([]int16, len(b)/2)
 			for k := 0; k < len(toks); k++ {
-				toks[k] = int16(uint16(p[k*2])<<8 | uint16(p[k*2+1]))
+				toks[k] = int16(uint16(b[k*2])<<8 | uint16(b[k*2+1]))
 			}
 			tokenRows[i] = toks
 		}
@@ -688,8 +1179,6 @@ func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, bp
 			DataVarUint8: payloads,
 		}}
 	}
-	// Float-quantization extras: per-tile ZSCALE/ZZERO and an
-	// optional GZIP_COMPRESSED_DATA fallback column.
 	if quantExtra != nil {
 		if len(quantExtra.zscale) != len(payloads) || len(quantExtra.zzero) != len(payloads) {
 			return nil, fmt.Errorf("fits: emitCompressedHDU: zscale/zzero length %d/%d != tiles %d",
@@ -710,11 +1199,24 @@ func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, bp
 			})
 		}
 	}
-	tbl, err := AppendBinaryTable(f, zhdr, cols)
+	if zb.err != nil {
+		return nil, fmt.Errorf("fits: compressed image header: %w", zb.err)
+	}
+	tbl, err := AppendBinaryTable(f, zb.h, cols)
 	if err != nil {
 		return nil, err
 	}
 	return &CompressedImageHDU{rec: tbl.rec, tbl: tbl}, nil
+}
+
+// callerSimple returns the caller header's SIMPLE value, if present
+// (checkCallerScaling has refused a SIMPLE that is not logical).
+func callerSimple(hdr *header.Header) (bool, bool) {
+	if hdr == nil || !hdr.Has("SIMPLE") {
+		return false, false
+	}
+	v, _ := hdr.Bool("SIMPLE")
+	return v, true
 }
 
 // isCompressedZKey reports whether a keyword is one of the Z-prefixed
@@ -722,7 +1224,7 @@ func emitCompressedHDU(f *File, hdr *header.Header, shape, tileShape []int64, bp
 // from the caller's header.
 func isCompressedZKey(key string) bool {
 	switch key {
-	case "ZIMAGE", "ZTENSION", "ZBITPIX", "ZNAXIS", "ZPCOUNT", "ZGCOUNT",
+	case "ZIMAGE", "ZTENSION", "ZSIMPLE", "ZBITPIX", "ZNAXIS", "ZPCOUNT", "ZGCOUNT",
 		"ZCMPTYPE", "ZQUANTIZ", "ZDITHER0", "ZBLANK":
 		return true
 	}

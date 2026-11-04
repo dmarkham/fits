@@ -1,0 +1,24 @@
+# As sip_nosuffix_tan on a SIN projection: wcslib applies SIP without the
+# '-SIP' suffix on any projection (synthetic).
+NOTE pipeline: SIP keywords without the -SIP suffix are applied (SIN)
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---SIN'
+CTYPE2  = 'DEC--SIN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5

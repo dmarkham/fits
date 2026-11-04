@@ -1,0 +1,22 @@
+# Alternate WCS 'A' with a CD matrix and LONPOLEA on a non-zenithal
+# projection (CAR, CRVAL2A = 30, LONPOLEA = 0), primary is pixel-linear.
+# Synthetic.
+NOTE pipeline: alternate WCS A, CDi_jA and LONPOLEA on CAR
+ALT A
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'LINEAR'
+CTYPE2  = 'LINEAR'
+CTYPE1A = 'RA---CAR'
+CTYPE2A = 'DEC--CAR'
+CRVAL1A = 100.0
+CRVAL2A = 30.0
+CRPIX1A = 256.5
+CRPIX2A = 256.5
+CD1_1A  = -0.1
+CD2_2A  = 0.1
+LONPOLEA= 0.0

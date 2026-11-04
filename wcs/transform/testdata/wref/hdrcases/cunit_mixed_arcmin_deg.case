@@ -1,0 +1,17 @@
+# Mixed celestial units the other way round: CUNIT1 = 'arcmin' (CRVAL1
+# and CDELT1 in arcmin), CUNIT2 blank (deg). Synthetic.
+NOTE pipeline: per-axis CUNIT, arcmin longitude with blank (deg) latitude
+GRID 1 512 9 1 512 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CUNIT1  = 'arcmin'
+CRVAL1  = 10800.0
+CRVAL2  = -30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.06
+CDELT2  = 0.001

@@ -1,0 +1,32 @@
+# CAR, CRVAL = (10, 0), LONPOLE = 90, LATPOLE = 30 (synthetic). celset
+# puts the native north pole at celestial (280, 30) and the south pole at
+# (100, -30). Each native pole is a whole row of pixels in CAR, so the
+# sky->pixel answer for a sky point exactly at one is a convention: wcslib
+# sphs2x takes the "change of origin of longitude" (phi = phip + dlng - 180
+# when 90 - latp < 90). Three SKY points sit exactly on the native poles;
+# three more lie 1e-7 deg from them, where the native longitude rests on
+# sphs2x's rearranged formula for |x| < 1e-5 (without it, 8e-5 px off).
+# The grid crosses the rest of the sphere.
+NOTE pipeline: sky points exactly at the native poles (wcslib sphs2x convention)
+GRID 1 512 9 1 512 9
+SKY 280 30
+SKY 100 -30
+SKY -80 30
+SKY 280 30.0000001
+SKY 280.0000001 30
+SKY 100.0000001 -30.0000001
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 90.0
+LATPOLE = 30.0

@@ -1,0 +1,15 @@
+# Supergalactic SLON/SLAT pair with TAN (synthetic).
+NOTE frame_slon_tan
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'SLON-TAN'
+CTYPE2  = 'SLAT-TAN'
+CDELT1  = -0.001
+CDELT2  = 0.001

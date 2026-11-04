@@ -1,0 +1,64 @@
+{
+ "file": "comp_fz_i64small_gzip1_w2_blank.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 23,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                   10 / number of rows in table",
+    "PCOUNT  =                  441 / number of group parameters",
+    "GCOUNT  =                    1 / number of groups",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'",
+    "TFORM1  = '1PB(45) '",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTENSION= 'IMAGE   '           / Image extension",
+    "ZBITPIX =                   64 / array data type",
+    "ZNAXIS  =                    2 / number of array dimensions",
+    "ZNAXIS1 =                   12",
+    "ZNAXIS2 =                   10",
+    "ZPCOUNT =                    0 / number of parameters",
+    "ZGCOUNT =                    1 / number of groups",
+    "ZTILE1  =                   12 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'GZIP_1  '           / compression algorithm",
+    "EXTNAME = 'COMPRESSED_IMAGE'   / name of this binary table extension",
+    "BLANK   =                   37 / gen_fpack setkey"
+   ],
+   "image": {"bitpix": 64, "equivtype": 64, "compressed": true, "naxis": 2, "naxes": [12,10], "npix": 120, "bscale": 1, "bzero": 0, "blank": 37,
+    "phys": {"n": 120, "sha256": "280d0cbac77e876be0debb005d1cc0692d74fbb05d9bb5ec638e4be8fa538dd1", "pool": "f64"},
+    "i64": {"n": 120, "sha256": "2222bc31251f437876b1d44f52b11cfdb7317167d90d2d9dd6f3fea3689b6f4e", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

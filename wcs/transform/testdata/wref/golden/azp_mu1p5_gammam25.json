@@ -1,0 +1,4 @@
+{"name": "azp_mu1p5_gammam25", "code": "AZP", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 1.5], [2, -25]],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 1.5, -25, null]},
+"forward": 1075, "inverse": 1235, "roundtrip": 661, "payload": "azp_mu1p5_gammam25.bin", "payload_bytes": 69223}

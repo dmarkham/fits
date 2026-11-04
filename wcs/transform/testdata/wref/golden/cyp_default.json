@@ -1,0 +1,4 @@
+{"name": "cyp_default", "code": "CYP", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [],
+"prjset": {"phi0": 0, "theta0": 0, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 1, 1, null]},
+"forward": 555, "inverse": 1524, "roundtrip": 555, "payload": "cyp_default.bin", "payload_bytes": 65862}

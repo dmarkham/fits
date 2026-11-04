@@ -1,0 +1,25 @@
+# CAR with theta_0 = -30 (PV1_2), LONPOLE = 150 and CRVAL2 = -30.00000001:
+# the native pole lands 1.2e-8 deg from the celestial pole and celset's
+# z = cos(latp) cos(lat0) = 1.75e-10 is just ABOVE its 1e-10 tolerance, so
+# wcslib takes the general atan2 branch for the native pole's longitude
+# (cel.c), which here differs by 1.2e-4 deg (0.42 arcsec) from the
+# "celestial north pole at the native pole" shortcut. A z tolerance looser
+# than 1.75e-10 takes the shortcut and fails. Synthetic.
+NOTE pipeline: celset z = 1.75e-10, just above the 1e-10 tolerance
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = -30.00000001
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = -30.0
+LONPOLE = 150.0
+LATPOLE = 90.0

@@ -1,0 +1,17 @@
+# Ecliptic ELON/ELAT TAN (synthetic). Only the axis-pair identification is
+# exercised; the frame itself is just a label for PixelToSky.
+NOTE pipeline: ELON/ELAT
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'ELON-TAN'
+CTYPE2  = 'ELAT-TAN'
+CRVAL1  = 270.0
+CRVAL2  = -66.5
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.01
+CDELT2  = 0.01

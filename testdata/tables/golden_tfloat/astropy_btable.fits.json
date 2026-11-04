@@ -1,0 +1,1 @@
+{"file":"astropy_btable.fits","hdus":[{"index":1,"columns":[{"n":1,"ttype":"order","rows":[["3f800000"],["40000000"],["40400000"]]},{"n":3,"ttype":"mag","rows":[["bfb9999a"],["bf3ae148"],["bdcccccd"]]}]}]}

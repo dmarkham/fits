@@ -1,0 +1,29 @@
+SIMPLE  =                    T / minimal cards added for a standalone file
+BITPIX  =                   16
+NAXIS   =                    2
+NAXIS1  =                 2048
+NAXIS2  =                 4096
+WCSASTRM= 'ct4m.19990714T012701 (USNO-K V) by F. Valdes 1999-08-02' / WCS Source
+WCSDIM  =                    2 / WCS dimensionality
+CTYPE1  = 'RA---TNX'           / Coordinate type
+CTYPE2  = 'DEC--TNX'           / Coordinate type
+CRVAL1  =   310.08145293602507 / Coordinate reference value
+CRVAL2  =   20.663666538998399 / Coordinate reference value
+CRPIX1  =            4268.3258 / Coordinate reference pixel
+CRPIX2  =            2256.2481 / Coordinate reference pixel
+CD1_1   =       -6.8295807e-08 / Coordinate matrix
+CD2_1   =        7.3313414e-05 / Coordinate matrix
+CD1_2   =         7.374228e-05 / Coordinate matrix
+CD2_2   =       -1.1927219e-06 / Coordinate matrix
+WAT0_001= 'system=image'       / Coordinate system
+WAT1_001= 'wtype=tnx axtype=ra lngcor = "3. 4. 4. 2. -0.3171856965643079 -0.015'
+WAT1_002= '0652479325533 -0.3126038394350166 -0.1511955040928311 0.002318100364'
+WAT1_003= '838772 0.01749134520424022 -0.01082784423020123 -0.1387962673564234 '
+WAT1_004= '-4.307309762939804E-4 0.009069288008295441 0.002875265278754504 -0.0'
+WAT1_005= '4487658756007625 -0.1058043162287004 -0.0686214765375767 "          '
+WAT2_001= 'wtype=tnx axtype=dec latcor = "3. 4. 4. 2. -0.3171856965643079 -0.01'
+WAT2_002= '50652479325533 -0.3126038394350166 -0.1511955040928311 0.00553481957'
+WAT2_003= '8784082 0.01258790793029932 0.01016780085575339 0.01541083298696018 '
+WAT2_004= '0.03531979587941362 0.0150096457430599 -0.1086479352595234 0.0399806'
+WAT2_005= '086902122 0.02341002785565408 -0.07773808393244387 "                '
+END

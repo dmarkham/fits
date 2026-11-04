@@ -3,43 +3,43 @@ package stats
 import "math"
 
 // MeanStdevSiril computes the mean and sample standard deviation (N-1)
-// of data using the two-pass algorithm from Siril's siril_stats_float_sd
-// (statistics_float.c). Returns float32 to preserve rejection-boundary
-// precision — silently promoting to float64 produces ULP-level
-// differences at sigma-clip boundaries that affect pixel rejection
-// decisions on real astronomical data.
+// of data with the two-pass algorithm of Siril's siril_stats_float_sd
+// (src/algos/statistics_float.c), and returns exactly what that C
+// function returns: both outputs are bit-identical to Siril's, which is
+// tested against the verbatim Siril source (testdata/sref) on 424
+// inputs from n=0 to n=2*10^7.
 //
-// Algorithm (bit-for-bit port of the C source):
+// Algorithm (operation for operation):
 //
 //  1. First pass: accumulate sum in float64.
-//  2. Truncate the mean to float32: mean = float32(sum / n).
+//  2. Round the mean to float32: mean = (float)(sum / n).
 //  3. Second pass: subtract in float32 (data[i] - mean), square in
 //     float32, accumulate in float64.
-//  4. Return float32(sqrt(acc / (n-1))).
+//  4. Return sqrtf((float)(acc / (n-1))): the variance is rounded to
+//     float32 before the square root.
 //
-// The float32 mean truncation and float32 deviation arithmetic are the
-// load-bearing parts: the same loops in float64 produce different ULP-
-// level results that change pixel rejection decisions. The fits-
-// processing rejection pipeline traced a visible artifact (red hotspot
-// in stacked output) to this precision gap and validated the two-pass-
-// with-truncation algorithm against Siril's actual rejection output on
-// real Rosette Nebula data.
+// The float32 mean, the float32 deviations and the float32 variance are
+// all load-bearing: doing any of them in float64 changes the result by
+// an ULP on a sizeable fraction of inputs, and rejection pipelines
+// compare pixels against boundaries derived from this value. On the 424
+// golden inputs, keeping the float32 mean and deviations but taking the
+// square root of the unrounded float64 variance differs from Siril on 43
+// of them; computing everything in float64 and rounding only the result
+// differs on 50 (TestMeanStdevSiril_DocCounts).
 //
-// NaN handling: NONE — matches Siril. NaN inputs propagate by IEEE
-// rules and the result is NaN in both outputs. Callers must pre-filter
-// NaN if needed (cf. Siril's reassign_to_non_null_data_float).
+// NaN handling: none, as in Siril. NaN inputs propagate by IEEE rules
+// and both outputs are NaN. Callers must pre-filter NaN if needed (cf.
+// Siril's reassign_to_non_null_data_float, FilterNonZero).
 //
-// Edge cases (also Siril behavior):
+// Edge cases (Siril's behaviour, also tested):
 //   - n=0: returns (NaN, -0). Mean is 0/0 = NaN; the deviation
-//     accumulator is 0 and the (n-1)=-1 division yields -0.
-//   - n=1: returns (data[0], NaN). Mean is data[0]; the single
-//     deviation is 0 and the (n-1)=0 division yields NaN.
+//     accumulator is 0 and 0/(n-1) = 0/-1 = -0.
+//   - n=1: returns (data[0], NaN). The single deviation is 0 and
+//     0/(n-1) = 0/0 = NaN.
 //
-// If you want a friendly default (e.g. (0, 0) for empty input), use
-// the generic MeanStdev — but be aware its outputs differ from this
-// function at the ULP level even for well-formed inputs.
-//
-// Source: Siril src/algos/statistics_float.c siril_stats_float_sd.
+// For a friendly default (e.g. (0, 0) for empty input) use MeanStdev or
+// MeanStdevTwoPass; both return float64 results that differ from this
+// function at the ULP level even on well-formed inputs.
 func MeanStdevSiril(data []float32) (mean, stdev float32) {
 	n := len(data)
 	var acc float64
@@ -50,12 +50,10 @@ func MeanStdevSiril(data []float32) (mean, stdev float32) {
 
 	acc = 0
 	for _, v := range data {
-		// float32 subtraction and float32 squaring, matching Siril's
-		// (data[i] - mean) * (data[i] - mean) where both operands are
-		// float and the result is implicitly promoted to double for
-		// the +=.
+		// (data[i] - mean) * (data[i] - mean): float subtraction and
+		// float product, promoted to double for the +=.
 		d := v - mean
 		acc += float64(d * d)
 	}
-	return mean, float32(math.Sqrt(acc / float64(n-1)))
+	return mean, float32(math.Sqrt(float64(float32(acc / float64(n-1)))))
 }

@@ -1,0 +1,19 @@
+{
+ "file": "cfwritten.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 0},
+   {"n": 7, "key": "LONGSTR", "str": "0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789a", "comment": "comment text comment text comment text comment text comment text comment"},
+   {"n": 13, "key": "STR68", "str": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "comment": "68 chars"},
+   {"n": 15, "key": "STR69", "str": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy", "comment": "69 chars"},
+   {"n": 17, "key": "LEADSP", "str": "   leading blanks", "comment": "kept"},
+   {"n": 18, "key": "ESO OBS LONGNAME", "str": "hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value ", "comment": "hierarch comment"},
+   {"n": 22, "key": "ESO DET NAME", "str": "short", "comment": "hierarch short"},
+   {"n": 33, "key": "U64MAX", "u64": 18446744073709551615},
+   {"n": 34, "key": "I64MIN", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 36, "key": "CPX", "cplx": [1.5, -2.25]}
+  ]}
+ ]
+}

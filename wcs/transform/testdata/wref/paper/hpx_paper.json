@@ -1,0 +1,22 @@
+{
+ "source": "Calabretta & Roukema 2007 MNRAS 381 865 (arXiv:0704.0626) sec. 6, mpmath 1.4.1 at 60 digits",
+ "layout": "per case, in order: forward rows [phi, theta, x, y], then inverse rows [x, y, phi, theta]",
+ "cases": [
+  {
+   "h": 4,
+   "k": 3,
+   "forward": 1416,
+   "inverse": 1398
+  },
+  {
+   "h": 5,
+   "k": 5,
+   "forward": 528,
+   "inverse": 636
+  }
+ ],
+ "payload": "hpx_paper.bin",
+ "values": 15912,
+ "sha256": "e5d1129a188dc038bf6256dd92ec0f3ef618967d9bbb57528e938b1f1fc6e153",
+ "zlib_version": "1.3.2"
+}

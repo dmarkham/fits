@@ -1,0 +1,20 @@
+# PC matrix AND CROTA2 = 25 (synthetic, crota2_tan plus PC1_2). PC takes
+# precedence and CROTA2 is ignored (wcslib altlin). Letting CROTA2 win
+# gives 683 arcsec at grid corner (-100, -100).
+NOTE pipeline: PC wins over CROTA2
+GRID -100 612 9 -100 612 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PC1_2   = 0.2
+CROTA2  = 25.0

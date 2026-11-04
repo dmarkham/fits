@@ -1,0 +1,19 @@
+# TAN with LONPOLE = 150 (synthetic, audit probe h/tan_lonpole.hdr): a
+# rotation of the native frame about the reference point.
+NOTE pipeline: zenithal TAN with non-default LONPOLE
+GRID -100 612 9 -100 612 9
+PIX 256.5 256.5
+SKY 250 15
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 250.0
+CRVAL2  = 40.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.01
+CDELT2  = 0.01
+LONPOLE = 150.0

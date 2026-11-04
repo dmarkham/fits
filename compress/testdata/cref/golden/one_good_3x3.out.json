@@ -1,0 +1,4 @@
+{"name": "one_good_3x3", "nx": 3, "ny": 3, "nullcheck": 1, "nullvalue": -1, "qlevel": 4, "dither_method": 0, "row": 0, "fill": "fill_one_good", "in_sha256": "c50c67fb7980c5cf17e3efbde40477646cfc5b578dd79a8beeece77831b7c5a8",
+ "stats": {"ngood": 1, "min": 7, "max": 7, "mean": 7, "sigma": 0, "noise1": 0, "noise2": 0, "noise3": 0, "noise5": 0},
+ "quantize": {"return": 0, "bscale": 0, "bzero": 0, "iminval": 0, "imaxval": 0},
+ "out": null}

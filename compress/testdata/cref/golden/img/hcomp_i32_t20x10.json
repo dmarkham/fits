@@ -1,0 +1,1 @@
+{"name": "hcomp_i32_t20x10", "type": "i32", "naxes": [40, 25], "algo": "HCOMPRESS_1", "tile": [20, 10], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 2, "gen_seed": 5040, "in_sha256": "c69980310be98f60ee976a20978c26fcface9b438863828ab8bc54d529c3d143"}

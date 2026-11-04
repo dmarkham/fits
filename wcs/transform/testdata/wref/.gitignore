@@ -1,0 +1,6 @@
+# Build artifacts; sources and goldens are committed.
+/wref
+/hdr2sky
+/golden/hdr/*.tmp
+/verify.out/
+/golden/*.tmp

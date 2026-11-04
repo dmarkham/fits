@@ -1,0 +1,25 @@
+# Both PCi_j and CDi_j present (forbidden by Paper I, seen in the wild).
+# wcslib accepts the header and uses PC + CDELT, ignoring CD (wcs.h,
+# altlin). The CD here differs from CDELT*PC so the choice is visible.
+# Synthetic.
+NOTE pipeline: PC and CD both present, PC wins
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PC1_1   = 0.9
+PC1_2   = 0.1
+PC2_1   = -0.1
+PC2_2   = 0.9
+CD1_1   = -0.002
+CD2_2   = 0.002

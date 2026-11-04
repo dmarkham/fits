@@ -1,0 +1,25 @@
+SIMPLE  =                    T
+BITPIX  =                   16
+NAXIS   =                    2
+NAXIS1  =                 2048
+NAXIS2  =                 2048
+WCSDIM  =                    2
+CTYPE1  = 'RA---TNX'
+CTYPE2  = 'DEC--TNX'
+CRVAL1  =         150.11916667
+CRVAL2  =           2.20583333
+CRPIX1  =               1024.5
+CRPIX2  =              1030.25
+CD1_1   =             -7.2E-05
+CD1_2   =              4.1E-06
+CD2_1   =              3.9E-06
+CD2_2   =             7.25E-05
+LONPOLE =                175.0
+WAT0_001= 'system=image'
+WAT1_001= 'wtype=tnx axtype=ra lngcor = "2. 3. 3. 1. -0.085 0.087 -0.084 0.086 '
+WAT1_002= '0.00012 -0.00034 0.00022 0.00056 -7.1e-05 3.3e-05 -0.00029 0.00011 -'
+WAT1_003= '6.6e-05 "'
+WAT2_001= 'wtype=tnx axtype=dec latcor = "2. 3. 3. 1. -0.085 0.087 -0.084 0.086'
+WAT2_002= ' -0.00021 0.00014 -3.2e-05 -0.00044 8.8e-05 -1.2e-05 0.00031 -9.9e-0'
+WAT2_003= '5 4.5e-05 "'
+END

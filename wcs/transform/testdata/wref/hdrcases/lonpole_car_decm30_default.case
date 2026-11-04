@@ -1,0 +1,17 @@
+# CAR at CRVAL2 = -30, no LONPOLE (synthetic). delta_0 < theta_0 = 0, so
+# wcslib's default is LONPOLE = phi_0 + 180 = 180.
+NOTE pipeline: default LONPOLE on CAR with CRVAL2 < theta_0
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 100.0
+CRVAL2  = -30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1

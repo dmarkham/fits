@@ -1,0 +1,19 @@
+# CUNIT1/2 = 'mas': CRVAL and CDELT in milliarcseconds (factor 1/3.6e6).
+# Synthetic; same sky as a deg header with CRVAL (180, 30).
+NOTE pipeline: CUNIT mas
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CUNIT1  = 'mas'
+CUNIT2  = 'mas'
+CRVAL1  = 648000000.0
+CRVAL2  = 108000000.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -36000.0
+CDELT2  = 36000.0

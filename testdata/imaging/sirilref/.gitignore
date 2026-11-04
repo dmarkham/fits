@@ -1,0 +1,3 @@
+# build artifacts of the Siril truth harness (source sirilref.c is committed)
+/sirilref
+/verify.out/

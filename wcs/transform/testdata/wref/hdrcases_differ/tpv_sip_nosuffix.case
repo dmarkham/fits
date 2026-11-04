@@ -1,0 +1,42 @@
+# 'RA---TPV' (no '-SIP') with a TPV polynomial AND SIP keywords, the form of
+# ATLAS pipeline headers (real one: real_atlas_k2_tpv_sip), here with
+# synthetic coefficients and a SIP set that is NOT a copy of the TPV
+# correction. wcslib 8.10 applies BOTH: SIP as the prior distortion
+# (wcspih: SIP from the A_p_q/B_p_q keywords, attached as lin.dispre) and
+# TPV as the sequent distortion (wcsset: TPV -> lindist(2), lin.disseq).
+# astropy 8.0.2 drops the SIP set ("Removed redundant SIP distortion
+# parameters because CTYPE explicitly specifies TPV distortions"), and so
+# do we: the answer must be tpv_sip_nosuffix_tpvonly's (this header without
+# its SIP cards). Deliberate difference from wcslib (hdrcases_differ).
+# SAME-AS: tpv_sip_nosuffix_tpvonly
+# WCSLIB-DIFFERS-ARCSEC: 0 8.3
+# ASTROPY-TOL-ARCSEC: 1e-8
+# ASTROPY-TOL-PX: 1e-9
+NOTE differ: TPV + SIP keywords without -SIP: SIP ignored (astropy); wcslib applies both
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+PV1_1   = 1.0
+PV1_4   = 1e-3
+PV1_5   = -5e-4
+PV2_1   = 1.0
+PV2_6   = 2e-3
+PV2_4   = 4e-4

@@ -1,0 +1,36 @@
+# TPV whose PV1_1 = PV2_1 = 1 are written explicitly. The TPV registry
+# (fits.gsfc.nasa.gov/registry/tpvwcs/tpv.html) says "missing PV keywords
+# default to 0 except for PV1_1 and PV2_1 which default to 1", so the SAME
+# header with those two cards deleted must give these same answers;
+# TestTPVMissingPV1DefaultsToOne checks that against this golden. wcslib
+# 8.10 instead defaults a missing PVi_1 to 0 whenever other PVi_m are
+# present, so wcslib is only the truth for the explicit form. Synthetic.
+# TOL_PX 1e-8: the s2p input is wcslib's p2s sky position, whose angular
+# round-off (~2e-10 arcsec, the p2s budget measured on every case) is
+# 8e-10 px at this case's 0.26 arcsec/px plate scale; measured Go vs wcslib
+# max 1.6e-9 px. Known SIP/TPV inverse bugs were >= 1e-4 px.
+TOL_PX 1e-8
+NOTE pipeline: TPV with explicit PV1_1 = PV2_1 = 1 (registry default)
+GRID 1 2048 9 1 2048 9
+PIX 1024.5 1024.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 2048
+NAXIS2  = 2048
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CRVAL1  = 210.0
+CRVAL2  = 54.0
+CRPIX1  = 1024.5
+CRPIX2  = 1024.5
+CD1_1   = -7.3E-05
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 7.3E-05
+PV1_1   = 1.0
+PV1_4   = 1.0E-03
+PV1_7   = -4.0E-03
+PV1_11  = 2.0E-03
+PV2_1   = 1.0
+PV2_4   = -2.0E-03
+PV2_9   = 3.0E-03

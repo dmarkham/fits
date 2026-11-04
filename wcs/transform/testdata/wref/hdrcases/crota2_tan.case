@@ -1,0 +1,18 @@
+# AIPS-convention CROTA2 = 25 with CDELT (no PC/CD), synthetic (audit
+# probe h/crota2.hdr). Was ignored: 476 arcsec off at the edge.
+NOTE pipeline: CROTA2 on TAN
+GRID -100 612 9 -100 612 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+CROTA2  = 25.0

@@ -1,0 +1,21 @@
+# TAN with PV1_1 = 0, PV1_2 = theta_0 = 70 and no offset (PV1_0 absent):
+# the reference point CRVAL sits at native (0, 70) for the celestial
+# rotation while the projection keeps (x, y) = (0, 0) at its native pole
+# (wcslib celset, offset = 0). Synthetic.
+NOTE pipeline: PVi_2 (theta_0) on the longitude axis without offset
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 120.0
+CRVAL2  = 50.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.01
+CDELT2  = 0.01
+PV1_1   = 0.0
+PV1_2   = 70.0

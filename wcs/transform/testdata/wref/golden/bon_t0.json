@@ -1,0 +1,4 @@
+{"name": "bon_t0", "code": "BON", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 0]],
+"prjset": {"phi0": 0, "theta0": 0, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 0, null, null]},
+"forward": 555, "inverse": 1252, "roundtrip": 555, "payload": "bon_t0.bin", "payload_bytes": 55222}

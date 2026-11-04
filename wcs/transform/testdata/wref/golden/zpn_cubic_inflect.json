@@ -1,0 +1,4 @@
+{"name": "zpn_cubic_inflect", "code": "ZPN", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[0, 0], [1, 1], [3, -0.2]],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 1, 0, -0.2]},
+"forward": 1075, "inverse": 1147, "roundtrip": 445, "payload": "zpn_cubic_inflect.bin", "payload_bytes": 55207}

@@ -1,0 +1,35 @@
+{
+ "file": "vari.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 28},
+   {"n": 5, "key": "NAXIS2", "u64": 91},
+   {"n": 6, "key": "PCOUNT", "u64": 0},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 7},
+   {"n": 9, "key": "TTYPE1", "str": "a", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 11, "key": "TTYPE2", "str": "2", "comment": "label for field   2"},
+   {"n": 12, "key": "TFORM2", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 13, "key": "TTYPE3", "str": "c", "comment": "label for field   3"},
+   {"n": 14, "key": "TFORM3", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 15, "key": "TTYPE4", "str": "4", "comment": "label for field   4"},
+   {"n": 16, "key": "TFORM4", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 17, "key": "TTYPE5", "str": "e", "comment": "label for field   5"},
+   {"n": 18, "key": "TFORM5", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 19, "key": "TTYPE6", "str": "COMPRESSED_DATA", "comment": "label for field   6"},
+   {"n": 20, "key": "TFORM6", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 21, "key": "TTYPE7", "str": "g", "comment": "label for field   7"},
+   {"n": 22, "key": "TFORM7", "str": "1E", "comment": "data format of field: 4-byte REAL"},
+   {"n": 23, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": "name of this binary table extension"}
+  ]}
+ ]
+}

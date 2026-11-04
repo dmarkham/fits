@@ -1,0 +1,21 @@
+# Defunct PC00i00j matrix keywords (early drafts of WCS Papers I/II;
+# synthetic). wcslib 8.10 wcspih accepts them as PCi_j (WCSHDR_PC00i00j,
+# on in WCSHDR_all) and astropy 8.0.2 (relax=True) too.
+NOTE legacy_pc00i00j_rot
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CDELT1  = -0.001
+CDELT2  = 0.001
+PC001001= 0.9
+PC001002= 0.4
+PC002001= -0.4
+PC002002= 0.9

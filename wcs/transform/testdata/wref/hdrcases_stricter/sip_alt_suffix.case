@@ -1,0 +1,44 @@
+# -SIP on an alternate description: CTYPE1A = 'RA---TAN-SIP' with SIP
+# keywords in the header, read as description A (synthetic, from the
+# round-3 verifier probes). wcslib 8.10 accepts it and computes description
+# A UNDISTORTED (SIP has no alternate form; wcspih attaches it to the
+# primary only), so the declared -SIP is silently not applied. We refuse it
+# (wcs.Header.UnsupportedDistortion). Twin of hdrcases/sip_nosuffix_alt_a,
+# which has no -SIP on the alternate and is computed undistorted.
+# AP/BP are given so hdr2sky injects nothing.
+# EXPECT-GO-ERROR: SIP (A_ORDER/B_ORDER have no alternate-description form; CTYPE1A declares -SIP)
+NOTE stricter: sip_alt_suffix
+ALT A
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0
+CTYPE1A = 'RA---TAN-SIP'
+CTYPE2A = 'DEC--TAN-SIP'
+CRVAL1A = 150.0
+CRVAL2A = 2.0
+CRPIX1A = 512.5
+CRPIX2A = 512.5
+CD1_1A  = -0.0002777
+CD2_2A  = 0.0002777

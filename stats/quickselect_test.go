@@ -11,7 +11,7 @@ import (
 // index" — slow but obviously correct.
 func TestQuickSelect_AgainstSort(t *testing.T) {
 	cases := map[string][]float32{
-		"distinct_small":  {3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5},
+		"distinct_small": {3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5},
 		"already_sorted": {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		"reverse_sorted": {10, 9, 8, 7, 6, 5, 4, 3, 2, 1},
 		"all_same":       {7, 7, 7, 7, 7, 7, 7, 7, 7, 7},

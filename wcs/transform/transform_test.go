@@ -280,8 +280,8 @@ func assertRoundTrip(t *testing.T, code string, crval1, crval2, crpix1, crpix2, 
 
 // TestAllPaperIICodesImplemented verifies that every 3-letter code in
 // allProjectionCodes constructs successfully via Select (with sensible
-// default PV parameters). All 27 Paper II projections plus HPX/XPH
-// are implemented; none may return ErrUnsupportedProjection.
+// default PV parameters). All 28 codes (Paper II, HPX, XPH) are
+// implemented; none may return ErrUnsupportedProjection.
 func TestAllPaperIICodesImplemented(t *testing.T) {
 	// Conic projections require a non-zero PV2_1 (theta_a); supply one.
 	conicPV := map[wcs.PVKey]float64{
@@ -294,7 +294,8 @@ func TestAllPaperIICodesImplemented(t *testing.T) {
 	for code := range allProjectionCodes {
 		var pv map[wcs.PVKey]float64
 		switch code {
-		case "COP", "COE", "COD", "COO":
+		case "COP", "COE", "COD", "COO", "BON":
+			// BON's theta_1 (PV2_1) is required too (wcslib bonset).
 			pv = conicPV
 		case "ZPN":
 			pv = zpnPV
@@ -524,11 +525,23 @@ func TestNewAppliesSIP(t *testing.T) {
 	if tr.Code() != "TAN" {
 		t.Errorf("Code() = %q, want TAN", tr.Code())
 	}
-	// The same header without the suffix: undistorted TAN.
-	plain, err := New(makeSIPHeader(t, "", false))
+	// The same header without the suffix: SIP is still applied, as in
+	// wcslib (golden sip_nosuffix_tan), so it must equal the suffixed form.
+	nosuffix, err := New(makeSIPHeader(t, "", false))
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, p := range [][2]float64{{0, 0}, {3999, 3999}} {
+		a1, d1, _ := tr.PixelToSky(p[0], p[1])
+		a2, d2, _ := nosuffix.PixelToSky(p[0], p[1])
+		if a1 != a2 || d1 != d2 {
+			t.Errorf("pixel %v: no -SIP suffix gives (%v,%v), -SIP gives (%v,%v)", p, a2, d2, a1, d1)
+		}
+	}
+	// Undistorted reference: the same transform with the SIP step removed.
+	plainT := *nosuffix
+	plainT.sip = nil
+	plain := &plainT
 	sip := &SIP{
 		A: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, -4.5e-07}, {0, -1.0e-06, 0}, {-5.4e-07, 0, 0}}},
 		B: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, -7.1e-07}, {0, -2.1e-06, 0}, {-1.5e-06, 0, 0}}},
@@ -580,10 +593,14 @@ func TestSIPSkyToPixelInvertsPixelToSky(t *testing.T) {
 	}
 }
 
-// TestSIPSkyToPixelUsesAPBP: with AP/BP present, SkyToPixel applies the
-// header's inverse polynomial to the undistorted offset:
-// p = CRPIX + U + AP(U, V), where U is the plain-TAN offset.
-func TestSIPSkyToPixelUsesAPBP(t *testing.T) {
+// TestSIPSkyToPixelAPBPIsOnlyAStartingGuess: AP/BP are an approximate
+// inverse. As in wcslib (dis.h: AP/BP "provide an initial estimate for
+// its more precise iterative inversion"), SkyToPixel must return the
+// exact inverse of PixelToSky, NOT p = CRPIX + U + AP(U, V). The two
+// differ by more than 1e-5 px at these pixels (the header's AP/BP are only first-order
+// negations of A/B); the full wcslib comparison is the hdr golden
+// sip4_rough_apbp.
+func TestSIPSkyToPixelAPBPIsOnlyAStartingGuess(t *testing.T) {
 	tr, err := New(makeSIPHeader(t, "-SIP", true))
 	if err != nil {
 		t.Fatal(err)
@@ -595,24 +612,32 @@ func TestSIPSkyToPixelUsesAPBP(t *testing.T) {
 	ap := &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 4.5e-07}, {0, 1.0e-06, 0}, {5.4e-07, 0, 0}}}
 	bp := &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 7.1e-07}, {0, 2.1e-06, 0}, {1.5e-06, 0, 0}}}
 	const crpix = 1999.5 // 0-based
-	for _, sky := range [][2]float64{{101.40, 28.99}, {101.60, 28.81}, {101.52, 28.95}} {
-		x, y, err := tr.SkyToPixel(sky[0], sky[1])
+	for _, p := range [][2]float64{{0, 0}, {3999, 3999}, {600, 3500}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
 		if err != nil {
 			t.Fatal(err)
 		}
-		x0, y0, err := plain.SkyToPixel(sky[0], sky[1])
+		x, y, err := tr.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(x-p[0]) > 1e-9 || math.Abs(y-p[1]) > 1e-9 {
+			t.Errorf("pixel %v -> sky -> (%.12g, %.12g): not the exact inverse", p, x, y)
+		}
+		x0, y0, err := plain.SkyToPixel(a, d)
 		if err != nil {
 			t.Fatal(err)
 		}
 		u, v := x0-crpix, y0-crpix
 		wx, wy := crpix+u+ap.eval(u, v), crpix+v+bp.eval(u, v)
-		if math.Abs(x-wx) > 1e-9 || math.Abs(y-wy) > 1e-9 {
-			t.Errorf("sky %v: got (%v,%v), want (%v,%v)", sky, x, y, wx, wy)
+		if math.Hypot(wx-p[0], wy-p[1]) < 1e-5 {
+			t.Errorf("pixel %v: AP/BP alone already inverts to %.3g px; the test needs a rough AP/BP", p, math.Hypot(wx-p[0], wy-p[1]))
 		}
 	}
 }
 
-// TestSIPSuffixWithoutCoefficientsIsUndistorted: as astropy.wcs, a "-SIP"
+// TestSIPSuffixWithoutCoefficientsIsUndistorted: as wcslib (hdr golden
+// sip_suffix_no_coeffs), a "-SIP"
 // CTYPE with no A_ORDER/B_ORDER maps exactly like plain TAN.
 func TestSIPSuffixWithoutCoefficientsIsUndistorted(t *testing.T) {
 	cards := func(suffix string) *wcs.Header {

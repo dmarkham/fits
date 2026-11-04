@@ -1,0 +1,20 @@
+# CEA (lambda = 1) with CRVAL2 = 15 and LONPOLE = 90: phi_p - phi_0 = 90
+# with theta_0 = 0 makes the native-pole latitude depend on LATPOLE alone
+# (wcslib cel.c "latpreq = 2" branch). LATPOLE = 40. Synthetic.
+NOTE pipeline: LONPOLE = 90 on CEA, pole latitude from LATPOLE only
+GRID 156 356 9 156 356 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CEA'
+CTYPE2  = 'DEC--CEA'
+CRVAL1  = 200.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 90.0
+LATPOLE = 40.0

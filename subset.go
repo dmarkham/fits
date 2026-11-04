@@ -2,9 +2,6 @@ package fits
 
 import (
 	"fmt"
-	"math"
-
-	"github.com/dmarkham/fits/internal/bitpix"
 )
 
 // ReadSubset reads an n-dimensional hyperslab from h.
@@ -24,7 +21,12 @@ import (
 // near-optimal; for large strided axes it issues more seeks than an
 // all-at-once read would.
 //
-// BSCALE/BZERO are applied as in ReadPixels.
+// BSCALE/BZERO are applied, and target types accepted or refused, exactly
+// as in ReadPixels (integer targets exact, float targets equal to
+// cfitsio's fits_read_subset, with ReadPixels' one difference: a value
+// beyond the float32 range reads as +-Inf into float32, where cfitsio
+// returns +-FLT_MAX). BLANK is not applied, as in ReadPixels. Any
+// NAXIS >= 1 is supported.
 func ReadSubset[T Numeric](h *ImageHDU, lower, upper, stride []int64) ([]T, error) {
 	naxis := h.rec.naxis
 	if len(lower) != naxis || len(upper) != naxis || len(stride) != naxis {
@@ -40,13 +42,9 @@ func ReadSubset[T Numeric](h *ImageHDU, lower, upper, stride []int64) ([]T, erro
 		}
 	}
 	bp := h.bitpixType()
-	if !canConvertInto[T](bp) {
-		var zero T
-		return nil, &TypeMismatchError{
-			Requested: fmt.Sprintf("%T", zero),
-			BITPIX:    int(bp),
-			Lossy:     true,
-		}
+	conv, err := pixelConverter[T](h)
+	if err != nil {
+		return nil, err
 	}
 
 	// Count output elements along each axis.
@@ -57,9 +55,6 @@ func ReadSubset[T Numeric](h *ImageHDU, lower, upper, stride []int64) ([]T, erro
 		outLen *= perAxisCount[i]
 	}
 	out := make([]T, outLen)
-	bscale := h.BSCALE()
-	bzero := h.BZERO()
-	applyBScale := !(bscale == 1.0 && bzero == 0.0)
 	elemSize := int64(bp.Size())
 
 	// We iterate over every combination of axis 1..(naxis-1) indices (call
@@ -107,12 +102,7 @@ func ReadSubset[T Numeric](h *ImageHDU, lower, upper, stride []int64) ([]T, erro
 		count := perAxisCount[0]
 		for k := range count {
 			srcPix := k * stride[0]
-			src := rowBuf[srcPix*elemSize : srcPix*elemSize+elemSize]
-			v := decodeOneFloat(src, bp)
-			if applyBScale {
-				v = v*bscale + bzero
-			}
-			out[outBase+k] = numericFromFloat[T](v)
+			out[outBase+k] = conv.one(rowBuf[srcPix*elemSize : srcPix*elemSize+elemSize])
 		}
 
 		// Advance the axis 1.. counters.
@@ -133,31 +123,4 @@ func ReadSubset[T Numeric](h *ImageHDU, lower, upper, stride []int64) ([]T, erro
 		}
 	}
 	return out, nil
-}
-
-// decodeOneFloat reads a single element of the given BITPIX from the first
-// bytes of b and returns it as float64. Used by the hyperslab path where
-// applying BSCALE/BZERO through a single pipeline is simpler than
-// specializing for each output type.
-func decodeOneFloat(b []byte, bp bitpix.BITPIX) float64 {
-	switch bp {
-	case bitpix.Int8:
-		return float64(b[0])
-	case bitpix.Int16:
-		return float64(int16(uint16(b[0])<<8 | uint16(b[1])))
-	case bitpix.Int32:
-		return float64(int32(uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])))
-	case bitpix.Int64:
-		return float64(int64(
-			uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
-				uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])))
-	case bitpix.Float32:
-		u := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-		return float64(math.Float32frombits(u))
-	case bitpix.Float64:
-		u := uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
-			uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
-		return math.Float64frombits(u)
-	}
-	return 0
 }

@@ -1,0 +1,49 @@
+# The header of hdrcases/sip4_no_apbp (TAN-SIP order 4, no AP/BP), handed
+# to wcslib exactly as written (NOINJECT). wcslib 8.10 sipset REFUSES it:
+# with no AP_p_q / BP_p_q card the inverse degree is -1. It cannot read a
+# SIP header without an inverse polynomial at all, although disx2p inverts
+# A/B by iteration and uses AP/BP only as the starting guess. We accept
+# the header and invert A/B by Newton iteration; the answer must equal the
+# golden of sip4_no_apbp, which is wcslib's iterated inverse started from
+# an identity AP/BP (the harness injection, see hdr2sky.c CAVEAT).
+# EXPECT-WCSLIB-ERROR: Degree must not exceed 9, got -1
+# SAME-AS: sip4_no_apbp
+NOTE lenient: sip_no_apbp
+NOINJECT
+GRID 1 4096 9 1 4096 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 4096
+NAXIS2  = 4096
+CTYPE1  = 'RA---TAN-SIP'
+CTYPE2  = 'DEC--TAN-SIP'
+CRVAL1  = 150.1166
+CRVAL2  = 2.2058
+CRPIX1  = 2048.0
+CRPIX2  = 2048.0
+CD1_1   = -1.3888E-05
+CD1_2   = 2.1E-07
+CD2_1   = 1.9E-07
+CD2_2   = 1.3888E-05
+A_ORDER = 4
+A_0_2   = 2.1E-06
+A_1_1   = -1.4E-05
+A_2_0   = 8.2E-06
+A_0_3   = 3.1E-10
+A_1_2   = -2.2E-10
+A_2_1   = 5.1E-10
+A_3_0   = -1.3E-10
+A_0_4   = 1.1E-14
+A_2_2   = -3.0E-14
+A_4_0   = 2.0E-14
+B_ORDER = 4
+B_0_2   = -6.0E-06
+B_1_1   = 9.0E-06
+B_2_0   = -2.6E-06
+B_0_3   = 4.0E-10
+B_1_2   = 1.9E-10
+B_2_1   = -3.3E-10
+B_3_0   = 2.2E-10
+B_1_3   = 1.5E-14
+B_3_1   = -2.5E-14
+B_0_4   = 5.0E-15

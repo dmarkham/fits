@@ -1,0 +1,20 @@
+# -SIP on a SIN projection (synthetic; SIP is not limited to TAN in
+# wcslib or astropy). No AP/BP: hdr2sky injects an inverse for wcslib only.
+NOTE sip_on_sin
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'RA---SIN-SIP'
+CTYPE2  = 'DEC--SIN-SIP'
+CDELT1  = -0.001
+CDELT2  = 0.001
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 1e-5
+B_0_2   = 1e-5

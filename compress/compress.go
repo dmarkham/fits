@@ -1,30 +1,42 @@
-// Package compress implements decoders for the FITS tile-compression
-// algorithms defined by the "Compressed Images" FITS convention
-// (Pence et al. 2010). It is a pure bytes-in / bytes-out library that
-// knows nothing about FITS headers or binary tables — the FITS-side
-// wrapping lives in the root fits package as the CompressedImageHDU
-// type.
+// Package compress implements the FITS tile-compression codecs of the
+// "Compressed Images" convention (Pence et al. 2010, FITS standard 4.0
+// section 10). It is a pure bytes-in / bytes-out library that knows
+// nothing about FITS headers or binary tables — the FITS-side wrapping
+// lives in the root fits package (CompressedImageHDU for reading,
+// AppendCompressedImage / AppendCompressedFloat32Image for writing).
 //
-// # Supported algorithms
+// # Algorithms
 //
 //	RICE_1      — Rice coding with per-block k parameter (Pence 1998,
-//	              White & Greenfield 1998). The workhorse for JWST and
-//	              most HST CCD data.
-//	GZIP_1      — Raw pixel bytes through zlib DEFLATE.
+//	              White & Greenfield 1998).
+//	GZIP_1      — Raw pixel bytes through DEFLATE.
 //	GZIP_2      — Byte-shuffled GZIP: bytes are grouped by significance
-//	              before gzip. Improves ratio on smooth imagery.
-//	NOCOMPRESS  — Identity pass-through (used by the tile-level
-//	              fallback chain when compression would inflate a tile).
-//	PLIO_1      — IRAF Planio run-length encoding for integer masks.
+//	              before DEFLATE.
+//	PLIO_1      — IRAF PLIO run-length encoding for integer masks
+//	              (pixel values 0 .. 2^24-1).
 //	HCOMPRESS_1 — H-transform with quadtree coding (White 1991).
+//	NOCOMPRESS  — Identity tiles. Decoded for completeness (astropy can
+//	              write it), but cfitsio 4.7.0 and funpack cannot read
+//	              ZCMPTYPE = 'NOCOMPRESS' ("unknown compression
+//	              algorithm"), so the fits writers refuse to produce it.
+//	              cfitsio itself never falls back to NOCOMPRESS; its
+//	              per-tile fallback is the GZIP_COMPRESSED_DATA column
+//	              for float tiles that cannot be quantized.
 //
-// # Coverage status
+// Select returns a decoder for each of the six. SelectEncoder returns
+// an encoder for each; the RICE_1, HCOMPRESS_1 and PLIO_1 encoders are
+// ports of cfitsio's fits_rcomp/_short/_byte, fits_hcompress/
+// fits_hcompress64 and pl_p2li whose output is byte-identical to
+// libcfitsio 4.7.0 on adversarial inputs (encode_cref_test.go, goldens
+// from testdata/cref). The RICE_1 and HCOMPRESS_1 encoders accept
+// BYTEPIX 1, 2 and 4 only, as cfitsio does.
 //
-// All six algorithms listed above are recognized by Select. RICE_1,
-// GZIP_1, GZIP_2, NOCOMPRESS, and PLIO_1 have full decoders. HCOMPRESS_1
-// currently returns ErrUnsupportedCompression and will ship in a
-// follow-up — it is less common in modern data products than the
-// others.
+// The float quantizer (QuantizeFloat32, QuantizeFloat64, ImgStatsFloat32)
+// is a port of cfitsio's fits_quantize_float / fits_quantize_double and
+// fits_img_stats_float, bit-exact against libcfitsio (cref_test.go; the
+// float64 path through whole BITPIX -64 images, golden img64), and FitsRandoms is cfitsio's
+// fits_rand_value dither table (randoms_cref_test.go). Decoder accuracy
+// against real compressed files is tested separately from the encoders.
 package compress
 
 import (
@@ -50,8 +62,9 @@ const (
 	HCOMPRESS1
 	// PLIO1 is IRAF Planio run-length encoding for integer masks.
 	PLIO1
-	// NoCompress is an identity pass-through. Used by cfitsio when a tile
-	// would inflate under the primary compressor.
+	// NoCompress is the identity "algorithm" (ZCMPTYPE = 'NOCOMPRESS').
+	// Readable here, but not by cfitsio/funpack, so never written by the
+	// fits writers.
 	NoCompress
 )
 
@@ -74,11 +87,14 @@ func (a Algorithm) String() string {
 	return "UNKNOWN"
 }
 
-// ParseAlgorithm maps a ZCMPTYPE value to an Algorithm. Leading and
-// trailing whitespace is trimmed; the comparison is case-insensitive.
-// Returns Unknown for values not in the standard set.
+// ParseAlgorithm maps a ZCMPTYPE value to an Algorithm the way cfitsio
+// recognises it (imcompress.c imcomp_get_compressed_image_par): trailing
+// blanks are insignificant (FITS strings), the comparison is
+// case-sensitive, and 'RICE_ONE' is an alias for RICE_1. So 'rice_1' is
+// Unknown, as cfitsio refuses it (TestZCMPTYPEComparedLikeCfitsio in the
+// root package). Returns Unknown for values not in the standard set.
 func ParseAlgorithm(s string) Algorithm {
-	switch strings.ToUpper(strings.TrimSpace(s)) {
+	switch strings.TrimRight(s, " ") {
 	case "RICE_1", "RICE_ONE":
 		return RICE1
 	case "GZIP_1":
@@ -95,13 +111,20 @@ func ParseAlgorithm(s string) Algorithm {
 	return Unknown
 }
 
-// Params carries the per-algorithm compression parameters (ZNAMEi=ZVALi
-// pairs from the header). Each algorithm extracts what it needs:
+// Params carries the per-algorithm compression parameters. On read, the
+// fits package fills them the way cfitsio does: RICE_1 BLOCKSIZE and
+// BYTEPIX and HCOMPRESS_1 SMOOTH are taken from ZVAL1/ZVAL2 by POSITION,
+// not from the ZNAMEi names (compressed.go parseCompressedMetadata,
+// proven by TestCompressedCorpusRead). The HCOMPRESS_1 SCALE is not
+// passed on read (the stream carries it). Each algorithm extracts what
+// it needs:
 //
-//	RICE_1:      BLOCKSIZE (default 32), BYTEPIX (1/2/4/8)
+//	RICE_1:      BLOCKSIZE (default 32), BYTEPIX 1/2/4 (8 is refused by
+//	             the decoder and the encoder: cfitsio has no 64-bit Rice
+//	             coder)
 //	GZIP_1:      none (byte stream is self-describing)
-//	GZIP_2:      BYTEPIX (derived from ZBITPIX if absent)
-//	HCOMPRESS_1: SCALE, SMOOTH
+//	GZIP_2:      BYTEPIX (the shuffle width; must equal elemSize)
+//	HCOMPRESS_1: SCALE (write only), SMOOTH
 //	PLIO_1:      none
 //
 // Values are int64 to match the FITS integer-card representation.
@@ -137,11 +160,12 @@ type Decoder interface {
 
 // Sentinel errors.
 var (
-	// ErrUnsupportedCompression is returned when the algorithm is
-	// recognized but not implemented. Kept as a forward-compatibility
-	// sentinel — every algorithm in the Pence et al. 2010 convention
-	// (RICE_1, GZIP_1, GZIP_2, HCOMPRESS_1, PLIO_1, NOCOMPRESS) is now
-	// fully supported for both read and write.
+	// ErrUnsupportedCompression is returned when an algorithm is
+	// recognized but the requested use is not supported: an encoder
+	// asked for a pixel width cfitsio does not support (RICE_1 and
+	// HCOMPRESS_1 BYTEPIX 8), the RICE_1 decoder asked for BYTEPIX 8, or
+	// PLIO_1 pixels outside 0..2^24-1
+	// (ErrPLIORange wraps it).
 	ErrUnsupportedCompression = errors.New("fits/compress: unsupported compression algorithm")
 
 	// ErrUnknownCompression is returned when the algorithm string does

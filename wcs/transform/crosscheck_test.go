@@ -4,178 +4,109 @@ import (
 	"encoding/json"
 	"math"
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/dmarkham/fits/wcs"
+	"github.com/dmarkham/fits/internal/testutil"
 )
 
-// TestCrossCheckFixtures compares this library's pixel→sky mapping
-// against pre-computed reference values from wcslib / astropy.wcs for a
-// set of real observatory headers.
+// TestCrossCheckFixtures compares this library with astropy.wcs (astropy
+// 8.0.2, bundling wcslib 8.6) through the FULL public path: the header
+// card images stored in testdata/wcs_crosscheck.json go through
+// header.ParseCards -> wcs.Parse -> New (the parser is under test too),
+// and both directions are checked: pixel -> sky against
+// WCS.all_pix2world and sky -> pixel against WCS.all_world2pix.
 //
-// The reference values live in testdata/wcs_crosscheck.json. That file
-// is meant to be generated once by a Python helper (see
-// testdata/generate_wcs_crosscheck.py) using astropy.wcs on a set of
-// real FITS headers from HST, JWST, Chandra, Gaia, Planck, WMAP, COBE,
-// and 2MASS. The Go test reads the file and asserts our library agrees
-// with each tabulated (pixel, sky) pair to within tolerance.
+// The JSON is produced by testdata/generate_wcs_crosscheck.py (see its
+// docstring; TestCrossCheckFixturesReproduce re-runs it). A missing or
+// empty file is a failure, never a skip.
 //
-// When the JSON file is absent, the test is skipped — this allows
-// development to proceed without the Python toolchain installed. The
-// v1.1 release gate requires the file to be present and the test to
-// pass.
+// Tolerances (per fixture, from the JSON): 1e-8 arcsec pixel -> sky and
+// 1e-9 px sky -> pixel, the same budgets as the wcslib header goldens
+// (hdr_golden_test.go) for the same reasons; the smallest bug the WCS
+// audit found was ~0.01 arcsec.
 func TestCrossCheckFixtures(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "wcs_crosscheck.json")
+	path := testutil.TestdataPath(t, "wcs_crosscheck.json")
+	testutil.RequireFile(t, path)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Skip("testdata/wcs_crosscheck.json not present; skipping wcslib cross-check")
-		}
 		t.Fatal(err)
 	}
-	var fixtures []CrossCheckFixture
-	if err := json.Unmarshal(data, &fixtures); err != nil {
+	var doc crossCheckDoc
+	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(fixtures) == 0 {
-		t.Skip("no cross-check fixtures declared")
+	if len(doc.Fixtures) == 0 {
+		t.Fatalf("%s has no fixtures", path)
 	}
-	for _, f := range fixtures {
-		f := f
+	t.Logf("truth: astropy %s, wcslib %s, numpy %s", doc.Astropy, doc.Wcslib, doc.Numpy)
+	for _, f := range doc.Fixtures {
 		t.Run(f.Name, func(t *testing.T) {
-			pc := f.PC
-			if pc == nil && f.CD == nil {
-				// Default identity PC when neither matrix is in the JSON.
-				pc = [][]float64{{1, 0}, {0, 1}}
+			if len(f.P2S) == 0 || len(f.S2P) == 0 {
+				t.Fatalf("fixture %s has no vectors", f.Name)
 			}
-			w := &wcs.Header{
-				NAxis:    2,
-				CType:    []string{f.CType1, f.CType2},
-				CRVal:    []float64{f.CRVal1, f.CRVal2},
-				CRPix:    []float64{f.CRPix1, f.CRPix2},
-				CDelt:    []float64{f.CDelt1, f.CDelt2},
-				PC:       pc,
-				CD:       f.CD,
-				PV:       unmarshalPVMap(f.PV),
-				LonAxis:  1,
-				LatAxis:  2,
-				AxisType: []string{splitAxisType(f.CType1), splitAxisType(f.CType2)},
-				ProjCode: []string{splitProjCode(f.CType1), splitProjCode(f.CType2)},
-				DistCode: []string{splitDistCode(f.CType1), splitDistCode(f.CType2)},
-				SIP:      f.SIP,
+			w, err := hdrParse(f.Cards, "")
+			if err != nil {
+				t.Fatalf("wcs.Parse: %v", err)
 			}
 			tr, err := New(w)
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
-			tol := f.Tolerance
-			if tol == 0 {
-				tol = 1e-9
-			}
-			for _, tv := range f.TestVectors {
-				a, d, err := tr.PixelToSky(tv.Pixel[0], tv.Pixel[1])
+			var maxAS, maxPx float64
+			for _, v := range f.P2S {
+				a, d, err := tr.PixelToSky(v.Pixel[0], v.Pixel[1])
 				if err != nil {
-					t.Errorf("PixelToSky(%v): %v", tv.Pixel, err)
+					t.Errorf("PixelToSky(%v): %v", v.Pixel, err)
 					continue
 				}
-				if math.Abs(a-tv.Sky[0]) > tol || math.Abs(d-tv.Sky[1]) > tol {
-					t.Errorf("pixel %v: got (%v,%v), want (%v,%v), tol %v",
-						tv.Pixel, a, d, tv.Sky[0], tv.Sky[1], tol)
+				sep := angSepArcsec(a, d, v.Sky[0], v.Sky[1])
+				maxAS = math.Max(maxAS, sep)
+				if !(sep <= f.TolArcsec) {
+					t.Errorf("pixel %v: got (%.15g, %.15g), astropy (%.15g, %.15g): %.3g arcsec > %g",
+						v.Pixel, a, d, v.Sky[0], v.Sky[1], sep, f.TolArcsec)
 				}
 			}
+			for _, v := range f.S2P {
+				x, y, err := tr.SkyToPixel(v.Sky[0], v.Sky[1])
+				if err != nil {
+					t.Errorf("SkyToPixel(%v): %v", v.Sky, err)
+					continue
+				}
+				d := math.Max(math.Abs(x-v.Pixel[0]), math.Abs(y-v.Pixel[1]))
+				maxPx = math.Max(maxPx, d)
+				if !(d <= f.TolPx) {
+					t.Errorf("sky %v: got pixel (%.15g, %.15g), astropy (%.15g, %.15g): %.3g px > %g",
+						v.Sky, x, y, v.Pixel[0], v.Pixel[1], d, f.TolPx)
+				}
+			}
+			t.Logf("%s: %d p2s max %.3g arcsec, %d s2p max %.3g px", f.Source, len(f.P2S), maxAS, len(f.S2P), maxPx)
 		})
 	}
 }
 
-// CrossCheckFixture is the JSON-serializable schema for one test fixture.
-// The Python reference generator emits a list of these.
-type CrossCheckFixture struct {
-	Name      string      `json:"name"`
-	Source    string      `json:"source"` // mission / instrument, for documentation
-	CType1    string      `json:"ctype1"`
-	CType2    string      `json:"ctype2"`
-	CRVal1    float64     `json:"crval1"`
-	CRVal2    float64     `json:"crval2"`
-	CRPix1    float64     `json:"crpix1"`
-	CRPix2    float64     `json:"crpix2"`
-	CDelt1    float64     `json:"cdelt1"`
-	CDelt2    float64     `json:"cdelt2"`
-	PC        [][]float64 `json:"pc,omitempty"`
-	CD        [][]float64 `json:"cd,omitempty"`
-	PV        []PVJSON    `json:"pv,omitempty"`
-	SIP       *wcs.SIP    `json:"sip,omitempty"` // A, B, AP, BP as {Order, Coeffs}
-	Tolerance float64     `json:"tolerance"`
-	TestVectors []CrossCheckVector `json:"test_vectors"`
+// crossCheckDoc is the JSON written by testdata/generate_wcs_crosscheck.py.
+type crossCheckDoc struct {
+	Generator string              `json:"generator"`
+	Astropy   string              `json:"astropy"`
+	Wcslib    string              `json:"wcslib"`
+	Numpy     string              `json:"numpy"`
+	Fixtures  []CrossCheckFixture `json:"fixtures"`
 }
 
-// CrossCheckVector is one (pixel, sky) pair produced by the reference.
+// CrossCheckFixture is one header with astropy's answers in both
+// directions.
+type CrossCheckFixture struct {
+	Name      string             `json:"name"`
+	Source    string             `json:"source"`
+	Cards     []string           `json:"cards"` // 80-column card images, END excluded
+	TolArcsec float64            `json:"tol_arcsec"`
+	TolPx     float64            `json:"tol_px"`
+	P2S       []CrossCheckVector `json:"p2s"`
+	S2P       []CrossCheckVector `json:"s2p"`
+}
+
+// CrossCheckVector is one (pixel, sky) pair (0-based pixels, degrees).
 type CrossCheckVector struct {
 	Pixel [2]float64 `json:"pixel"`
 	Sky   [2]float64 `json:"sky"`
-}
-
-// PVJSON is the JSON serialization of one PV key-value pair.
-type PVJSON struct {
-	Axis  int     `json:"axis"`
-	Index int     `json:"index"`
-	Value float64 `json:"value"`
-}
-
-// unmarshalPVMap converts a slice of PVJSON into the map format used by
-// *wcs.Header.
-func unmarshalPVMap(pvs []PVJSON) map[wcs.PVKey]float64 {
-	if len(pvs) == 0 {
-		return nil
-	}
-	m := make(map[wcs.PVKey]float64, len(pvs))
-	for _, p := range pvs {
-		m[wcs.PVKey{Axis: p.Axis, Index: p.Index}] = p.Value
-	}
-	return m
-}
-
-// splitAxisType / splitProjCode / splitDistCode duplicate the logic in
-// wcs.splitCType because it is unexported in the wcs package. For a CTYPE
-// like "RA---TAN-SIP" they return "RA", "TAN" and "SIP"; for a linear
-// CTYPE, (raw, "", "").
-func splitAxisType(ctype string) string {
-	ctype = stripDistCode(ctype)
-	if len(ctype) >= 8 && ctype[len(ctype)-4] == '-' {
-		return trimRightDashes(ctype[:len(ctype)-3])
-	}
-	return ctype
-}
-
-func splitProjCode(ctype string) string {
-	ctype = stripDistCode(ctype)
-	if len(ctype) >= 8 && ctype[len(ctype)-4] == '-' {
-		return ctype[len(ctype)-3:]
-	}
-	return ""
-}
-
-func splitDistCode(ctype string) string {
-	if hasDistCode(ctype) {
-		return ctype[len(ctype)-3:]
-	}
-	return ""
-}
-
-func stripDistCode(ctype string) string {
-	if hasDistCode(ctype) {
-		return ctype[:len(ctype)-4]
-	}
-	return ctype
-}
-
-func hasDistCode(ctype string) bool {
-	return len(ctype) >= 12 && ctype[len(ctype)-4] == '-' && ctype[len(ctype)-8] == '-'
-}
-
-func trimRightDashes(s string) string {
-	for len(s) > 0 && s[len(s)-1] == '-' {
-		s = s[:len(s)-1]
-	}
-	return s
 }

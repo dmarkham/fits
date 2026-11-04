@@ -3,129 +3,160 @@ package fits
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
-	"strings"
 
 	"github.com/dmarkham/fits/header"
+	"github.com/dmarkham/fits/internal/block"
 	"github.com/dmarkham/fits/internal/checksum"
 )
 
-// VerifyChecksum verifies the CHECKSUM and DATASUM keywords on an HDU if
-// they are present. It returns nil if both verify (or if they are absent).
-// If one or both are present but wrong, it returns an error identifying
-// which failed.
-//
-// Algorithm (FITS Appendix J):
-//   - DATASUM is the 32-bit 1's-complement checksum of the data section
-//     only, encoded as an ASCII integer.
-//   - CHECKSUM is the 16-char ASCII-encoded 1's-complement checksum such
-//     that the combined (header + data) checksum sums to all-ones.
-func VerifyChecksum(h HDU) error {
+// The FITS checksum convention (FITS Standard v4.0 Appendix J): DATASUM is
+// the 32-bit ones'-complement sum of the data unit (including its block
+// padding) written as a decimal string; CHECKSUM is a 16-character ASCII
+// encoding chosen so that the ones'-complement sum of the whole HDU
+// (header blocks, with the CHECKSUM card as stored, plus the data unit) is
+// all ones (negative zero). The data sum and header sum are combined with
+// the same end-around-carry addition, as cfitsio's ffpcks/ffvcks do.
+
+// ChecksumStatus verifies an HDU's DATASUM and CHECKSUM keywords against
+// the bytes on disk and reports each the way cfitsio's fits_verify_chksum
+// does: 1 when the keyword is present and correct, 0 when it is absent (or
+// blank), -1 when it is present and wrong. It works for every HDU kind,
+// including tile-compressed images (whose checksum covers the binary table
+// as stored). The returned error is for I/O problems, and
+// ErrUndefinedChecksum for a DATASUM or CHECKSUM card with no value (where
+// fits_verify_chksum fails too).
+func ChecksumStatus(h HDU) (datasum, hdusum int, err error) {
 	rec := hduRecordOf(h)
-	if rec == nil {
-		return errors.New("fits: VerifyChecksum: HDU has no backing record")
+	if rec == nil || rec.file == nil || rec.file.br == nil {
+		return 0, 0, errors.New("fits: ChecksumStatus: HDU is not backed by a readable file")
 	}
-	hdr := h.Header()
-	var dataSumVal uint32
-	var haveDataSum bool
-	if s, err := hdr.String(header.KeyDatasum); err == nil {
-		haveDataSum = true
-		s = strings.TrimSpace(s)
-		// cfitsio writes DATASUM as a decimal integer string.
-		v, convErr := strconv.ParseUint(s, 10, 32)
-		if convErr != nil {
-			return fmt.Errorf("fits: DATASUM not a valid integer: %q", s)
-		}
-		dataSumVal = uint32(v)
-	}
-
-	// Read the data section in 2880-byte chunks and accumulate.
-	var actualDataSum uint32
-	dataBytes := rec.paddedEnd - rec.dataStart
-	if dataBytes > 0 {
-		chunk := make([]byte, 2880)
-		off := rec.dataStart
-		for off < rec.paddedEnd {
-			if err := rec.file.br.ReadRange(off, chunk); err != nil {
-				return fmt.Errorf("fits: VerifyChecksum: read data: %w", err)
-			}
-			actualDataSum = checksum.Update(actualDataSum, chunk)
-			off += 2880
-		}
-	}
-
-	if haveDataSum && actualDataSum != dataSumVal {
-		return fmt.Errorf("fits: DATASUM mismatch: stored %d, computed %d", dataSumVal, actualDataSum)
-	}
-
-	// CHECKSUM is the sum over header bytes + data bytes such that the
-	// result is complementary. If present, verify by summing header bytes
-	// and checking that header_sum + data_sum + stored-card = all-ones.
-	checkStr, err := hdr.String(header.KeyChecksum)
+	hdr, dataSum, err := rec.onDiskSums()
 	if err != nil {
-		return nil // no CHECKSUM card; DATASUM already verified (or also absent)
+		return 0, 0, err
 	}
-	if len(checkStr) != 16 {
-		return fmt.Errorf("fits: CHECKSUM length %d != 16", len(checkStr))
+	// The keywords are found and parsed as cfitsio's ffvcks does. It reads
+	// CHECKSUM first and then DATASUM, each with ffgcrd, which searches
+	// from the card after the last one it read to END and then wraps to
+	// the top: CHECKSUM is the first card of that name, and DATASUM the
+	// first one after that CHECKSUM card (or, if there is none after it
+	// or no CHECKSUM, the first from the top). Names are compared in
+	// upper case; the value is unquoted (ffgkys) and empty means absent.
+	// DATASUM is read with atof (the longest numeric prefix, so "123abc"
+	// is 123 and hex floats are accepted) and cast to unsigned long, which
+	// truncates toward zero: it matches when the truncated value equals
+	// the data sum (so "123.9" matches 123 and "-0.5", which truncates to
+	// 0, matches a zero sum). A value at or below -1, or of 2^32 or more,
+	// never matches: cfitsio's cast of a negative value is undefined in C
+	// (on x86-64 it yields 2^64 minus the magnitude, which cannot equal a
+	// 32-bit sum) and a larger value cannot equal it either (unsigned long
+	// is 64 bits). A card with no value at all (not even '') makes
+	// cfitsio's ffgkys fail with VALUE_UNDEFINED, and fits_verify_chksum
+	// with it.
+	ckPos, ckVal, ckFound := cfFindCard(hdr, header.KeyChecksum, 0)
+	if ckFound && ckVal == "" {
+		return 0, 0, fmt.Errorf("%w: %s (cfitsio: VALUE_UNDEFINED)", ErrUndefinedChecksum, header.KeyChecksum)
 	}
-	// Sum the header bytes (as currently on disk).
-	hdrBytes := rec.rawHeader
-	headerSum := checksum.Compute(hdrBytes)
-	// The CHECKSUM card itself was part of the header during the compute —
-	// cfitsio uses a "placeholder trick": write "0000...0000" first,
-	// compute, then derive the final CHECKSUM value so that the sum over
-	// the entire HDU is zero (complement). On verify we read back the
-	// stored CHECKSUM, decode its value, and check that
-	// header_sum + data_sum + stored_sum == 0xFFFFFFFF.
-	var enc [16]byte
-	copy(enc[:], checkStr)
-	storedSum := checksum.Decode(enc, false)
-	total := headerSum + actualDataSum + storedSum
-	if total != 0xFFFFFFFF && total != 0 {
-		return fmt.Errorf("fits: CHECKSUM mismatch: combined sum %#x", total)
+	dsFrom := 0
+	if ckFound {
+		dsFrom = ckPos + 1
+	}
+	_, dsVal, dsFound := cfFindCard(hdr, header.KeyDatasum, dsFrom)
+	if dsFound && dsVal == "" {
+		return 0, 0, fmt.Errorf("%w: %s (cfitsio: VALUE_UNDEFINED)", ErrUndefinedChecksum, header.KeyDatasum)
+	}
+	if dsFound {
+		if s := cfUnquote(dsVal); s != "" {
+			datasum = -1
+			if f := math.Trunc(cfAtof(s)); f >= 0 && f < 0x1p32 && uint32(f) == dataSum {
+				datasum = 1
+			}
+		}
+	}
+	if ckFound && cfUnquote(ckVal) != "" {
+		hdusum = -1
+		if s := checksum.Update(dataSum, hdr); s == 0xFFFFFFFF || s == 0 {
+			hdusum = 1
+		}
+	}
+	return datasum, hdusum, nil
+}
+
+// VerifyChecksum verifies the CHECKSUM and DATASUM keywords on an HDU if
+// they are present. It returns nil if every present keyword verifies (or
+// if both are absent) and an error naming the keyword(s) that do not.
+// The result agrees with cfitsio's fits_verify_chksum (see ChecksumStatus).
+func VerifyChecksum(h HDU) error {
+	ds, hs, err := ChecksumStatus(h)
+	if err != nil {
+		return err
+	}
+	switch {
+	case ds < 0 && hs < 0:
+		return errors.New("fits: DATASUM and CHECKSUM do not match the HDU")
+	case ds < 0:
+		return errors.New("fits: DATASUM does not match the data unit")
+	case hs < 0:
+		return errors.New("fits: CHECKSUM does not match the HDU")
 	}
 	return nil
 }
 
-// WriteChecksum updates (or creates) the CHECKSUM and DATASUM cards on an
-// HDU in edit mode. It must be called BEFORE Flush so that the re-serialized
-// header contains the correct cards. The computed values are returned for
-// inspection.
+// onDiskSums reads the HDU's header blocks as stored and returns them with
+// the ones'-complement sum of the data unit (to the end of its padding;
+// a missing final pad reads as the zeros it stands for).
+func (r *hduRecord) onDiskSums() (hdr []byte, dataSum uint32, err error) {
+	hdr = make([]byte, r.dataStart-r.headerStart)
+	if err := r.file.br.ReadRange(r.headerStart, hdr); err != nil {
+		return nil, 0, fmt.Errorf("fits: checksum: read header of HDU %d: %w", r.index, err)
+	}
+	chunk := make([]byte, 64*block.Size)
+	for off := r.dataStart; off < r.paddedEnd; {
+		n := min(int64(len(chunk)), r.paddedEnd-off)
+		if err := r.file.br.ReadRange(off, chunk[:n]); err != nil {
+			return nil, 0, fmt.Errorf("fits: checksum: read data of HDU %d: %w", r.index, err)
+		}
+		dataSum = checksum.Update(dataSum, chunk[:n])
+		off += n
+	}
+	return hdr, dataSum, nil
+}
+
+// WriteChecksum sets the DATASUM and CHECKSUM cards of an HDU of a file
+// opened with OpenForEdit, the way cfitsio's fits_write_chksum computes
+// them: DATASUM from the data unit on disk, CHECKSUM so that the HDU,
+// with the header exactly as Flush will write it, sums to all ones. Call
+// (*File).Flush afterwards to write the header; data changes made after
+// WriteChecksum invalidate it. The computed DATASUM and the 32-bit value
+// encoded in CHECKSUM are returned.
 //
-// Checksums are not computed automatically on Close — callers must opt
-// in via WriteChecksum per HDU. This keeps the strict-fidelity promise:
-// users get byte-exact round-trip unless they explicitly ask for mutation.
+// WriteChecksum returns ErrReadOnly in ModeRead and an error in
+// ModeCreate (Flush does not rewrite headers of a file being created, so
+// the cards would never reach the disk): reopen the file with
+// OpenForEdit to checksum it.
 func WriteChecksum(h HDU) (dataSum, checkSum uint32, err error) {
 	rec := hduRecordOf(h)
-	if rec == nil {
+	if rec == nil || rec.file == nil {
 		return 0, 0, errors.New("fits: WriteChecksum: HDU has no backing record")
 	}
-	if rec.file == nil || rec.file.mode == ModeRead {
+	switch rec.file.mode {
+	case ModeRead:
 		return 0, 0, ErrReadOnly
+	case ModeCreate:
+		return 0, 0, errors.New("fits: WriteChecksum: not supported in ModeCreate; close the file and reopen it with OpenForEdit")
 	}
-	hdr := h.Header()
-
-	// Compute DATASUM by reading the on-disk data bytes.
-	dataBytes := rec.paddedEnd - rec.dataStart
-	if dataBytes > 0 {
-		chunk := make([]byte, 2880)
-		off := rec.dataStart
-		for off < rec.paddedEnd {
-			if err := rec.file.br.ReadRange(off, chunk); err != nil {
-				return 0, 0, err
-			}
-			dataSum = checksum.Update(dataSum, chunk)
-			off += 2880
-		}
-	}
-
-	// Update DATASUM card.
-	dsStr := strconv.FormatUint(uint64(dataSum), 10)
-	if err := hdr.Set(header.KeyDatasum, dsStr, "data checksum"); err != nil {
+	hdr, err := rec.loadHeader()
+	if err != nil {
 		return 0, 0, err
 	}
-
-	// Placeholder CHECKSUM and re-encode the header to compute header sum.
+	_, dataSum, err = rec.onDiskSums()
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := hdr.Set(header.KeyDatasum, strconv.FormatUint(uint64(dataSum), 10), "data unit checksum"); err != nil {
+		return 0, 0, err
+	}
 	if err := hdr.Set(header.KeyChecksum, "0000000000000000", "HDU checksum"); err != nil {
 		return 0, 0, err
 	}
@@ -133,16 +164,14 @@ func WriteChecksum(h HDU) (dataSum, checkSum uint32, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	headerSum := checksum.Compute(hdrBytes)
-	total := headerSum + dataSum
-	// We want total + stored == 0xFFFFFFFF; stored = 0xFFFFFFFF - total.
-	stored := 0xFFFFFFFF - total
-	checkSum = stored
-	checkEnc := checksum.Encode(stored, false)
-	if err := hdr.Set(header.KeyChecksum, string(checkEnc[:]), "HDU checksum"); err != nil {
+	// The encoding of the complement, written over the all-'0'
+	// placeholder, adds exactly the complement to the sum (Appendix J).
+	sum := checksum.Update(dataSum, hdrBytes)
+	checkSum = ^sum
+	enc := checksum.Encode(checkSum, false)
+	if err := hdr.Set(header.KeyChecksum, string(enc[:]), "HDU checksum"); err != nil {
 		return 0, 0, err
 	}
-	// Mark dirty so a subsequent Flush persists the updated header.
 	rec.dirty = true
 	return dataSum, checkSum, nil
 }
@@ -156,6 +185,8 @@ func hduRecordOf(h HDU) *hduRecord {
 	case *BinaryTableHDU:
 		return v.rec
 	case *ASCIITableHDU:
+		return v.rec
+	case *CompressedImageHDU:
 		return v.rec
 	}
 	return nil

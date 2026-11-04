@@ -1,0 +1,4 @@
+{"name": "range_fsub_256x1", "nx": 256, "ny": 1, "nullcheck": 0, "nullvalue": 0, "qlevel": -2.3283064365386963e-10, "dither_method": 1, "row": 1, "fill": "fill_range_fsub", "in_sha256": "ab6f57a8e331c9902986670e5f48bd8a294caeeb6236528f739f9506dd92b2c8",
+ "stats": {"ngood": 256, "min": -5.657784640789032e-08, "max": 0.99999994039535522, "mean": 0.49999995046073309, "sigma": 0.28980498506237273, "noise1": 0, "noise2": 0.0082224144118666648, "noise3": 0, "noise5": 1.056222915649414e-08},
+ "quantize": {"return": 0, "bscale": 0, "bzero": 0, "iminval": 0, "imaxval": 0},
+ "out": null}

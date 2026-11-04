@@ -1,0 +1,27 @@
+# Primary has WCSAXES = 3; alternate A has no WCSAXESA and keywords for
+# axes 1-2 only. WCSAXES belongs to the primary description, so A's
+# dimension comes from max(NAXIS, highest index of A's keywords) = 2
+# (wcslib agrees: golden wcs.naxis). Synthetic.
+NOTE pipeline: WCSAXES of the primary does not apply to alternate A
+ALT A
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+WCSAXES = 3
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CTYPE3  = 'STOKES'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CDELT1  = -0.001
+CDELT2  = 0.001
+CTYPE1A = 'RA---STG'
+CTYPE2A = 'DEC--STG'
+CRVAL1A = 10.0
+CRVAL2A = 60.0
+CRPIX1A = 256.5
+CRPIX2A = 256.5
+CDELT1A = -0.01
+CDELT2A = 0.01

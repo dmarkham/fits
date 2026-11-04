@@ -1,0 +1,22 @@
+# CAR with a fiducial-point offset: PV1_0 = 1 (apply the offset), PV1_1 =
+# phi_0 = 20, PV1_2 = theta_0 = 10 (Paper II sect. 2.5; wcslib
+# cel.offset). The projection is shifted so that (x, y) = (0, 0) is at
+# native (20, 10). Synthetic.
+NOTE pipeline: PVi_0..2 on the longitude axis, fiducial offset applied
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_0   = 1.0
+PV1_1   = 20.0
+PV1_2   = 10.0

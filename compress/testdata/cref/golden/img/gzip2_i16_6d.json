@@ -1,0 +1,1 @@
+{"name": "gzip2_i16_6d", "type": "i16", "naxes": [5, 4, 3, 2, 2, 2], "algo": "GZIP_2", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 2, "gen_seed": 5086, "in_sha256": "8203800efd9cf0b0e429fa29a97e5be1d96b4c4ce5aed9e597a6e78a0040530a"}

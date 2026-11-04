@@ -6,157 +6,271 @@ import (
 	"github.com/dmarkham/fits/wcs"
 )
 
-// This file implements the HEALPix-based projections from Calabretta &
-// Roukema 2007: HPX (the standard HEALPix projection) and XPH (the polar
-// "butterfly" variant). Both are exactly equal-area and tessellate the
-// sphere into 12 congruent diamond facets.
+// HEALPix projections: HPX (Calabretta & Roukema 2007, MNRAS 381, 865)
+// and XPH, the polar "butterfly" HEALPix (Calabretta & Lowe 2013, PASA 30,
+// e050). Both are equal-area by construction. Ports of the wcslib 8.10 prj.c
+// functions of the same names, in degrees (see projection.go).
 
-// HPX — HEALPix projection (CR 2007 §2).
+// HPX — HEALPix (Calabretta & Roukema 2007).
 //
-// Parameters:
+//	PV2_1 = H  number of facets in longitude (default 4)
+//	PV2_2 = K  number of facets in latitude  (default 3)
 //
-//	PV2_1 = H (longitude facets, default 4)
-//	PV2_2 = K (latitude facets, default 3)
+// Equatorial zone, |sin(theta)| <= (K-1)/K:
 //
-// For the standard HEALPix (H=4, K=3), the sphere is tessellated into 12
-// diamonds arranged in an equatorial band of 8 diamonds plus 4 polar
-// triangles (each polar cap contains 2 wrapped diamonds).
+//	x = phi,  y = (90 K / H) sin(theta)
 //
-// The projection has two regimes:
+// Polar caps, with sigma = sqrt(K (1 - |sin theta|)) and phi_c the
+// longitude of the centre of the facet containing phi:
 //
-//   Equatorial region (|sin(theta)| <= (K-1)/K, approximately |theta| <= 41.8°):
-//     x = phi
-//     y = (pi * K / (2*H)) * sin(theta) * H / K = (pi/2) * sin(theta)
+//	x = phi_c + (phi - phi_c) sigma
+//	y = +-(180/H) ((K + 1)/2 - sigma)
 //
-//   Polar caps (|sin(theta)| > (K-1)/K):
-//     The diamond fold kicks in; x and y are piecewise-linear in a
-//     rotated coordinate system.
-//
-// For H=4, K=3 this reduces to the formulas in CR 2007 eq. 5-7.
+// For odd K the polar facets of the two caps line up; for even K the
+// southern cap is shifted by half a facet (wcslib's "offset"). Points in
+// the gaps between the polar triangles are rejected.
 type hpxProjection struct {
-	H int // longitude facets
-	K int // latitude facets
+	K                                  float64
+	m, n                               int
+	w2, w3, w4, w5, w6, w7, w8, w9, w0 float64
 }
 
-func newHPX(pv map[wcs.PVKey]float64, latAxis int) Projection {
-	H := int(pvFloat(pv, latAxis, 1, 4))
-	K := int(pvFloat(pv, latAxis, 2, 3))
-	if H <= 0 {
-		H = 4
+func newHPX(pv map[wcs.PVKey]float64, latAxis int) (hpxProjection, error) {
+	H := pvFloat(pv, latAxis, 1, 4)
+	K := pvFloat(pv, latAxis, 2, 3)
+	if H <= 0.0 || K <= 0.0 {
+		return hpxProjection{}, errBadParam("HPX", "H = PV%d_1 = %g and K = PV%d_2 = %g must be > 0", latAxis, H, latAxis, K)
 	}
-	if K <= 0 {
-		K = 3
-	}
-	return hpxProjection{H: H, K: K}
+	p := hpxProjection{K: K}
+	p.m = int(H+0.5) % 2
+	p.n = int(K+0.5) % 2
+	p.w0 = 1.0
+	p.w2 = (K - 1.0) / K
+	p.w3 = 90.0 * K / H
+	p.w4 = (K + 1.0) / 2.0
+	p.w5 = 90.0 * (K - 1.0) / H
+	p.w6 = 180.0 / H
+	p.w7 = H / 360.0
+	p.w8 = float64(p.w3 * p.w0)
+	p.w9 = float64(p.w6 * p.w0)
+	return p, nil
 }
 
 func (hpxProjection) Code() string    { return "HPX" }
-func (hpxProjection) Theta0() float64 { return 0 }
+func (hpxProjection) theta0() float64 { return 0 }
 
-func (p hpxProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	// CR 2007 eq. 5-7 for the standard H=4, K=3 case, generalized to
-	// arbitrary H, K.
-	//
-	// Equatorial region: |sin(theta)| <= (K-1)/K
-	sinT := math.Sin(theta)
-	threshold := float64(p.K-1) / float64(p.K)
-	if math.Abs(sinT) <= threshold {
-		// Equatorial: simple linear map.
-		x = phi
-		y = math.Pi * float64(p.K) * sinT / (2 * float64(p.H))
-		return x, y, true
-	}
-	// Polar caps: the diamond fold.
-	// Let sigma = sqrt(K * (1 - |sin(theta)|))
-	// omega = H * phi / pi (facet-fraction longitude, 0..2H)
-	// phi_c = -pi + (2*floor((omega+1)/2) + 1) * pi/H
-	// x = phi_c + (phi - phi_c) * sigma
-	// y = (pi / (2*H)) * ((K+1)/2 - sigma) * sign(sin(theta))
-	sign := 1.0
-	if sinT < 0 {
-		sign = -1.0
-	}
-	sigma := math.Sqrt(float64(p.K) * (1 - math.Abs(sinT)))
-	omega := float64(p.H) * phi / math.Pi
-	// phi_c is the longitude of the nearest facet center in the polar cap.
-	phic := -math.Pi + (2*math.Floor((omega+1)/2)+1)*math.Pi/float64(p.H)
-	x = phic + (phi-phic)*sigma
-	y = math.Pi / (2 * float64(p.H)) * (float64(p.K+1)/2 - sigma) * sign
-	return x, y, true
-}
-
-func (p hpxProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	threshold := math.Pi * float64(p.K-1) / (2 * float64(p.H))
-	if math.Abs(y) <= threshold {
-		// Equatorial.
-		phi = x
-		theta = math.Asin(2 * float64(p.H) * y / (math.Pi * float64(p.K)))
-		return phi, theta, true
-	}
-	// Polar cap inverse.
-	sign := 1.0
-	if y < 0 {
-		sign = -1.0
-	}
-	sigma := float64(p.K+1)/2 - 2*float64(p.H)*math.Abs(y)/math.Pi
-	if sigma < 0 || sigma > math.Sqrt(float64(p.K)) {
+func (p hpxProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	s := x
+	t := -180.0 + float64((float64(2.0*math.Floor(float64((x+180.0)*p.w7)))+1.0)*p.w6)
+	t = x - t
+	slim := p.w6 + 1e-12
+	ylim := float64(p.w9 * p.w4)
+	absy := math.Abs(y)
+	switch {
+	case absy <= p.w5:
+		phi = s
+		theta = asind(y / p.w3)
+	case absy <= ylim:
+		offset := !(p.n != 0 || y > 0.0)
+		sigma := p.w4 - absy/p.w6
+		var s2, tt float64
+		if sigma == 0.0 {
+			s2 = 1e9
+			tt = 90.0
+		} else {
+			tt = 1.0 - sigma*sigma/p.K
+			if tt < -1.0 {
+				return 0, 0, false
+			}
+			s2 = 1.0 / sigma
+			tt = asind(tt)
+		}
+		if y < 0.0 {
+			tt = -tt
+		}
+		if offset {
+			h := int(math.Floor(s/p.w6)) + p.m
+			if h%2 != 0 {
+				t -= p.w6
+			} else {
+				t += p.w6
+			}
+		}
+		r := float64(s2 * t)
+		if slim <= math.Abs(r) {
+			return 0, 0, false
+		}
+		if r != 0.0 {
+			r -= t
+		}
+		phi = s + r
+		theta = tt
+	default:
 		return 0, 0, false
 	}
-	sinTheta := (1 - sigma*sigma/float64(p.K)) * sign
-	if sinTheta < -1 || sinTheta > 1 {
-		return 0, 0, false
-	}
-	theta = math.Asin(sinTheta)
-	// Recover phi from x and the facet center.
-	omegaEst := float64(p.H) * x / math.Pi
-	phic := -math.Pi + (2*math.Floor((omegaEst+1)/2)+1)*math.Pi/float64(p.H)
-	if sigma == 0 {
-		phi = phic
-	} else {
-		phi = phic + (x-phic)/sigma
-	}
-	return phi, theta, true
+	return phi, theta, prjbchk(1.0e-12, &phi, &theta)
 }
 
-// XPH — HEALPix polar / butterfly (CR 2007 §3).
-//
-// Same equal-area property but the layout is "unfolded around the pole"
-// to put polar data at the center with meridians radiating outward. Used
-// when the region of interest is near a celestial pole.
-//
-// XPH is derived from HPX by a coordinate rotation: swap (x, y) ↔ a
-// 45°-rotated frame, and conjoin the polar caps into a single central
-// diamond.
+func (p hpxProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	xi := float64(p.w0 * phi)
+	t := -180.0 + float64((float64(2.0*math.Floor(float64((phi+180.0)*p.w7)))+1.0)*p.w6)
+	t = float64(p.w0 * (phi - t))
+	sinthe := sind(theta)
+	abssin := math.Abs(sinthe)
+	if abssin <= p.w2 {
+		return xi, float64(p.w8 * sinthe), true
+	}
+	offset := !(p.n != 0 || theta > 0.0)
+	sigma := math.Sqrt(float64(p.K * (1.0 - abssin)))
+	xi2 := sigma - 1.0
+	eta := float64(p.w9 * (p.w4 - sigma))
+	if theta < 0 {
+		eta = -eta
+	}
+	if offset {
+		h := int(math.Floor(xi/p.w9)) + p.m
+		if h%2 != 0 {
+			t -= p.w9
+		} else {
+			t += p.w9
+		}
+	}
+	x = xi + float64(t*xi2)
+	if 180.0 < x {
+		x = 360.0 - x
+	}
+	return x, eta, true
+}
+
+// XPH — HEALPix polar, "butterfly" (Calabretta & Lowe 2013). The sphere is
+// cut along the four meridians phi = -180, -90, 0, 90 and laid out as four
+// HPX quadrants rotated by 45 deg about the native pole, which is the
+// fiducial point (theta_0 = 90). Plane points outside the butterfly are
+// rejected.
 type xphProjection struct{}
 
-func (xphProjection) Code() string    { return "XPH" }
-func (xphProjection) Theta0() float64 { return math.Pi / 2 }
+var (
+	xphW0 = 1.0 / math.Sqrt(2.0)
+	xphW2 = 2.0 / 3.0
+	xphW3 = 1e-4
+	xphW4 = float64(math.Sqrt(xphW2) * r2d)
+	xphW5 = 90.0 - float64(xphW3*xphW4)
+	xphW6 = float64(math.Sqrt(1.5) * d2r)
+)
 
-func (xphProjection) Forward(phi, theta float64) (x, y float64, ok bool) {
-	// CR 2007 eq. 17-19 for standard H=4, K=3. The projection maps the
-	// native pole to the origin; meridians radiate outward.
-	//
-	// The construction: first compute HPX coordinates, then apply a 45°
-	// rotation and shift so that the polar cap centers sit on the
-	// diagonals.
-	hpx := hpxProjection{H: 4, K: 3}
-	hx, hy, fok := hpx.Forward(phi, theta)
-	if !fok {
+func (xphProjection) Code() string    { return "XPH" }
+func (xphProjection) theta0() float64 { return 90 }
+
+func (xphProjection) x2s(x, y float64) (phi, theta float64, ok bool) {
+	const tol = 1.0e-12
+	xr := float64(x * xphW0)
+	yr := float64(y * xphW0)
+	var xi1, eta1 float64
+	switch {
+	case xr <= 0.0 && 0.0 < yr:
+		xi1 = -xr - yr
+		eta1 = xr - yr
+		phi = -180.0
+	case xr < 0.0 && yr <= 0.0:
+		xi1 = xr - yr
+		eta1 = xr + yr
+		phi = -90.0
+	case 0.0 <= xr && yr < 0.0:
+		xi1 = xr + yr
+		eta1 = -xr + yr
+		phi = 0.0
+	default:
+		xi1 = -xr + yr
+		eta1 = -xr - yr
+		phi = 90.0
+	}
+	xi := xi1 + 45.0
+	eta := eta1 + 90.0
+	abseta := math.Abs(eta)
+	if abseta > 90.0 {
 		return 0, 0, false
 	}
-	// Rotate 45° and translate; exact offsets per CR 2007.
-	cos45 := math.Sqrt2 / 2
-	sin45 := math.Sqrt2 / 2
-	x = cos45*hx - sin45*hy
-	y = sin45*hx + cos45*hy
-	return x, y, true
+	if abseta <= 45.0 {
+		phi += xi
+		theta = asind(eta / 67.5)
+		if 45.0+tol < math.Abs(xi1) {
+			return 0, 0, false
+		}
+	} else {
+		sigma := (90.0 - abseta) / 45.0
+		switch {
+		case xr == 0.0:
+			if yr <= 0.0 {
+				phi = 0.0
+			} else {
+				phi = 180.0
+			}
+		case yr == 0.0:
+			if xr < 0.0 {
+				phi = -90.0
+			} else {
+				phi = 90.0
+			}
+		default:
+			phi += 45.0 + xi1/sigma
+		}
+		if sigma < xphW3 {
+			theta = 90.0 - float64(sigma*xphW4)
+		} else {
+			theta = asind(1.0 - sigma*sigma/3.0)
+		}
+		if eta < 0.0 {
+			theta = -theta
+		}
+		if eta < -45.0 && eta+90.0+tol < math.Abs(xi1) {
+			return 0, 0, false
+		}
+	}
+	return phi, theta, prjbchk(1.0e-12, &phi, &theta)
 }
 
-func (xphProjection) Inverse(x, y float64) (phi, theta float64, ok bool) {
-	cos45 := math.Sqrt2 / 2
-	sin45 := math.Sqrt2 / 2
-	hx := cos45*x + sin45*y
-	hy := -sin45*x + cos45*y
-	hpx := hpxProjection{H: 4, K: 3}
-	return hpx.Inverse(hx, hy)
+func (xphProjection) s2x(phi, theta float64) (x, y float64, ok bool) {
+	chi := phi
+	if 180.0 <= math.Abs(chi) {
+		chi = math.Mod(chi, 360.0)
+		if chi < -180.0 {
+			chi += 360.0
+		} else if 180.0 <= chi {
+			chi -= 360.0
+		}
+	}
+	chi += 180.0
+	psi := math.Mod(chi, 90.0)
+	yq := chi - 180.0 // selects the quadrant
+
+	sinthe := sind(theta)
+	abssin := math.Abs(sinthe)
+	var xi, eta float64
+	if abssin <= xphW2 {
+		xi = psi
+		eta = float64(67.5 * sinthe)
+	} else {
+		var sigma float64
+		if theta < xphW5 {
+			sigma = math.Sqrt(float64(3.0 * (1.0 - abssin)))
+		} else {
+			sigma = float64((90.0 - theta) * xphW6)
+		}
+		xi = 45.0 + float64((psi-45.0)*sigma)
+		eta = float64(45.0 * (2.0 - sigma))
+		if theta < 0.0 {
+			eta = -eta
+		}
+	}
+	xi -= 45.0
+	eta -= 90.0
+	switch {
+	case yq < -90.0:
+		return float64(xphW0 * (-xi + eta)), float64(xphW0 * (-xi - eta)), true
+	case yq < 0.0:
+		return float64(xphW0 * (+xi + eta)), float64(xphW0 * (-xi + eta)), true
+	case yq < 90.0:
+		return float64(xphW0 * (xi - eta)), float64(xphW0 * (xi + eta)), true
+	}
+	return float64(xphW0 * (-xi - eta)), float64(xphW0 * (xi - eta)), true
 }

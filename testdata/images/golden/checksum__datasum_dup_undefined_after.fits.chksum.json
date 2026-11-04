@@ -1,0 +1,1 @@
+{"file":"datasum_dup_undefined_after.fits","cfitsio":"4.7.0","hdus":[{"index":0,"datasum":1410158359,"hdusum":1951818017,"verify_error":"verify_chksum status 204: keyword value is undefined"}]}

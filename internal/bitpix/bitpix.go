@@ -8,8 +8,10 @@ package bitpix
 import "fmt"
 
 // BITPIX is the FITS data-type encoding stored in the BITPIX header keyword.
-// Positive values are unsigned-width integer types, negative values are
-// IEEE-754 floating point.
+// Positive values are integer types (8 is an unsigned byte, 16/32/64 are
+// two's-complement signed), negative values are IEEE-754 floating point.
+// The constant names give the width only: Int8 is BITPIX 8, which stores
+// unsigned bytes 0..255.
 type BITPIX int
 
 // Mandatory BITPIX values defined by the FITS standard.
@@ -55,13 +57,13 @@ func (b BITPIX) IsFloat() bool { return b < 0 }
 func (b BITPIX) IsInt() bool { return b > 0 }
 
 // Signed reports whether the raw on-disk representation of b is signed.
-// All integer BITPIX values are signed in FITS (BITPIX=8 is the exception —
-// it is unsigned — but the convention is to treat it as signed byte in-memory
-// and apply TZERO=-128 to expose the unsigned form, matching cfitsio).
-// Float types are always signed.
+// BITPIX 16, 32 and 64 are signed; BITPIX 8 is an unsigned byte (FITS 4.0
+// Table 8). Float types are always signed.
 //
-// Note: the FITS "unsigned 16/32/64" convention is expressed via BZERO/BSCALE
-// or TZERO/TSCAL scaling, not via a separate BITPIX.
+// Note: signed bytes and unsigned 16/32/64-bit integers are expressed with
+// the BZERO (TZERO for table columns) offset convention, not a separate
+// BITPIX: BITPIX 8 with BZERO = -128 holds int8, BITPIX 16/32/64 with
+// BZERO = 2^15/2^31/2^63 hold uint16/uint32/uint64 (FITS 4.0 Table 11).
 func (b BITPIX) Signed() bool {
 	switch b {
 	case Int16, Int32, Int64, Float32, Float64:

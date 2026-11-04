@@ -19,3 +19,11 @@ __pycache__/
 /wcs/transform/testdata/wref/wref
 # Siril/RawTherapee stats reference harness.
 /stats/testdata/sref/sref
+
+# Python venv for golden generators (pyenv 3.11.11)
+/venv/
+# cfitsio truth harness (shared by all areas). Source testdata/cfref/cfref.c
+# and goldens testdata/cfref/golden/ are committed; rebuild the binary with
+# `make -C testdata/cfref`.
+/testdata/cfref/cfref
+/testdata/cfref/verify.out/

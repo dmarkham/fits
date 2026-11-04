@@ -1,0 +1,23 @@
+# CAR (theta0 = 0) with CRVAL2 = 0 and LONPOLE = 90: |phip - phi0| = 90,
+# so celset's z = sqrt((cos theta0 cos(phip - phi0))^2 + sin^2 theta0) is
+# exactly 0 and the native-pole latitude is set by LATPOLE alone
+# (latpreq = 2). LATPOLE = 95 is outside [-90, 90]; wcslib clamps it to
+# latp = +90 and accepts the header. Twin: celpole_z0_latpolem95.
+# Synthetic.
+NOTE pipeline: celset z = 0 branch, LATPOLE > 90 clamped to 90
+GRID 1 512 5 1 512 5
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 90.0
+LATPOLE = 95.0

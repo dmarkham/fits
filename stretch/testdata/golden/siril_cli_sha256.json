@@ -1,0 +1,195 @@
+{
+ "encoding": "sha256 over big-endian float32 bits, channel-major (nch, ny, nx), NaN as 0x7fc00000",
+ "input": {
+  "blob": "81be6ed909fabb8d1cdbec3488e132c22a05da0f",
+  "sha256": "15b917b0b5adea7eeaeb8d48c11b39fbe0e231ee0dc39996db97f3a12409e194",
+  "shape": [
+   3,
+   48,
+   64
+  ]
+ },
+ "presets": {
+  "asinh_light": {
+   "blob": "0c9471f6f6275c144476d7022571027756d3ac7c",
+   "command": "asinh 1 0",
+   "sha256": "628965eeb4c9fcfecc68cb67f1ed7ea4a867a66f67fbee24f45d8b456cb689d8",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "asinh_medium": {
+   "blob": "2db3f66db8b00f56ba26a998922bf5aa44d308d2",
+   "command": "asinh 50 0",
+   "sha256": "30f7f76a130e2e1c21956970f12b13564828ffe893727a9646499272a398ea7e",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "asinh_strong": {
+   "blob": "c4fce496952fdab27bc199dc41444a3c0b9a5816",
+   "command": "asinh 500 0",
+   "sha256": "cee598bbfab9b32793157e6c4bec8eca85f3475eb936161f371c7f616e467e67",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "auto_linked": {
+   "blob": "56d71e921e5035bc3c9bc20cf796ca4d60c3461c",
+   "command": "autostretch -linked",
+   "sha256": "6e0f743a8510f6b7c5374774afd1b7bdca4f934a798c3a120f9cfdbca9a44ce1",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "custom_dark": {
+   "blob": "6b34bdff584c0d6123f1a5d23fbfd2edc570ded4",
+   "command": "autostretch -6.5 0.03",
+   "sha256": "ce986d4aea7ba9e6a8bc46414f0304843049feed7a397273e708648d461903ec",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "custom_extreme": {
+   "blob": "053ed917b85114de7fb96c7385b4c70ad4077681",
+   "command": "autostretch -7.5 0.02",
+   "sha256": "3bb39f3c76b70adf576a2c8e33b1ecd5ffbc182938ab83ac956e6ceb539f3653",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "custom_mask": {
+   "blob": "8e6263a84c3a5207d46348dcd0f8b532371529fe",
+   "command": "autostretch -12.0 0.005",
+   "sha256": "f03f5af7abf682b2a5aea81e39a9d8fc820ca8dd51e17c2c4dc4c6e4bae1d81c",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "custom_ultra": {
+   "blob": "967c858730d4ff474024d986381848d7a823f590",
+   "command": "autostretch -9.0 0.01",
+   "sha256": "a27dd15cabd101d0554dadecb14d552f4a753022733eaa204ed92e9cd5734a24",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "ght_mild": {
+   "blob": "3fd9f7566b388e82af30b0aeed5dc16a717c4b2e",
+   "command": "ght -D=2.0 -B=0.0 -SP=0.5",
+   "sha256": "c34c4a27cd18274e1dd09d1d75103c4034b8cea51e8b12dc3a3eb5ab98fcf7ac",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "ght_strong": {
+   "blob": "465441755d30ba9f2a985b0a9c797f4cf2017ec5",
+   "command": "ght -D=5.0 -B=2.0 -SP=0.3",
+   "sha256": "c097bdc681037338ad70e62e009293dec61369ecd96e0561cfab91a441c0163f",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars1": {
+   "blob": "d20dadfe6151d47deba24e46ed324a4a805f716e",
+   "command": "autostretch -2.8 0.25",
+   "sha256": "4735f275e189724ccfb1e5fa1078564c7939071941a76eeb26a4cbdb0c780917",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars2": {
+   "blob": "e8e59ff2fc9ac9f2dfd42140dfe256df9ae8a3b7",
+   "command": "autostretch -1.5 0.25",
+   "sha256": "7694a4b26249a4314f7f01278b989c1f3c68af4c381af1e5cee26ff660332978",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars3": {
+   "blob": "1443b737d17c5d7119ac3c9cb7c932d873dcef8d",
+   "command": "autostretch -1.0 0.125",
+   "sha256": "681a3e7f3b6c9dd2452ecdfbb2f6fe3106c3ee92c37009e4606632cba5881cb8",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars4": {
+   "blob": "cfee9542d9f6ea1309862a48cc5941acb8192838",
+   "command": "autostretch -0.5 0.125",
+   "sha256": "b8c6b124bc7a95b01e8a74fc742099bfc689cfd771da6d92684367907bddf904",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars5": {
+   "blob": "c8eb27d9acfaa259545120fd1ce4a34d1bdf0848",
+   "command": "autostretch -2.0 0.125",
+   "sha256": "67e2697dbfa0d4aa52db4fe60d70f982ef4a05f7e0730073bfd1f22640e87c92",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars6": {
+   "blob": "8c45a206c024708c0f41581a85a7cb58d8a47a96",
+   "command": "autostretch -4.0 0.125",
+   "sha256": "67e2697dbfa0d4aa52db4fe60d70f982ef4a05f7e0730073bfd1f22640e87c92",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "kstars7": {
+   "blob": "e785e910ed5629e2e0d0828d1bf3fa8336847323",
+   "command": "autostretch -5.5 0.25",
+   "sha256": "4735f275e189724ccfb1e5fa1078564c7939071941a76eeb26a4cbdb0c780917",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  },
+  "linear": {
+   "blob": "5afe7fb854074ef739cfff69131b3cd4fb824a84",
+   "command": "linstretch -BP=0.05",
+   "sha256": "0acacd16ffa0a6f5b4e120f5b6d6175d3a850f330d2a016c9b31ba13a5e8f50e",
+   "shape": [
+    3,
+    48,
+    64
+   ]
+  }
+ },
+ "source": "siril-cli output committed in c17580b (gen_golden.py; siril-cli build not recorded)"
+}

@@ -1,6 +1,8 @@
 package fits
 
 import (
+	"fmt"
+
 	"github.com/dmarkham/fits/header"
 	"github.com/dmarkham/fits/internal/bitpix"
 )
@@ -23,11 +25,12 @@ func (*ImageHDU) Compressed() bool { return false }
 func (*ImageHDU) CompressionType() string { return "" }
 
 // Header returns the parsed header, loading it lazily on first call.
-// Errors during parse panic here; callers that need to handle parse errors
-// explicitly must call (*File).HDU followed by direct access via the header
-// package — in practice the scan pass already validated structure, so a
-// lazy parse failure indicates programmer error or disk corruption between
-// open and access.
+//
+// It panics if package header cannot parse a card. Open decodes only the
+// structural cards (SIMPLE/XTENSION, BITPIX, NAXISn, PCOUNT, GCOUNT, ...),
+// so a file can open, and its pixels can be read (BSCALE/BZERO/BLANK are
+// read from the stored cards directly), even though some other card is
+// malformed: use HeaderOf to get the parse error instead of a panic.
 func (h *ImageHDU) Header() *header.Header {
 	hdr, err := h.rec.loadHeader()
 	if err != nil {
@@ -56,22 +59,48 @@ func (h *ImageHDU) Shape() []int64 {
 	return out
 }
 
-// BSCALE returns the BSCALE keyword value, or 1.0 if absent (§4.4.2.5).
-func (h *ImageHDU) BSCALE() float64 {
-	hdr := h.Header()
-	if v, err := hdr.Float(header.KeyBscale); err == nil {
-		return v
+// BSCALE returns the scaling factor every read and write of this package
+// applies to the image, by the scaling-card rule (scalingCards in
+// scaling.go): 1 when there is no BSCALE card; the LAST of duplicate
+// BSCALE cards, as cfitsio and astropy apply it. It returns a wrapped
+// ErrInvalidScaling, as every pixel read of the HDU does, when that card
+// is not a valid value card with a FITS number that cfitsio converts to
+// the same value (a quoted string, logical, complex, Inf/NaN, hex,
+// lowercase d exponent, out-of-range or junk value, "BSCALE  =2.0", a
+// lowercase "bscale" card), or when a HIERARCH BSCALE / BZERO / BLANK
+// card is present (cfitsio applies it, astropy ignores it). It is read
+// from the header as parsed (including unflushed in-memory edits, as they
+// would be written) or, before the full header is parsed, straight from
+// the stored cards, with the same answer either way. Proven against
+// cfitsio and astropy by TestScalingKeywordsRule.
+func (h *ImageHDU) BSCALE() (float64, error) {
+	s, _, _, err := h.rec.imageKeywords()
+	if err != nil {
+		return 0, fmt.Errorf("fits: HDU %d: %w", h.rec.index, err)
 	}
-	return 1.0
+	return s.bscale, nil
 }
 
-// BZERO returns the BZERO keyword value, or 0.0 if absent (§4.4.2.5).
-func (h *ImageHDU) BZERO() float64 {
-	hdr := h.Header()
-	if v, err := hdr.Float(header.KeyBzero); err == nil {
-		return v
+// BZERO returns the offset applied to the image, read like BSCALE (0 when
+// there is no BZERO card). The value is a float64, as in cfitsio; the
+// uint64 convention's 9223372036854775808 (2^63) is exact.
+func (h *ImageHDU) BZERO() (float64, error) {
+	s, _, _, err := h.rec.imageKeywords()
+	if err != nil {
+		return 0, fmt.Errorf("fits: HDU %d: %w", h.rec.index, err)
 	}
-	return 0.0
+	return s.bzero, nil
+}
+
+// BLANK returns the null value of an integer image (the stored value that
+// marks an undefined pixel) by the same rule, and whether there is one. A
+// float image has none (FITS 4.0 §4.4.2.4: NaN marks nulls).
+func (h *ImageHDU) BLANK() (int64, bool, error) {
+	_, b, ok, err := h.rec.imageKeywords()
+	if err != nil {
+		return 0, false, fmt.Errorf("fits: HDU %d: %w", h.rec.index, err)
+	}
+	return b, ok, nil
 }
 
 // pixelCount returns the total number of pixels = NAXIS1*...*NAXISm, or 0

@@ -1,0 +1,48 @@
+{
+ "file": "continue.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 27,
+   "cards": [
+    {"n": 1, "raw": "SIMPLE  =                    T / file does conform to FITS standard", "key": "SIMPLE", "class": 10, "value": "T", "comment": "file does conform to FITS standard", "type": "L", "logical": true},
+    {"n": 2, "raw": "BITPIX  =                    8 / bits per pixel", "key": "BITPIX", "class": 10, "value": "8", "comment": "bits per pixel", "type": "I", "int": 8, "float": 8},
+    {"n": 3, "raw": "NAXIS   =                    0 / no data", "key": "NAXIS", "class": 10, "value": "0", "comment": "no data", "type": "I", "int": 0, "float": 0},
+    {"n": 4, "raw": "LONGSTR = 'first part &' / c1", "key": "LONGSTR", "class": 150, "value": "'first part &'", "comment": "c1", "type": "C", "str": "first part second part third"},
+    {"n": 5, "raw": "CONTINUE  'second part &' / c2", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'second part &' / c2"},
+    {"n": 6, "raw": "CONTINUE  'third' / c3", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'third' / c3"},
+    {"n": 7, "raw": "LONELY  = 'abc' / no ampersand", "key": "LONELY", "class": 150, "value": "'abc'", "comment": "no ampersand", "type": "C", "str": "abc"},
+    {"n": 8, "raw": "CONTINUE  'def' / lone continue", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'def' / lone continue"},
+    {"n": 9, "raw": "NUMPRE  =                    5", "key": "NUMPRE", "class": 150, "value": "5", "comment": "", "type": "I", "int": 5, "float": 5},
+    {"n": 10, "raw": "CONTINUE  'after int'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'after int'"},
+    {"n": 11, "raw": "AMPEND  = 'dangling &' / & but no CONTINUE follows", "key": "AMPEND", "class": 150, "value": "'dangling &'", "comment": "& but no CONTINUE follows", "type": "C", "str": "dangling &"},
+    {"n": 12, "raw": "NEXT    =                    1", "key": "NEXT", "class": 150, "value": "1", "comment": "", "type": "I", "int": 1, "float": 1},
+    {"n": 13, "raw": "AMPEMPTY= 'x&'", "key": "AMPEMPTY", "class": 150, "value": "'x&'", "comment": "", "type": "C", "str": "x&"},
+    {"n": 14, "raw": "CONTINUE  ''", "key": "CONTINUE", "class": 140, "value": "", "comment": "  ''"},
+    {"n": 15, "raw": "AMPCMT  = 'y&' / first", "key": "AMPCMT", "class": 150, "value": "'y&'", "comment": "first", "type": "C", "str": "y"},
+    {"n": 16, "raw": "CONTINUE  '' / only a comment", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '' / only a comment"},
+    {"n": 17, "raw": "CONTEQ  = 'z&'", "key": "CONTEQ", "class": 150, "value": "'z&'", "comment": "", "type": "C", "str": "z&"},
+    {"n": 18, "raw": "CONTINUE= 'value indicator: not a continuation'", "key": "CONTINUE", "class": 140, "value": "", "comment": "= 'value indicator: not a continuation'"},
+    {"n": 19, "raw": "UNQ     = 'u&'", "key": "UNQ", "class": 150, "value": "'u&'", "comment": "", "type": "C", "str": "uunquoted"},
+    {"n": 20, "raw": "CONTINUE  unquoted", "key": "CONTINUE", "class": 140, "value": "", "comment": "  unquoted"},
+    {"n": 21, "raw": "HIERARCH ESO OBS LONGNAME = 'hier part one &' / hc1", "key": "ESO OBS LONGNAME", "class": 150, "value": "'hier part one &'", "comment": "hc1", "type": "C", "str": "hier part one hier part two"},
+    {"n": 22, "raw": "CONTINUE  'hier part two' / hc2", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'hier part two' / hc2"},
+    {"n": 23, "raw": "FULL    = 'abc&' / ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "key": "FULL", "class": 150, "value": "'abc&'", "comment": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "type": "C", "str": "abcdef"},
+    {"n": 24, "raw": "CONTINUE  'def' / more", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'def' / more"},
+    {"n": 25, "raw": "QSPLIT  = 'it''&'", "key": "QSPLIT", "class": 150, "value": "'it''&'", "comment": "", "type": "C", "str": "it''s"},
+    {"n": 26, "raw": "CONTINUE  '''s'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '''s'"},
+    {"n": 27, "raw": "FINAL   = 'end'", "key": "FINAL", "class": 150, "value": "'end'", "comment": "", "type": "C", "str": "end"}
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  }
+ ]
+}

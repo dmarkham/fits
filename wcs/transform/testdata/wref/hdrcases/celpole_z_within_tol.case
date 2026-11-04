@@ -1,0 +1,24 @@
+# Twin of celpole_z_above_tol with CRVAL2 = -30.000000001: celset's
+# z = cos(latp) cos(lat0) = 1.6e-11 is WITHIN its 1e-10 tolerance, so wcslib
+# takes the "celestial north pole at the native pole" branch (lngp = lng0 +
+# phip - phi0 - 180) although z != 0. A tolerance tighter than 1.6e-11 (or
+# an exact z == 0 test) takes the ill-conditioned atan2 branch instead.
+# Synthetic.
+NOTE pipeline: celset z = 1.6e-11, within the 1e-10 tolerance (nonzero)
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = -30.000000001
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = -30.0
+LONPOLE = 150.0
+LATPOLE = 90.0

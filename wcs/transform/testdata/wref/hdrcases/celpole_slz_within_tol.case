@@ -1,0 +1,20 @@
+# CAR, CRVAL2 = 30, LONPOLE = 60.0000000016: celset's slz = sin(lat0) /
+# |cos(phip - phi0)| = 1 + 5e-11, above 1 by less than its 1e-10
+# tolerance, so wcslib clamps it to 1 (cel.c) instead of refusing the
+# header. Twin of hdrcases_reject/celpole_slz_tol_out. Synthetic.
+NOTE pipeline: celset slz = 1 + 5e-11 clamped to 1
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 60.0000000016

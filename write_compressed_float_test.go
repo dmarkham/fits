@@ -13,7 +13,8 @@ import (
 // (constant value / zero noise), the writer should store the raw float
 // bytes gzipped in a secondary column. The reader then routes that
 // column back through the gzip decoder and skips dequantization. Pixels
-// reconstructed from a fallback tile must equal the original bit-for-bit.
+// reconstructed from a fallback tile must equal the original bit-for-bit;
+// the quantized tile must be within half a quantization step.
 func TestWriteCompressedFloat32_GzipFallback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "float_fallback.fits")
@@ -72,28 +73,29 @@ func TestWriteCompressedFloat32_GzipFallback(t *testing.T) {
 				i, got[i], pixels[i])
 		}
 	}
-	// Noisy region should round-trip within quantization tolerance.
-	worst := float32(0)
-	for i := 32 * shape[0]; i < n; i++ {
-		diff := got[i] - pixels[i]
-		if diff < 0 {
-			diff = -diff
-		}
-		if diff > worst {
-			worst = diff
-		}
+	// Noisy region (tile 3): within half a quantization step of the
+	// input, the bound fits_quantize_float guarantees (ZSCALE of tile 3).
+	tc := readTableCols(t, cimg)
+	if len(tc.f64["ZSCALE"]) != 3 || tc.f64["ZSCALE"][0] != 0 || tc.f64["ZSCALE"][1] != 0 || tc.f64["ZSCALE"][2] <= 0 {
+		t.Fatalf("ZSCALE %v: want fallback rows 1-2 = 0 (as cfitsio leaves them) and a positive step for row 3", tc.f64["ZSCALE"])
 	}
-	t.Logf("noisy region worst reconstruction error: %g", worst)
-	if worst > 10 {
-		t.Errorf("noisy region reconstruction too lossy: %g", worst)
+	if d := tc.data["GZIP_COMPRESSED_DATA"]; len(d) != 3 || len(d[0]) == 0 || len(d[1]) == 0 || len(d[2]) != 0 {
+		t.Fatalf("GZIP_COMPRESSED_DATA: want cells for tiles 1-2 only")
+	}
+	bound := 0.5*tc.f64["ZSCALE"][2]*(1+1e-12) + 1e-5
+	for i := 32 * shape[0]; i < n; i++ {
+		if diff := math.Abs(float64(got[i]) - float64(pixels[i])); diff > bound {
+			t.Fatalf("noisy pixel %d: |%g - %g| = %g > half step %g", i, got[i], pixels[i], diff, bound)
+		}
 	}
 }
 
 // TestWriteCompressedFloat32_Roundtrip writes a float32 image with
 // tile compression via AppendCompressedFloat32Image, then reads it
-// back with Open + ReadPixelsCompressed[float32] and verifies pixel
-// values match within the expected quantization precision
-// (~sigma/qlevel ~ 5/4 ~ 1.25).
+// back with Open + ReadPixelsCompressed[float32] and verifies every pixel
+// is within half a quantization step (0.5*ZSCALE of its tile) of the
+// input. External readers of the same files are checked in
+// TestCompressedWriterInterop.
 func TestWriteCompressedFloat32_Roundtrip(t *testing.T) {
 	algos := []struct {
 		name string
@@ -174,30 +176,26 @@ func TestWriteCompressedFloat32_Roundtrip(t *testing.T) {
 				t.Fatalf("len %d want %d", len(got), n)
 			}
 
-			// The quantization step is delta = sigma/qlevel ~= 1.25.
-			// With dither, reconstruction error per pixel is bounded
-			// by ~0.5*delta ~ 0.625. Allow 2*delta as a safety margin.
-			tolerance := float32(2.5)
-			worst := float32(0)
-			nbad := 0
+			// Every pixel must be within half a quantization step of the
+			// input: the bound of fits_quantize_float with dithering
+			// (ZSCALE is that step, per 16-row tile).
+			tcols := readTableCols(t, cimg)
+			zs := tcols.f64["ZSCALE"]
+			if len(zs) != 3 {
+				t.Fatalf("ZSCALE has %d rows, want 3", len(zs))
+			}
+			worst := 0.0
 			for i := int64(0); i < n; i++ {
-				diff := got[i] - pixels[i]
-				if diff < 0 {
-					diff = -diff
-				}
+				bound := 0.5*zs[i/(shape[0]*16)]*(1+1e-12) + 1e-5
+				diff := math.Abs(float64(got[i]) - float64(pixels[i]))
 				if diff > worst {
 					worst = diff
 				}
-				if diff > tolerance {
-					nbad++
+				if diff > bound {
+					t.Fatalf("%s: pixel %d: |%g - %g| = %g > half step %g", tc.name, i, got[i], pixels[i], diff, bound)
 				}
 			}
-			if nbad > 0 {
-				t.Errorf("%s: %d pixels outside tolerance %g (worst %g)",
-					tc.name, nbad, tolerance, worst)
-			}
-			t.Logf("%s: worst reconstruction error %g (tolerance %g)",
-				tc.name, worst, tolerance)
+			t.Logf("%s: worst reconstruction error %g; half steps per tile %g %g %g", tc.name, worst, zs[0]/2, zs[1]/2, zs[2]/2)
 		})
 	}
 }

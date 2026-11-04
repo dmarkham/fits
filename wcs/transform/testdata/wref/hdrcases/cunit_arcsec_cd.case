@@ -1,0 +1,20 @@
+# CUNIT = arcsec with a CD matrix in arcsec/pixel (synthetic).
+NOTE pipeline: CUNIT arcsec with CD
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CUNIT1  = 'arcsec'
+CUNIT2  = 'arcsec'
+CRVAL1  = 720000.0
+CRVAL2  = 144000.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -0.8
+CD1_2   = 0.3
+CD2_1   = 0.25
+CD2_2   = 0.75

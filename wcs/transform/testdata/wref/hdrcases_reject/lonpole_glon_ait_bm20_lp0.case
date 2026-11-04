@@ -1,0 +1,29 @@
+# GLON-AIT at CRVAL2 = -20 with an explicit LONPOLE = 0 (synthetic,
+# hand-written). For theta_0 = 0 the reference point (phi_0, 0) = (0, 0)
+# with phi_p = LONPOLE = 0 needs cos(delta_p) = sin(delta_0) < 0: there is
+# no native pole, so wcslib refuses the header. Its default would be
+# LONPOLE = 180 (delta_0 < theta_0), which is valid: a reader that treats an
+# explicit LONPOLE = 0 as "unset" silently substitutes it and returns
+# coordinates. For CAR/AIT (theta_0 = 0) an explicit LONPOLE = 0 is either
+# the default (delta_0 >= 0: the real sample_msx_*/sample_rosat_* survey
+# headers, CRVAL2 = 0) or invalid like this, so this refusal is what pins
+# the rule on GLON-AIT; lonpole_tan_dec40_lp0 pins it on a header that
+# wcslib accepts.
+# EXPECT-WCSLIB-ERROR: Ill-conditioned coordinate transformation parameter
+NOTE reject: lonpole_glon_ait_bm20_lp0
+GRID 1 720 9 1 360 9
+PIX 360.5 180.5
+SKYGRID -150 150 7 -60 60 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 720
+NAXIS2  = 360
+CTYPE1  = 'GLON-AIT'
+CTYPE2  = 'GLAT-AIT'
+CRVAL1  = 30.0
+CRVAL2  = -20.0
+CRPIX1  = 360.5
+CRPIX2  = 180.5
+CDELT1  = -0.5
+CDELT2  = 0.5
+LONPOLE = 0.0

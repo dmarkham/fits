@@ -1,0 +1,41 @@
+{
+ "file": "comp_fz_f64nan_rice_sd1.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 16},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 24},
+   {"n": 5, "key": "NAXIS2", "u64": 24},
+   {"n": 6, "key": "PCOUNT", "u64": 739},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 3},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": "label for field   1"},
+   {"n": 10, "key": "TFORM1", "str": "1PB(34)", "comment": "data format of field: variable length array"},
+   {"n": 11, "key": "TTYPE2", "str": "ZSCALE", "comment": "label for field   2"},
+   {"n": 12, "key": "TFORM2", "str": "1D", "comment": "data format of field: 8-byte DOUBLE"},
+   {"n": 13, "key": "TTYPE3", "str": "ZZERO", "comment": "label for field   3"},
+   {"n": 14, "key": "TFORM3", "str": "1D", "comment": "data format of field: 8-byte DOUBLE"},
+   {"n": 16, "key": "ZTILE1", "u64": 40},
+   {"n": 17, "key": "ZTILE2", "u64": 1},
+   {"n": 18, "key": "ZCMPTYPE", "str": "RICE_1", "comment": "compression algorithm"},
+   {"n": 19, "key": "ZBLANK", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 20, "key": "ZNAME1", "str": "BLOCKSIZE", "comment": "compression block size"},
+   {"n": 21, "key": "ZVAL1", "u64": 32},
+   {"n": 22, "key": "ZNAME2", "str": "BYTEPIX", "comment": "bytes per pixel (1, 2, 4, or 8)"},
+   {"n": 23, "key": "ZVAL2", "u64": 4},
+   {"n": 24, "key": "EXTNAME", "str": "COMPRESSED_IMAGE", "comment": ""},
+   {"n": 26, "key": "ZBITPIX", "skipped": "not an unsigned decimal in uint64 range"},
+   {"n": 27, "key": "ZNAXIS", "u64": 2},
+   {"n": 28, "key": "ZNAXIS1", "u64": 40},
+   {"n": 29, "key": "ZNAXIS2", "u64": 24},
+   {"n": 33, "key": "ZQUANTIZ", "str": "SUBTRACTIVE_DITHER_1", "comment": "Pixel Quantization Algorithm"},
+   {"n": 37, "key": "ZDITHER0", "u64": 17}
+  ]}
+ ]
+}

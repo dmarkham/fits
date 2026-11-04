@@ -1,0 +1,25 @@
+# CTYPE 'RA---TPU' / 'DEC--TPU' (synthetic, from the round-3 verifier
+# probe p36_tpu). TPU is a wcslib-only alias (wcs.c wcsset: the TPV
+# polynomial applied as a PRIOR distortion, before the matrix, instead of
+# TPV's sequent one); it is not a registered projection code. wcslib 8.10
+# accepts and computes it; we do not implement it and refuse the code.
+# EXPECT-GO-ERROR: unknown projection code: "TPU"
+NOTE stricter: tpu_alias
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TPU'
+CTYPE2  = 'DEC--TPU'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+PV1_1   = 1.0
+PV2_1   = 1.0
+PV1_4   = 1e-3

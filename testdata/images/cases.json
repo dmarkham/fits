@@ -1,0 +1,1251 @@
+{
+ "comment": "Write-interop matrix. Each case is written by cfitsio (imgref write: fits_create_img(cf_imgtype) + optional BSCALE/BZERO/BLANK + fits_write_img(cf_datatype)) into cfwrite/<name>.fits, and by the Go library (WriteImage[gotype] with the same BSCALE/BZERO/BLANK cards in the user header) in the test. Values are decimal text, or \"bits:0x<hex>\" for the exact IEEE bit pattern of a float (signaling NaNs). Every value is storable (cfitsio status 0): values that overflow the stored range, which WriteImage refuses with ErrNumOverflow, are in gen.py WRITE_OVERFLOW / golden/write_overflow.json.",
+ "cases": [
+  {
+   "name": "u8_plain",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    6
+   ],
+   "values": [
+    "0",
+    "1",
+    "127",
+    "128",
+    "254",
+    "255"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i16_plain",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "-32768",
+    "-32767",
+    "-1",
+    "0",
+    "1",
+    "32766",
+    "32767"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i32_plain",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    6
+   ],
+   "values": [
+    "-2147483648",
+    "-1",
+    "0",
+    "1",
+    "123456789",
+    "2147483647"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i64_plain",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "-9223372036854775808",
+    "-9007199254740993",
+    "-1",
+    "0",
+    "1",
+    "4611686018427387905",
+    "9223372036854775807"
+   ],
+   "note": ""
+  },
+  {
+   "name": "f32_plain",
+   "gotype": "float32",
+   "cf_imgtype": -32,
+   "cf_datatype": 42,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    11
+   ],
+   "values": [
+    "-3.4028234663852886e+38",
+    "-1.5",
+    "-0.0",
+    "0",
+    "1.1754943508222875e-38",
+    "1.401298464324817e-45",
+    "3.1415927",
+    "3.4028234663852886e+38",
+    "inf",
+    "-inf",
+    "nan"
+   ],
+   "note": ""
+  },
+  {
+   "name": "f32_nanbits",
+   "gotype": "float32",
+   "cf_imgtype": -32,
+   "cf_datatype": 42,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    6
+   ],
+   "values": [
+    "bits:0x7f800001",
+    "bits:0x7f812345",
+    "bits:0xff800001",
+    "bits:0x7fbfffff",
+    "bits:0x7fc12345",
+    "bits:0xffc00001"
+   ],
+   "note": "signaling NaNs (and quiet NaNs with payloads) by bit pattern: written verbatim, never quieted by a float64 round trip"
+  },
+  {
+   "name": "f64_plain",
+   "gotype": "float64",
+   "cf_imgtype": -64,
+   "cf_datatype": 82,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    11
+   ],
+   "values": [
+    "-1.7976931348623157e+308",
+    "-1.5",
+    "-0.0",
+    "0",
+    "2.2250738585072014e-308",
+    "5e-324",
+    "3.141592653589793",
+    "1.7976931348623157e+308",
+    "inf",
+    "-inf",
+    "nan"
+   ],
+   "note": ""
+  },
+  {
+   "name": "f64_nanbits",
+   "gotype": "float64",
+   "cf_imgtype": -64,
+   "cf_datatype": 82,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "bits:0x7ff0000000000001",
+    "bits:0x7ff4000000012345",
+    "bits:0xfff0000000000001",
+    "bits:0x7ff8000000012345"
+   ],
+   "note": "signaling and payload NaNs by bit pattern, written verbatim"
+  },
+  {
+   "name": "i8_conv",
+   "gotype": "int8",
+   "cf_imgtype": 10,
+   "cf_datatype": 12,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "-128",
+    "-127",
+    "-1",
+    "0",
+    "1",
+    "126",
+    "127"
+   ],
+   "note": ""
+  },
+  {
+   "name": "u16_conv",
+   "gotype": "uint16",
+   "cf_imgtype": 20,
+   "cf_datatype": 20,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "0",
+    "1",
+    "32767",
+    "32768",
+    "40000",
+    "65534",
+    "65535"
+   ],
+   "note": ""
+  },
+  {
+   "name": "u32_conv",
+   "gotype": "uint32",
+   "cf_imgtype": 40,
+   "cf_datatype": 30,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "0",
+    "1",
+    "2147483647",
+    "2147483648",
+    "3000000000",
+    "4294967294",
+    "4294967295"
+   ],
+   "note": ""
+  },
+  {
+   "name": "u64_conv",
+   "gotype": "uint64",
+   "cf_imgtype": 80,
+   "cf_datatype": 80,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "0",
+    "1",
+    "9223372036854775807",
+    "9223372036854775808",
+    "9223372036854775809",
+    "18446744073709551614",
+    "18446744073709551615"
+   ],
+   "note": ""
+  },
+  {
+   "name": "u8_bzero_neg100",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": 1,
+   "bzero": -100,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "0",
+    "1",
+    "100",
+    "154",
+    "155"
+   ],
+   "note": "raw=v+100 up to 155 -> 255 (BITPIX 8 is 0..255); v>=156 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "u8_bzero_10",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": 1,
+   "bzero": 10,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "10",
+    "11",
+    "200",
+    "255"
+   ],
+   "note": "raw=v-10 from v=10 -> 0; v<10 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "i16_bzero1000",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 1,
+   "bzero": 1000,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "-31768",
+    "-1",
+    "0",
+    "1000",
+    "32767"
+   ],
+   "note": "raw=v-1000 from v=-31768 -> -32768; v<-31768 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "i16_bzero_only",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": null,
+   "bzero": 1000,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ],
+   "note": "the caller's header has BZERO and no BSCALE (cfitsio's file has both, BSCALE 1): raw=v-1000 (-32768 overflows: golden/write_overflow.json)"
+  },
+  {
+   "name": "i16_bscale_only",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 2,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "-5"
+   ],
+   "note": "the caller's header has BSCALE and no BZERO: raw=v/2 rounded half away"
+  },
+  {
+   "name": "f64_bzero_only",
+   "gotype": "float64",
+   "cf_imgtype": -64,
+   "cf_datatype": 82,
+   "bscale": null,
+   "bzero": 0.5,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "1",
+    "2.5",
+    "-3",
+    "1e300"
+   ],
+   "note": "float BITPIX, BZERO only: stored v-0.5"
+  },
+  {
+   "name": "i16_bscale2",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 2,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    9
+   ],
+   "values": [
+    "-32768",
+    "-5",
+    "-3",
+    "-1",
+    "0",
+    "1",
+    "3",
+    "5",
+    "32767"
+   ],
+   "note": "raw=v/2 rounded half away from zero"
+  },
+  {
+   "name": "i16_bscale2_bzero_half",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 2,
+   "bzero": 0.5,
+   "blank": null,
+   "naxes": [
+    8
+   ],
+   "values": [
+    "-4",
+    "-3",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "6"
+   ],
+   "note": "non-integral BZERO: physical values are not integers"
+  },
+  {
+   "name": "i32_bscale_milli",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": 0.001,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "-2147483",
+    "-1",
+    "0",
+    "1",
+    "2147483"
+   ],
+   "note": "raw=v*1000 for |v|<=2147483; larger |v| overflow (golden/write_overflow.json)"
+  },
+  {
+   "name": "i64_bzero1000",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": 1,
+   "bzero": 1000,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "-9223372036854774808",
+    "-1",
+    "0",
+    "1000",
+    "123456789012"
+   ],
+   "note": "raw=v-1000 exact, down to v=MinInt64+1000 -> MinInt64 (MinInt64 itself overflows: golden/write_overflow.json)"
+  },
+  {
+   "name": "u16_bzero_user",
+   "gotype": "uint16",
+   "cf_imgtype": 16,
+   "cf_datatype": 20,
+   "bscale": 1,
+   "bzero": 32768,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "0",
+    "1",
+    "32768",
+    "65535"
+   ],
+   "note": "unsigned convention given explicitly by the caller"
+  },
+  {
+   "name": "u64_bzero_user",
+   "gotype": "uint64",
+   "cf_imgtype": 64,
+   "cf_datatype": 80,
+   "bscale": 1,
+   "bzero": 9223372036854775808,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "0",
+    "1",
+    "9223372036854775808",
+    "18446744073709551615"
+   ],
+   "note": "uint64 convention given explicitly"
+  },
+  {
+   "name": "f32_bscale",
+   "gotype": "float32",
+   "cf_imgtype": -32,
+   "cf_datatype": 42,
+   "bscale": 0.5,
+   "bzero": 100,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "100",
+    "101",
+    "99.5",
+    "-1e30",
+    "1e30",
+    "inf",
+    "nan"
+   ],
+   "note": "float BITPIX with scaling: no clamping"
+  },
+  {
+   "name": "f64_bscale",
+   "gotype": "float64",
+   "cf_imgtype": -64,
+   "cf_datatype": 82,
+   "bscale": 3,
+   "bzero": -7,
+   "blank": null,
+   "naxes": [
+    6
+   ],
+   "values": [
+    "-7",
+    "-4",
+    "0",
+    "1e300",
+    "-1e300",
+    "nan"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i16_blank",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": null,
+   "bzero": null,
+   "blank": -32768,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "-32768",
+    "0",
+    "5",
+    "-32768",
+    "32767"
+   ],
+   "note": "BLANK=-32768 marks pixels 0 and 3"
+  },
+  {
+   "name": "u8_blank",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": null,
+   "bzero": null,
+   "blank": 255,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "255",
+    "0",
+    "1",
+    "255"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i32_blank_bzero",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": 1,
+   "bzero": 100,
+   "blank": -199,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "-99",
+    "0",
+    "7",
+    "-99"
+   ],
+   "note": "BLANK compares the raw value: raw=-199 is physical -99"
+  },
+  {
+   "name": "i32_cube",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    4,
+    3,
+    2
+   ],
+   "values": [
+    "-11000",
+    "-10000",
+    "-9000",
+    "-8000",
+    "-7000",
+    "-6000",
+    "-5000",
+    "-4000",
+    "-3000",
+    "-2000",
+    "-1000",
+    "0",
+    "1000",
+    "2000",
+    "3000",
+    "4000",
+    "5000",
+    "6000",
+    "7000",
+    "8000",
+    "9000",
+    "10000",
+    "11000",
+    "12000"
+   ],
+   "note": ""
+  },
+  {
+   "name": "u16_cube",
+   "gotype": "uint16",
+   "cf_imgtype": 20,
+   "cf_datatype": 20,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    5,
+    4,
+    3
+   ],
+   "values": [
+    "0",
+    "2731",
+    "5462",
+    "8193",
+    "10924",
+    "13655",
+    "16386",
+    "19117",
+    "21848",
+    "24579",
+    "27310",
+    "30041",
+    "32772",
+    "35503",
+    "38234",
+    "40965",
+    "43696",
+    "46427",
+    "49158",
+    "51889",
+    "54620",
+    "57351",
+    "60082",
+    "62813",
+    "8",
+    "2739",
+    "5470",
+    "8201",
+    "10932",
+    "13663",
+    "16394",
+    "19125",
+    "21856",
+    "24587",
+    "27318",
+    "30049",
+    "32780",
+    "35511",
+    "38242",
+    "40973",
+    "43704",
+    "46435",
+    "49166",
+    "51897",
+    "54628",
+    "57359",
+    "60090",
+    "62821",
+    "16",
+    "2747",
+    "5478",
+    "8209",
+    "10940",
+    "13671",
+    "16402",
+    "19133",
+    "21864",
+    "24595",
+    "27326",
+    "30057"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i64_cube",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    3,
+    3,
+    2
+   ],
+   "values": [
+    "4611686018427387904",
+    "-4611686018427387905",
+    "4611686018427387906",
+    "-4611686018427387907",
+    "4611686018427387908",
+    "-4611686018427387909",
+    "4611686018427387910",
+    "-4611686018427387911",
+    "4611686018427387912",
+    "-4611686018427387913",
+    "4611686018427387914",
+    "-4611686018427387915",
+    "4611686018427387916",
+    "-4611686018427387917",
+    "4611686018427387918",
+    "-4611686018427387919",
+    "4611686018427387920",
+    "-4611686018427387921"
+   ],
+   "note": ""
+  },
+  {
+   "name": "f64_4d",
+   "gotype": "float64",
+   "cf_imgtype": -64,
+   "cf_datatype": 82,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    4,
+    3,
+    2,
+    2
+   ],
+   "values": [
+    "-3.0",
+    "-2.75",
+    "-2.5",
+    "-2.25",
+    "-2.0",
+    "-1.75",
+    "-1.5",
+    "-1.25",
+    "-1.0",
+    "-0.75",
+    "-0.5",
+    "-0.25",
+    "0.0",
+    "0.25",
+    "0.5",
+    "0.75",
+    "1.0",
+    "1.25",
+    "1.5",
+    "1.75",
+    "2.0",
+    "2.25",
+    "2.5",
+    "2.75",
+    "3.0",
+    "3.25",
+    "3.5",
+    "3.75",
+    "4.0",
+    "4.25",
+    "4.5",
+    "4.75",
+    "5.0",
+    "5.25",
+    "5.5",
+    "5.75",
+    "6.0",
+    "6.25",
+    "6.5",
+    "6.75",
+    "7.0",
+    "7.25",
+    "7.5",
+    "7.75",
+    "8.0",
+    "8.25",
+    "8.5",
+    "8.75"
+   ],
+   "note": ""
+  },
+  {
+   "name": "i16_bscale_1p1",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    9
+   ],
+   "values": [
+    "-32768",
+    "-2252",
+    "-2241",
+    "-1",
+    "0",
+    "1",
+    "30000",
+    "30011",
+    "32767"
+   ],
+   "note": "BSCALE 1.1: (v-BZERO)/BSCALE and (v-BZERO)*(1/BSCALE) round differently for -2252, -2241, 30000, 30011 (cfitsio divides)"
+  },
+  {
+   "name": "u8_bscale_1p1",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "0",
+    "14",
+    "25",
+    "58",
+    "102",
+    "113",
+    "255"
+   ],
+   "note": "BSCALE 1.1 on BITPIX 8: 14, 25, 58, 102, 113 separate division from reciprocal multiplication"
+  },
+  {
+   "name": "i32_bscale_1p1",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    6
+   ],
+   "values": [
+    "-2147483648",
+    "-99998",
+    "-99987",
+    "0",
+    "99987",
+    "2147483647"
+   ],
+   "note": "BSCALE 1.1 on BITPIX 32: -99998, -99987 separate division from reciprocal multiplication; the int32 extremes stay in range"
+  },
+  {
+   "name": "i64_f32_round",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": null,
+   "bzero": null,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "4611686293305294849",
+    "4611686843061108735",
+    "-4611686293305294849",
+    "-4611686843061108735",
+    "4611686293305294848",
+    "9223372036854775807",
+    "-9223372036854775808"
+   ],
+   "note": "int64 to float32: the first four differ between direct rounding (cfitsio) and rounding through float64; 2^62+2^38 is an exact tie"
+  },
+  {
+   "name": "i64_bscale_half",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": 0.5,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    8
+   ],
+   "values": [
+    "-4611686018427387904",
+    "3",
+    "-3",
+    "0",
+    "1",
+    "-1",
+    "9007199254740993",
+    "-9007199254740995"
+   ],
+   "note": "BITPIX 64, BSCALE 0.5: (v-0.25)/0.5 is exactly -2^63 for v=-2^62 (stored as is); small values are ties (3 -> 5.5 -> 6, -3 -> -6.5 -> -7). v=-2^63, 2^63-1 (cfitsio 412) and v=2^62, 2^62-1 (scaled value exactly 2^63: cfitsio stores INT64_MIN silently) overflow (golden/write_overflow.json)"
+  },
+  {
+   "name": "i64_bscale_1p5",
+   "gotype": "int64",
+   "cf_imgtype": 64,
+   "cf_datatype": 81,
+   "bscale": 1.5,
+   "bzero": -3,
+   "blank": null,
+   "naxes": [
+    10
+   ],
+   "values": [
+    "-9223372036854775808",
+    "9223372036854775807",
+    "7",
+    "-7",
+    "0",
+    "1",
+    "-1",
+    "1152921504606859321",
+    "-1152921504606859321",
+    "1000000000000001"
+   ],
+   "note": "BITPIX 64, BSCALE 1.5, BZERO -3: non-integer quotients rounded half away (7 -> 6.67 -> 7, 0 -> 2), no overflow"
+  },
+  {
+   "name": "i16_bscale_neg1",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": -1,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "-32767",
+    "-2",
+    "-1",
+    "0",
+    "1",
+    "2",
+    "32767"
+   ],
+   "note": "negative BSCALE: raw=-v from v=-32767 -> 32767; v=-32768 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "i16_bscale_neg2_bzero10",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": -2,
+   "bzero": 10,
+   "blank": null,
+   "naxes": [
+    8
+   ],
+   "values": [
+    "11",
+    "13",
+    "9",
+    "7",
+    "10",
+    "0",
+    "-32768",
+    "32767"
+   ],
+   "note": "negative BSCALE with BZERO: raw=(v-10)/-2 rounded half away (11 -> -1, 13 -> -2, 9 -> 1, 7 -> 2); physical range [-65524, 65546]"
+  },
+  {
+   "name": "i32_bscale_neg3",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": -3,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    8
+   ],
+   "values": [
+    "0",
+    "3",
+    "-3",
+    "4",
+    "-4",
+    "5",
+    "2147483647",
+    "-2147483648"
+   ],
+   "note": "negative BSCALE on BITPIX 32: raw=v/-3 rounded half away; physical range [-6442450941, 6442450944] fits only int64"
+  },
+  {
+   "name": "u8_bzero_half",
+   "gotype": "uint8",
+   "cf_imgtype": 8,
+   "cf_datatype": 11,
+   "bscale": 1,
+   "bzero": 0.5,
+   "blank": null,
+   "naxes": [
+    3
+   ],
+   "values": [
+    "1",
+    "2",
+    "255"
+   ],
+   "note": "v=1 stores 0.5, rounded half away to 1; v=0 stores -0.5 = lo-0.5, beyond cfitsio's DUCHAR_MIN -0.49: overflow (golden/write_overflow.json)"
+  },
+  {
+   "name": "i16_bzero_half",
+   "gotype": "int16",
+   "cf_imgtype": 16,
+   "cf_datatype": 21,
+   "bscale": 1,
+   "bzero": 0.5,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "-32767",
+    "0",
+    "1",
+    "32767"
+   ],
+   "note": "-32767 -> -32767.5 rounds half away to -32768 = lo (inside DSHRT_MIN -32768.49); v=-32768 stores lo-0.5: overflow (golden/write_overflow.json)"
+  },
+  {
+   "name": "i32_bzero_half",
+   "gotype": "int32",
+   "cf_imgtype": 32,
+   "cf_datatype": 31,
+   "bscale": 1,
+   "bzero": 0.5,
+   "blank": null,
+   "naxes": [
+    3
+   ],
+   "values": [
+    "-2147483647",
+    "0",
+    "2147483647"
+   ],
+   "note": "-2^31+1 -> lo-0.5+1 rounds half away to lo; v=-2^31 stores lo-0.5 (beyond DINT_MIN -2147483648.49): overflow (golden/write_overflow.json)"
+  },
+  {
+   "name": "u16_bscale_1p1",
+   "gotype": "uint16",
+   "cf_imgtype": 16,
+   "cf_datatype": 20,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    7
+   ],
+   "values": [
+    "0",
+    "14",
+    "25",
+    "58",
+    "102",
+    "113",
+    "36044"
+   ],
+   "note": "uint16 values with BSCALE 1.1 on BITPIX 16: 14, 25, 58, 102, 113 separate division from reciprocal multiplication; 36044 stores 32767 = hi; 65535 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "u16_bscale_neg2",
+   "gotype": "uint16",
+   "cf_imgtype": 16,
+   "cf_datatype": 20,
+   "bscale": -2,
+   "bzero": 10,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "0",
+    "9",
+    "10",
+    "11",
+    "65535"
+   ],
+   "note": "uint16 with negative BSCALE: raw=(v-10)/-2 rounded half away (9 -> 0.5 -> 1, 11 -> -0.5 -> -1), 65535 -> -32762.5 -> -32763"
+  },
+  {
+   "name": "u32_bscale_1p1",
+   "gotype": "uint32",
+   "cf_imgtype": 32,
+   "cf_datatype": 30,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "0",
+    "14",
+    "25",
+    "2147483649",
+    "2147483660"
+   ],
+   "note": "uint32 with BSCALE 1.1 on BITPIX 32: 14, 25, 2147483649, 2147483660 separate division from reciprocal multiplication; 4294967295 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "u32_bscale_neg3",
+   "gotype": "uint32",
+   "cf_imgtype": 32,
+   "cf_datatype": 30,
+   "bscale": -3,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "0",
+    "3",
+    "4",
+    "5",
+    "4294967295"
+   ],
+   "note": "uint32 with negative BSCALE: raw=v/-3 rounded half away (4 -> -1, 5 -> -2); 4294967295 -> -1431655765"
+  },
+  {
+   "name": "u64_bscale_1p1",
+   "gotype": "uint64",
+   "cf_imgtype": 64,
+   "cf_datatype": 80,
+   "bscale": 1.1,
+   "bzero": 0.25,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "0",
+    "14",
+    "25",
+    "58"
+   ],
+   "note": "uint64 with BSCALE 1.1 on BITPIX 64: 14, 25, 58 separate division from reciprocal multiplication; 2^64-1 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "u64_bscale_neg1p5",
+   "gotype": "uint64",
+   "cf_imgtype": 64,
+   "cf_datatype": 80,
+   "bscale": -1.5,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    4
+   ],
+   "values": [
+    "0",
+    "1",
+    "2",
+    "3"
+   ],
+   "note": "uint64 with negative non-integer BSCALE: 1 -> -0.67 -> -1, 2 -> -1.33 -> -1, 3 -> -2; 2^64-1 overflows (golden/write_overflow.json)"
+  },
+  {
+   "name": "i8_bscale_1p1",
+   "gotype": "int8",
+   "cf_imgtype": 8,
+   "cf_datatype": 12,
+   "bscale": 1.1,
+   "bzero": -140,
+   "blank": null,
+   "naxes": [
+    5
+   ],
+   "values": [
+    "-128",
+    "-1",
+    "0",
+    "1",
+    "127"
+   ],
+   "note": "int8 with caller scaling instead of the BZERO -128 convention: raw=(v+140)/1.1 (-128 -> 10.9 -> 11, 127 -> 242.7 -> 243)"
+  },
+  {
+   "name": "i8_bscale_neg1",
+   "gotype": "int8",
+   "cf_imgtype": 8,
+   "cf_datatype": 12,
+   "bscale": -1,
+   "bzero": 0,
+   "blank": null,
+   "naxes": [
+    3
+   ],
+   "values": [
+    "-128",
+    "-1",
+    "0"
+   ],
+   "note": "int8 with BSCALE -1 on BITPIX 8 (0..255): raw=-v, so -128 -> 128, -1 -> 1, 0 -> 0; v=1 and v=127 overflow (golden/write_overflow.json)"
+  }
+ ]
+}

@@ -7,27 +7,20 @@ import (
 	"github.com/dmarkham/fits/wcs"
 )
 
-// TestAllProjectionsRoundTrip walks every implemented projection and
-// verifies that pixel → sky → pixel is an identity to within the
-// expected numerical precision. Each projection is tested at its
-// reference pixel and at a small grid of off-center pixels inside its
-// valid domain.
+// TestAllProjectionsRoundTrip is a SELF-CONSISTENCY check, not a truth
+// test: for every implemented projection it builds a Transform from a
+// hand-made header and requires pixel -> sky -> pixel to come back to the
+// starting pixel, near the reference pixel (offsets of 3-5 px at
+// 0.01 deg/px). Agreement with wcslib is proven elsewhere:
+// TestWrefProjections (every code, default and non-default PV, both
+// directions, grids past every boundary) and TestHdrGoldens (full header
+// pipeline, one case per projection).
 //
-// Test-pixel offsets from CRPIX are kept small (3-8 pixels) so that
-// every projection's finite-domain constraints are satisfied uniformly.
-// Scale is 0.01 degrees/pixel (arcsecond-class) for all tests; this gives
-// each offset a physical extent of ~0.03-0.08 degrees, well inside every
-// projection's valid range.
-//
-// Tolerances reflect the inherent precision floor:
-//
-//   - closed-form, single-trig-chain (most): 1e-9 pixels
-//   - iterative inverse (MOL, PCO, SZP): 1e-7 pixels
-//   - quad-cube with face boundaries: 1e-9 pixels
-//   - CSC: polynomial forward/inverse are by design a lossy fit (O'Neill
-//     & Laubscher 1976); ~1% pixel error is normal and matches wcslib
-//     output. Tolerance is 0.02 pixels.
-//   - HPX/XPH equatorial band: 1e-9; polar cap boundary effects: 1e-6
+// Tolerances are the round-trip floor of each method: 1e-9 px for
+// closed-form directions, 1e-7..1e-6 px where one direction iterates (MOL,
+// PCO, ZPN, SZP), and 2e-2 px for CSC, whose forward and inverse
+// polynomials are independent fits that do not invert each other exactly
+// (wcslib's own CSC drifts the same way).
 func TestAllProjectionsRoundTrip(t *testing.T) {
 	type pv = map[wcs.PVKey]float64
 	pvKey := func(axis, index int, val float64) pv {
@@ -57,6 +50,8 @@ func TestAllProjectionsRoundTrip(t *testing.T) {
 		{code: "ARC", crval1: 200, crval2: 10, tolerance: 1e-9},
 		{code: "ZPN", crval1: 0, crval2: 0, pv: zpnPV, tolerance: 1e-7},
 		{code: "ZEA", crval1: 60, crval2: -30, tolerance: 1e-9},
+		{code: "AIR", crval1: 30, crval2: 20, tolerance: 1e-7},
+		{code: "AIR", crval1: 30, crval2: 20, pv: pvKey(2, 1, 45), tolerance: 1e-7},
 		// --- Cylindrical (§5.2) ---
 		{code: "CYP", crval1: 0, crval2: 0, pv: pvKey(2, 1, 1), tolerance: 1e-8},
 		{code: "CEA", crval1: 0, crval2: 0, pv: pvKey(2, 1, 1), tolerance: 1e-9},
@@ -77,8 +72,8 @@ func TestAllProjectionsRoundTrip(t *testing.T) {
 		{code: "PCO", crval1: 0, crval2: 0, tolerance: 1e-6},
 		// --- Quad-cube (§5.6) ---
 		{code: "TSC", crval1: 0, crval2: 0, tolerance: 1e-9},
-		// CSC's forward/inverse polynomials are known-lossy least-squares
-		// fits (not exact inverses); wcslib documents ~0.01 pixel RMS.
+		// CSC's forward/inverse polynomials are independent fits, not
+		// exact inverses of each other.
 		{code: "CSC", crval1: 0, crval2: 0, tolerance: 2e-2},
 		{code: "QSC", crval1: 0, crval2: 0, tolerance: 1e-9},
 		// --- HEALPix ---

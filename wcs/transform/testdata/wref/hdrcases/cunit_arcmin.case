@@ -1,0 +1,19 @@
+# CUNIT1/2 = 'arcmin': CRVAL and CDELT are in arcminutes (wcslib wcsunits
+# factor 1/60). Synthetic; same sky as a deg header with CRVAL (120, 30).
+NOTE pipeline: CUNIT arcmin
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CUNIT1  = 'arcmin'
+CUNIT2  = 'arcmin'
+CRVAL1  = 7200.0
+CRVAL2  = 1800.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.6
+CDELT2  = 0.6

@@ -1,0 +1,29 @@
+# All-sky plate carree, CRVAL2 = 0, no LONPOLE card: wcslib's default
+# LONPOLE for a cylindrical projection with delta0 >= theta0 (= 0) is
+# phi0 = 0. Pixel grid runs 20 px past every edge of the 720x360 map, so
+# |x| > 180 deg and |y| > 90 deg intermediate coordinates are exercised
+# and the rejection status must agree with wcslib.
+#
+# Sky points avoid the two places where the sky->pixel answer is
+# multi-valued, so a pixel difference there would not be a bug: the poles
+# (every pixel along y = 0.5 / 360.5 is the pole) and the seam at
+# lng = CRVAL1 +- 180 = 0/360 (x = 0.5 and x = 720.5 are the same sky).
+# Explicit pixels likewise stay off the map border.
+NOTE smoke: CAR all-sky, default LONPOLE, grid past the map edges
+GRID -19.5 740.5 20 -19.5 380.5 17
+PIX 1 1
+PIX 720 360
+PIX 360.5 180.5
+SKYGRID 1 359 13 -89 89 13
+HEADER
+NAXIS   = 2
+NAXIS1  = 720
+NAXIS2  = 360
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 180.0
+CRVAL2  = 0.0
+CRPIX1  = 360.5
+CRPIX2  = 180.5
+CDELT1  = -0.5
+CDELT2  = 0.5
