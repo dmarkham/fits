@@ -251,11 +251,14 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 	hadPcount, hadGcount, hadTfields := false, false, false
 	groups := false
 	axes := map[int]int64{}
-	// Structural keywords seen (a second one is refused: cfitsio reads
-	// BITPIX/NAXIS/NAXISn by position and an image's PCOUNT/GCOUNT last
-	// wins, so a duplicate has no single reading).
-	seen := map[string]bool{}
-	dupAxis := 0 // first NAXISn seen twice (checked against NAXIS below)
+	// Structural keywords seen, with their first value. A second card with
+	// a different value is refused: cfitsio reads BITPIX/NAXIS/NAXISn by
+	// position and an image's PCOUNT/GCOUNT last wins, so such a header
+	// has no single reading. A repeat of the same value reads the same
+	// either way and is accepted (astrometry.net 5200-series index files
+	// written by QFITS repeat BITPIX..TFIELDS in every kdtree header).
+	seen := map[string]any{}
+	dupAxis := 0 // first NAXISn seen twice with different values (checked against NAXIS below)
 	for i := range nCards {
 		off := i * header.CardWidth
 		raw := buf[off : off+header.CardWidth]
@@ -277,10 +280,14 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 		switch c.Key {
 		case header.KeySimple, header.KeyXtension, header.KeyBitpix, header.KeyNaxis,
 			header.KeyPcount, header.KeyGcount, header.KeyTfields:
-			if seen[c.Key] {
-				return nil, &DuplicateKeywordError{HDU: hduIdx, Keyword: c.Key}
+			v := structuralValue(c.Key, c.Value)
+			if first, dup := seen[c.Key]; dup {
+				if first != v {
+					return nil, &DuplicateKeywordError{HDU: hduIdx, Keyword: c.Key}
+				}
+				continue
 			}
-			seen[c.Key] = true
+			seen[c.Key] = v
 		}
 		switch c.Key {
 		case header.KeySimple:
@@ -340,8 +347,8 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 				if v < 0 {
 					return nil, fmt.Errorf("fits: HDU %d: negative %s = %d", hduIdx, c.Key, v)
 				}
-				if _, dup := axes[n]; dup {
-					if dupAxis == 0 || n < dupAxis {
+				if first, dup := axes[n]; dup {
+					if first != v && (dupAxis == 0 || n < dupAxis) {
 						dupAxis = n
 					}
 				} else {
@@ -433,4 +440,14 @@ func classifyKind(r *hduRecord) hduKind {
 		return kindASCIITable
 	}
 	return kindUnknown
+}
+
+// structuralValue is the value extractStructural compares when a
+// structural keyword repeats: the decoded value with its type (so 8 and
+// 8.0 differ), XTENSION trimmed and upper-cased as it is read.
+func structuralValue(key string, v any) string {
+	if s, ok := v.(string); ok && key == header.KeyXtension {
+		v = strings.ToUpper(strings.TrimSpace(s))
+	}
+	return fmt.Sprintf("%T %v", v, v)
 }
