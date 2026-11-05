@@ -1,0 +1,18 @@
+# Defunct PROJPn keywords (synthetic): wcslib 8.10 wcspih (WCSHDR_PROJPn)
+# reads PROJPn as PVi_n of the latitude axis (n <= 9). AZP mu = 2, gamma = 30.
+NOTE legacy_projp_azp
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'RA---AZP'
+CTYPE2  = 'DEC--AZP'
+CDELT1  = -0.001
+CDELT2  = 0.001
+PROJP1  = 2.0
+PROJP2  = 30.0

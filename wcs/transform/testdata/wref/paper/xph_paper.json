@@ -1,0 +1,10 @@
+{
+ "source": "Calabretta & Lowe 2013 PASA 30 e050 (arXiv:1308.6647v1) eqs (2)-(17), mpmath 1.4.1 at 60 digits",
+ "layout": "forward rows [phi, theta, x, y], then inverse rows [x, y, phi, theta]",
+ "forward": 1464,
+ "inverse": 1496,
+ "payload": "xph_paper.bin",
+ "values": 11840,
+ "sha256": "45de5599f7a6a167855f697c9cf4c58c461d1f524ab972df3dcae3b0f6ba8e8e",
+ "zlib_version": "1.3.2"
+}

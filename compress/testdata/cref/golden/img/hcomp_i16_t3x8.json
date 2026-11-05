@@ -1,0 +1,1 @@
+{"name": "hcomp_i16_t3x8", "type": "i16", "naxes": [40, 25], "algo": "HCOMPRESS_1", "tile": [3, 8], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": false, "status": 413, "error": "Hcompress minimum tile dimension is 4 pixels (imcomp_init_table)", "kind": 2, "gen_seed": 5079, "in_sha256": "b6e7a95d746bc1546d94af6383679a2b2d5b6001556216dc61b83c8c8e1ff3be"}

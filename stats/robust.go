@@ -1,6 +1,9 @@
 package stats
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // MaxHistoSize is the upper bound on histogram bins used by the
 // percentile/median family. Callers using the *Buf zero-alloc
@@ -8,19 +11,42 @@ import "fmt"
 // (or len(data), whichever is smaller).
 const MaxHistoSize = 65536
 
-// Percentile returns the p-th percentile (p in [0, 1], clamped) of data using
-// a histogram-based interpolated algorithm. This is a line-for-line
-// port of RawTherapee/Siril's findMinMaxPercentile (rt_algo.cc:167),
-// made generic over any Numeric type.
+// Percentile returns the p-th percentile (p in [0, 1], clamped) of data
+// using RawTherapee/Siril's histogram-based findMinMaxPercentile
+// (Siril src/rt/rt_algo.cc). The algorithm:
 //
-// The algorithm:
 //  1. Find min/max of the non-NaN data
 //  2. Build a histogram with min(65536, n) bins spanning [min, max]
-//  3. Walk the CDF to the percentile
-//  4. Interpolate between the two bins straddling the percentile
-//  5. Convert back to the original value range
+//  3. Walk the cumulative count to p*n
+//  4. Interpolate between the two bins straddling it
+//  5. Convert back to the original value range and clamp to [min, max]
 //
-// For empty slices (or all-NaN), returns 0.
+// It is not numpy's percentile. With n non-NaN values the result is
+// within one histogram bin, (max-min)/(min(n, 65536)-1), of the order
+// statistic x_(j), j = max(1, ceil(p*n)) (p*n rounded as the code rounds
+// it), plus a few ULP of rounding in the final conversion
+// (TestPercentile_WithinOneBin, against numpy order statistics). p = 0
+// gives the minimum and p = 1 the maximum exactly.
+//
+// For []float32 input the computation is done in float32 exactly as
+// Siril's C code does it, and the result is bit-identical to
+// findMinMaxPercentile run on the same values with the NaNs removed
+// (tested against the verbatim Siril source in testdata/sref, including
+// inputs of 2^24+3 and 2*10^7 elements). For every other element type
+// (including named types whose underlying type is float32) the values
+// are converted to float64 and the same algorithm runs in float64; the
+// result is bit-identical to that Siril source compiled with float
+// replaced by double (tested for every element type, including int8,
+// uint32, uint64 above 2^63 and a named float32 type, and on float64 and
+// uint16 inputs of 2*10^7 elements).
+//
+// Edge cases: empty or all-NaN input returns 0; p is clamped to [0, 1]
+// and a NaN p returns NaN; if the non-NaN data contains +Inf or -Inf, or
+// max-min overflows the working precision (float32 for []float32, e.g.
+// {-3e38, 3e38}; float64 otherwise), the histogram has no finite width
+// and the result is NaN (Siril's code has undefined behaviour there: its
+// bin index is a cast of NaN). TestPercentile_NonFinite and
+// TestPercentile_RangeOverflow pin these.
 //
 // Allocates a histogram slice on every call. For hot paths, use
 // PercentileBuf with a caller-supplied scratch buffer.
@@ -47,49 +73,43 @@ func Percentile[T Numeric](data []T, p float64) float64 {
 //		// ...
 //	}
 func PercentileBuf[T Numeric](data []T, p float64, histo []uint32) float64 {
+	if p != p {
+		return math.NaN()
+	}
 	if p < 0 {
 		p = 0
 	}
 	if p > 1 {
 		p = 1
 	}
-	// For float32 input, use float32 arithmetic for the histogram
-	// to match Siril/RawTherapee's findMinMaxPercentile exactly
-	// (it operates on float data with float scale/bin computation).
 	if f32, ok := any(data).([]float32); ok {
 		return percentileFloat32Buf(f32, float32(p), histo)
 	}
-	// Generic path for all other types: float64 arithmetic.
 	return percentileGenericBuf(data, p, histo)
 }
 
-// percentileFloat32Buf is the Siril-matching float32 specialization,
-// taking a caller-supplied histogram scratch buffer.
+// percentileFloat32Buf is findMinMaxPercentile in float32, operation for
+// operation. S is float64 only for the MAD path, whose deviations are
+// float32 values stored in the caller's []float64 scratch buffer; every
+// value converts to float32 exactly.
 //
-// Reimplementation of the findMinMaxPercentile algorithm from
-// RawTherapee/Siril using float32 arithmetic for scale, bin
-// assignment, and CDF walk — matching the C code's behavior.
-// The bin index uses uint16 truncation without clamping, matching
-// the C code's static_cast<uint16_t> behavior.
-func percentileFloat32Buf(data []float32, p float32, histo []uint32) float64 {
+// Siril details that matter for bit-exactness:
+//   - count is an integer (size_t) and is converted to float only where
+//     the C code compares or subtracts it (a float32 accumulator drifts
+//     once n exceeds 2^24);
+//   - the bin index is static_cast<uint16_t> of a float product;
+//   - every float32 product is rounded before it is added (explicit
+//     float32 conversions forbid the compiler from fusing them).
+func percentileFloat32Buf[S float32 | float64](data []S, p float32, histo []uint32) float64 {
 	n := 0
-	for _, v := range data {
-		if v == v { // skip NaN
-			n++
-		}
-	}
-	if n == 0 {
-		return 0
-	}
 	var minVal, maxVal float32
-	first := true
-	for _, v := range data {
-		if v != v {
+	for _, sv := range data {
+		v := float32(sv)
+		if v != v { // skip NaN
 			continue
 		}
-		if first {
+		if n == 0 {
 			minVal, maxVal = v, v
-			first = false
 		} else {
 			if v < minVal {
 				minVal = v
@@ -98,6 +118,18 @@ func percentileFloat32Buf(data []float32, p float32, histo []uint32) float64 {
 				maxVal = v
 			}
 		}
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	if math.IsInf(float64(minVal), 0) || math.IsInf(float64(maxVal), 0) {
+		return math.NaN()
+	}
+	if math.IsInf(float64(maxVal-minVal), 0) {
+		// The float32 range overflows: the scale is 0 and Siril's bin
+		// index would be a cast of NaN (undefined).
+		return math.NaN()
 	}
 	if maxVal-minVal == 0 {
 		return float64(minVal)
@@ -114,30 +146,31 @@ func percentileFloat32Buf(data []float32, p float32, histo []uint32) float64 {
 		histo[i] = 0
 	}
 	scale := float32(histoSize-1) / (maxVal - minVal)
-	for _, v := range data {
+	for _, sv := range data {
+		v := float32(sv)
 		if v != v {
 			continue
 		}
-		bin := uint16(scale * (v - minVal))
-		histo[bin]++
+		histo[uint16(float32(scale*(v-minVal)))]++
 	}
-	thresh := p * float32(n)
+	thresh := float32(p * float32(n))
 	k := 0
-	var count float32
-	for count < thresh && k < len(histo) {
-		count += float32(histo[k])
+	var count uint64
+	for float32(count) < thresh && k < len(histo) {
+		count += uint64(histo[k])
 		k++
 	}
 	var result float32
 	if k > 0 {
-		countPrev := count - float32(histo[k-1])
-		c0 := count - thresh
-		c1 := thresh - countPrev
-		result = (c1*float32(k) + c0*float32(k-1)) / (c0 + c1)
+		countPrev := count - uint64(histo[k-1])
+		c0 := float32(count) - thresh
+		c1 := thresh - float32(countPrev)
+		result = (float32(c1*float32(k)) + float32(c0*float32(k-1))) / (c0 + c1)
 	} else {
 		result = float32(k)
 	}
-	result = result/scale + minVal
+	result /= scale
+	result += minVal
 	if result < minVal {
 		result = minVal
 	}
@@ -147,19 +180,17 @@ func percentileFloat32Buf(data []float32, p float32, histo []uint32) float64 {
 	return float64(result)
 }
 
+// percentileGenericBuf is findMinMaxPercentile in float64.
 func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float64 {
-	// Collect non-NaN values and find min/max in one pass.
 	n := 0
 	var minVal, maxVal float64
-	started := false
 	for _, v := range data {
 		if isNaN(v) {
 			continue
 		}
 		fv := toFloat64(v)
-		if !started {
+		if n == 0 {
 			minVal, maxVal = fv, fv
-			started = true
 		} else {
 			if fv < minVal {
 				minVal = fv
@@ -173,11 +204,13 @@ func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float6
 	if n == 0 {
 		return 0
 	}
+	if math.IsInf(minVal, 0) || math.IsInf(maxVal, 0) || math.IsInf(maxVal-minVal, 0) {
+		return math.NaN()
+	}
 	if maxVal-minVal == 0 {
 		return minVal
 	}
 
-	// Histogram with min(65536, n) bins.
 	histoSize := n
 	if histoSize > MaxHistoSize {
 		histoSize = MaxHistoSize
@@ -195,7 +228,7 @@ func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float6
 		if isNaN(v) {
 			continue
 		}
-		bin := int(scale * (toFloat64(v) - minVal))
+		bin := int(float64(scale * (toFloat64(v) - minVal)))
 		if bin < 0 {
 			bin = 0
 		}
@@ -205,28 +238,25 @@ func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float6
 		histo[bin]++
 	}
 
-	// Walk CDF.
-	thresh := p * float64(n)
+	thresh := float64(p * float64(n))
 	k := 0
-	var count float64
-	for count < thresh {
-		count += float64(histo[k])
+	var count uint64
+	for float64(count) < thresh && k < len(histo) {
+		count += uint64(histo[k])
 		k++
 	}
 
-	// Interpolate.
 	var result float64
 	if k > 0 {
-		countPrev := count - float64(histo[k-1])
-		c0 := count - thresh
-		c1 := thresh - countPrev
-		result = (c1*float64(k) + c0*float64(k-1)) / (c0 + c1)
+		countPrev := count - uint64(histo[k-1])
+		c0 := float64(count) - thresh
+		c1 := thresh - float64(countPrev)
+		result = (float64(c1*float64(k)) + float64(c0*float64(k-1))) / (c0 + c1)
 	} else {
 		result = float64(k)
 	}
-
-	// Back to original range + clamp.
-	result = result/scale + minVal
+	result /= scale
+	result += minVal
 	if result < minVal {
 		result = minVal
 	}
@@ -236,7 +266,10 @@ func percentileGenericBuf[T Numeric](data []T, p float64, histo []uint32) float6
 	return result
 }
 
-// Median returns the median of data (the 50th percentile).
+// Median returns Percentile(data, 0.5): Siril's histogram_median_float
+// for []float32 input (bit-identical), the float64 equivalent otherwise.
+// It is a histogram approximation, not the exact middle element; use
+// QuickSelect for an exact order statistic.
 //
 // Allocates a histogram on every call. For hot paths, use MedianBuf
 // with a caller-supplied scratch buffer.
@@ -251,9 +284,18 @@ func MedianBuf[T Numeric](data []T, histo []uint32) float64 {
 	return PercentileBuf(data, 0.5, histo)
 }
 
-// MAD returns the Median Absolute Deviation: median(|xi - median(x)|).
-// This is the raw MAD — caller multiplies by 1.4826 for Gaussian-
-// equivalent sigma if needed.
+// MAD returns the raw Median Absolute Deviation, median(|xi - median(x)|),
+// with both medians computed by Median. Multiply by 1.4826 for a
+// Gaussian-equivalent sigma.
+//
+// For []float32 input this is Siril's siril_stats_float_mad applied to
+// the NaN-free data with the median from histogram_median_float: the
+// deviations are fabsf(x - (float)median) in float32 and the result is
+// bit-identical to Siril's (tested against the verbatim Siril source).
+// Other element types use float64 deviations and the float64 median.
+// NaN values are skipped; if the median is NaN (the data contains ±Inf,
+// or max-min overflows; see Percentile) the MAD is NaN. Empty or all-NaN
+// input returns 0.
 //
 // Allocates two slices on every call (histogram + absolute deviations).
 // For hot paths, use MADWithMedianBuf with caller-supplied scratch.
@@ -289,36 +331,47 @@ func MADWithMedian[T Numeric](data []T) (median, mad float64) {
 //
 // Panics if either buffer is too small.
 //
-// Note: absDev is []float64 (not generic []T) so a single buffer
-// works for any T. The deviations are computed as float64
-// regardless of input type, matching the existing MADWithMedian.
+// absDev is []float64 (not generic []T) so a single buffer works for
+// any T. For []float32 input it holds the float32 deviations (exactly
+// representable in float64), so the result is still Siril's float32
+// computation.
 func MADWithMedianBuf[T Numeric](data []T, histo []uint32, absDev []float64) (median, mad float64) {
 	if cap(absDev) < len(data) {
 		panic(fmt.Sprintf("stats: absDev buffer too small: got cap %d, need %d", cap(absDev), len(data)))
 	}
 
 	median = MedianBuf(data, histo)
+	if median != median {
+		return median, median
+	}
 
-	// Reset absDev length and append |xi - median|.
 	absDev = absDev[:0]
+	if f32, ok := any(data).([]float32); ok {
+		// siril_stats_float_mad: tmp[i] = fabsf(data[i] - median) with
+		// median converted to float.
+		m := float32(median)
+		for _, v := range f32 {
+			if v != v {
+				continue
+			}
+			absDev = append(absDev, math.Abs(float64(v-m)))
+		}
+		if len(absDev) == 0 {
+			return median, 0
+		}
+		return median, percentileFloat32Buf(absDev, 0.5, histo)
+	}
+
 	for _, v := range data {
 		if isNaN(v) {
 			continue
 		}
-		d := toFloat64(v) - median
-		if d < 0 {
-			d = -d
-		}
-		absDev = append(absDev, d)
+		absDev = append(absDev, math.Abs(toFloat64(v)-median))
 	}
 	if len(absDev) == 0 {
 		return median, 0
 	}
-
-	// MAD = median of the absolute deviations. Reuses the same histo
-	// scratch — PercentileBuf zeroes it on entry, so the previous
-	// median pass's contents don't corrupt this one.
+	// Reuses the same histo scratch: PercentileBuf zeroes it on entry.
 	mad = PercentileBuf(absDev, 0.5, histo)
 	return median, mad
 }
-

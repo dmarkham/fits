@@ -1,0 +1,1 @@
+{"name": "hcomp_i16", "type": "i16", "naxes": [40, 25], "algo": "HCOMPRESS_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 2, "gen_seed": 5016, "in_sha256": "011583d0d99a8680fdc96f557c08709dce236df59c2b9bbf6f661e532c90bdb7"}

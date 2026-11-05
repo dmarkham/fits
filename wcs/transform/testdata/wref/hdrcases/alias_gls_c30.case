@@ -1,0 +1,16 @@
+# AIPS legacy GLS projection (synthetic). wcslib 8.10 wcsset translates it
+# to SFL with the fiducial offset: PV1_0 = 1, phi0 = 0, theta0 = CRVAL2.
+NOTE alias GLS: RA---GLS, CRVAL2 = 30
+GRID 1.0 400.0 9 1.0 400.0 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 400
+NAXIS2  = 400
+CTYPE1  = 'RA---GLS'
+CTYPE2  = 'DEC--GLS'
+CRVAL1  = 83.8
+CRVAL2  = 30.0
+CRPIX1  = 200.5
+CRPIX2  = 180.5
+CDELT1  = -0.05
+CDELT2  = 0.05

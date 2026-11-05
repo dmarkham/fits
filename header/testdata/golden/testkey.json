@@ -1,0 +1,20 @@
+[
+ {"key": "SIMPLE", "status": 0},
+ {"key": "NAXIS1", "status": 0},
+ {"key": "DATE-OBS", "status": 0},
+ {"key": "A_B", "status": 0},
+ {"key": "A-B", "status": 0},
+ {"key": "1234567", "status": 0},
+ {"key": "12345678", "status": 0},
+ {"key": "LOWER", "status": 0},
+ {"key": "A B", "status": 207},
+ {"key": "A=B", "status": 207},
+ {"key": "A.B", "status": 207},
+ {"key": "A+B", "status": 207},
+ {"key": "A/B", "status": 207},
+ {"key": "A'B", "status": 207},
+ {"key": "A&B", "status": 207},
+ {"key": "\u00c3\u0089", "status": 207},
+ {"key": "TAB\u0009X", "status": 207},
+ {"key": "A*", "status": 207}
+]

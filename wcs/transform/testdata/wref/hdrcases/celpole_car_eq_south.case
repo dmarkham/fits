@@ -1,0 +1,22 @@
+# CAR with CRVAL2 = 0, LONPOLE = 0 and LATPOLE = -90: the two native-pole
+# solutions are latp = +90 and -90 and LATPOLE picks -90, so the
+# celestial SOUTH pole sits at the native pole and cos(latp) * cos(lat0)
+# = 0 (wcslib cel.c "celestial south pole at the native pole" branch:
+# lngp = lng0 - phip + phi0). Synthetic.
+NOTE pipeline: native pole at the celestial south pole (celset z = 0, latp < 0)
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 0.0
+LATPOLE = -90.0

@@ -1,0 +1,33 @@
+# TAN-SIP order 3 in PC + CDELT form (SIP is a prior distortion: applied
+# to the pixel offset before PC and CDELT). Synthetic.
+NOTE pipeline: SIP with PC + CDELT
+GRID 1 2048 9 1 2048 9
+PIX 1024.5 1024.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 2048
+NAXIS2  = 2048
+CTYPE1  = 'RA---TAN-SIP'
+CTYPE2  = 'DEC--TAN-SIP'
+CRVAL1  = 300.0
+CRVAL2  = 60.0
+CRPIX1  = 1024.5
+CRPIX2  = 1024.5
+CDELT1  = -1.1E-04
+CDELT2  = 1.1E-04
+PC1_1   = 0.99
+PC1_2   = 0.14
+PC2_1   = -0.14
+PC2_2   = 0.99
+A_ORDER = 3
+A_2_0   = 4.0E-06
+A_0_2   = -2.0E-06
+A_1_1   = 3.0E-06
+A_3_0   = 1.0E-10
+A_1_2   = -2.0E-10
+B_ORDER = 3
+B_2_0   = 1.0E-06
+B_1_1   = -5.0E-06
+B_0_2   = 2.0E-06
+B_0_3   = 3.0E-10
+B_2_1   = 1.0E-10

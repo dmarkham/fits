@@ -15,18 +15,20 @@ import (
 	"encoding/binary"
 )
 
-// Update folds the 2880-byte block b into the running 32-bit 1's-complement
-// checksum sum and returns the new value. It is the caller's responsibility
-// to ensure b is exactly 2880 bytes.
+// Update adds the bytes b to the running 32-bit ones'-complement checksum
+// sum and returns the new value. len(b) must be a multiple of 4 (FITS data
+// is always summed in whole 2880-byte blocks). b may span any number of
+// blocks: the 16-bit halves are accumulated in 64-bit counters and the
+// carries folded at the end, which gives the same ones'-complement sum as
+// cfitsio's ffcsum folding after every block. Because ones'-complement
+// addition is associative, Update(Update(s, a), b) == Update(s, a||b), so
+// header and data sums combine by continuing the sum, as cfitsio does.
 func Update(sum uint32, b []byte) uint32 {
-	// Read each block as 1440 big-endian uint16 values and accumulate into two
-	// 32-bit halves (hi: even-indexed shorts, lo: odd-indexed shorts). Fold
-	// overflow back in afterwards.
-	hi := uint32(sum >> 16)
-	lo := uint32(sum & 0xFFFF)
-	for i := 0; i < len(b); i += 4 {
-		hi += uint32(binary.BigEndian.Uint16(b[i : i+2]))
-		lo += uint32(binary.BigEndian.Uint16(b[i+2 : i+4]))
+	hi := uint64(sum >> 16)
+	lo := uint64(sum & 0xFFFF)
+	for i := 0; i+4 <= len(b); i += 4 {
+		hi += uint64(binary.BigEndian.Uint16(b[i : i+2]))
+		lo += uint64(binary.BigEndian.Uint16(b[i+2 : i+4]))
 	}
 	hicarry := hi >> 16
 	locarry := lo >> 16
@@ -36,15 +38,14 @@ func Update(sum uint32, b []byte) uint32 {
 		hicarry = hi >> 16
 		locarry = lo >> 16
 	}
-	return (hi << 16) + lo
+	return uint32(hi<<16 | lo)
 }
 
 // Compute returns the 32-bit 1's-complement checksum of the supplied bytes.
 // The length must be a multiple of 4 (i.e. the caller has already padded the
 // input to the block boundary as FITS requires).
 func Compute(data []byte) uint32 {
-	var sum uint32
-	return Update(sum, data)
+	return Update(0, data)
 }
 
 // excludeBytes are the ASCII punctuation characters between the digits and

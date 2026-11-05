@@ -1,0 +1,4 @@
+{"name": "azp_mu1_gamma45", "code": "AZP", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 1], [2, 45]],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 1, 45, null]},
+"forward": 1123, "inverse": 1395, "roundtrip": 858, "payload": "azp_mu1_gamma45.bin", "payload_bytes": 91596}

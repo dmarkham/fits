@@ -6,18 +6,22 @@ import (
 	"github.com/dmarkham/fits/wcs"
 )
 
-// TPV — TAN-PV polynomial distortion (the SCAMP / legacy ESO convention).
-//
-// TPV encodes a polynomial correction directly via PVi_m projection
-// parameters on the intermediate world coordinate axes. Unlike SIP (which
-// corrects in pixel space before the CD matrix), TPV corrects in
-// intermediate world coordinate space AFTER the linear step and BEFORE
-// the TAN projection.
+// TPV — TAN-PV polynomial distortion (the SCAMP / legacy ESO convention),
+// defined by the FITS registry note
+// https://fits.gsfc.nasa.gov/registry/tpvwcs/tpv.html ("the registry").
 //
 // CTYPE1 = 'RA---TPV', CTYPE2 = 'DEC--TPV'
 //
-// The polynomial uses up to 39 coefficients per axis (degree 7). Paper
-// IV defines the coefficient layout:
+// The registry defines TPV on CD-matrix intermediate coordinates
+// (xi, eta) = CD (p - CRPIX), in degrees: (xi', eta') = f(xi, eta), then
+// TAN. For a PC + CDELT header (which the registry does not define) we
+// follow wcslib, which applies TPV as a sequent distortion BEFORE CDELT,
+// i.e. on PC (p - CRPIX) (wcslib dis.h, "Historical idiosyncrasies": the
+// coefficients must then be scaled for the change of units). With
+// CDELT = 1, which is what astropy/wcslib write, both readings agree.
+//
+// The polynomial uses up to 40 coefficients per axis (PVi_0 .. PVi_39,
+// degree 7), in the registry's layout:
 //
 //	PV1_0  = constant
 //	PV1_1  = xi
@@ -30,13 +34,22 @@ import (
 //	PV1_8  = xi²*eta
 //	...and so on up through degree 7
 //
-// where (xi, eta) are the intermediate world coordinates (in degrees).
-// The r terms (PV1_3, PV1_11, PV1_23, PV1_39) are radial and make the
-// polynomial non-polynomial in (xi, eta) — they provide a way to encode
-// radial distortion efficiently.
+// The r terms (PV1_3, PV1_11, PV1_23, PV1_39) are radial (odd powers of r
+// only).
 //
-// Forward is direct polynomial evaluation. Inverse requires Newton
-// iteration against the forward polynomial.
+// The axis-2 polynomial uses the same layout with xi and eta exchanged:
+// PV2_1 multiplies eta, PV2_2 multiplies xi, PV2_4 is eta², and so on
+// (registry, wcslib tpv.c, SCAMP).
+//
+// Defaults: the registry says missing PV keywords default to 0 except
+// PV1_1 and PV2_1, which default to 1, and we follow it. wcslib 8.10
+// differs: when any PVi_m is present it defaults a missing PVi_1 to 0
+// (verified with astropy 8.0.2 / wcslib 8.10). Real SCAMP/DECam/ZTF/PTF
+// headers always write PVi_1, so this only matters for hand-made headers;
+// TestTPVMissingPV1DefaultsToOne pins our choice.
+//
+// Forward is direct polynomial evaluation. Inverse is Newton iteration
+// against the forward polynomial (see (*TPV).Inverse).
 
 // tpvTerms lists the (i, j, r-power) triples for each of the 40 TPV
 // coefficient slots. Radial coefficient r is sqrt(xi² + eta²).
@@ -49,46 +62,46 @@ var tpvTerms = [40]struct {
 	etaPow int
 	rPow   int
 }{
-	{0, 0, 0},  // PV1_0  = 1
-	{1, 0, 0},  // PV1_1  = xi
-	{0, 1, 0},  // PV1_2  = eta
-	{0, 0, 1},  // PV1_3  = r
-	{2, 0, 0},  // PV1_4  = xi²
-	{1, 1, 0},  // PV1_5  = xi*eta
-	{0, 2, 0},  // PV1_6  = eta²
-	{3, 0, 0},  // PV1_7  = xi³
-	{2, 1, 0},  // PV1_8  = xi²*eta
-	{1, 2, 0},  // PV1_9  = xi*eta²
-	{0, 3, 0},  // PV1_10 = eta³
-	{0, 0, 3},  // PV1_11 = r³
-	{4, 0, 0},  // PV1_12 = xi⁴
-	{3, 1, 0},  // PV1_13 = xi³*eta
-	{2, 2, 0},  // PV1_14 = xi²*eta²
-	{1, 3, 0},  // PV1_15 = xi*eta³
-	{0, 4, 0},  // PV1_16 = eta⁴
-	{5, 0, 0},  // PV1_17 = xi⁵
-	{4, 1, 0},  // PV1_18 = xi⁴*eta
-	{3, 2, 0},  // PV1_19 = xi³*eta²
-	{2, 3, 0},  // PV1_20 = xi²*eta³
-	{1, 4, 0},  // PV1_21 = xi*eta⁴
-	{0, 5, 0},  // PV1_22 = eta⁵
-	{0, 0, 5},  // PV1_23 = r⁵
-	{6, 0, 0},  // PV1_24 = xi⁶
-	{5, 1, 0},  // PV1_25 = xi⁵*eta
-	{4, 2, 0},  // PV1_26 = xi⁴*eta²
-	{3, 3, 0},  // PV1_27 = xi³*eta³
-	{2, 4, 0},  // PV1_28 = xi²*eta⁴
-	{1, 5, 0},  // PV1_29 = xi*eta⁵
-	{0, 6, 0},  // PV1_30 = eta⁶
-	{7, 0, 0},  // PV1_31 = xi⁷
-	{6, 1, 0},  // PV1_32 = xi⁶*eta
-	{5, 2, 0},  // PV1_33 = xi⁵*eta²
-	{4, 3, 0},  // PV1_34 = xi⁴*eta³
-	{3, 4, 0},  // PV1_35 = xi³*eta⁴
-	{2, 5, 0},  // PV1_36 = xi²*eta⁵
-	{1, 6, 0},  // PV1_37 = xi*eta⁶
-	{0, 7, 0},  // PV1_38 = eta⁷
-	{0, 0, 7},  // PV1_39 = r⁷
+	{0, 0, 0}, // PV1_0  = 1
+	{1, 0, 0}, // PV1_1  = xi
+	{0, 1, 0}, // PV1_2  = eta
+	{0, 0, 1}, // PV1_3  = r
+	{2, 0, 0}, // PV1_4  = xi²
+	{1, 1, 0}, // PV1_5  = xi*eta
+	{0, 2, 0}, // PV1_6  = eta²
+	{3, 0, 0}, // PV1_7  = xi³
+	{2, 1, 0}, // PV1_8  = xi²*eta
+	{1, 2, 0}, // PV1_9  = xi*eta²
+	{0, 3, 0}, // PV1_10 = eta³
+	{0, 0, 3}, // PV1_11 = r³
+	{4, 0, 0}, // PV1_12 = xi⁴
+	{3, 1, 0}, // PV1_13 = xi³*eta
+	{2, 2, 0}, // PV1_14 = xi²*eta²
+	{1, 3, 0}, // PV1_15 = xi*eta³
+	{0, 4, 0}, // PV1_16 = eta⁴
+	{5, 0, 0}, // PV1_17 = xi⁵
+	{4, 1, 0}, // PV1_18 = xi⁴*eta
+	{3, 2, 0}, // PV1_19 = xi³*eta²
+	{2, 3, 0}, // PV1_20 = xi²*eta³
+	{1, 4, 0}, // PV1_21 = xi*eta⁴
+	{0, 5, 0}, // PV1_22 = eta⁵
+	{0, 0, 5}, // PV1_23 = r⁵
+	{6, 0, 0}, // PV1_24 = xi⁶
+	{5, 1, 0}, // PV1_25 = xi⁵*eta
+	{4, 2, 0}, // PV1_26 = xi⁴*eta²
+	{3, 3, 0}, // PV1_27 = xi³*eta³
+	{2, 4, 0}, // PV1_28 = xi²*eta⁴
+	{1, 5, 0}, // PV1_29 = xi*eta⁵
+	{0, 6, 0}, // PV1_30 = eta⁶
+	{7, 0, 0}, // PV1_31 = xi⁷
+	{6, 1, 0}, // PV1_32 = xi⁶*eta
+	{5, 2, 0}, // PV1_33 = xi⁵*eta²
+	{4, 3, 0}, // PV1_34 = xi⁴*eta³
+	{3, 4, 0}, // PV1_35 = xi³*eta⁴
+	{2, 5, 0}, // PV1_36 = xi²*eta⁵
+	{1, 6, 0}, // PV1_37 = xi*eta⁶
+	{0, 7, 0}, // PV1_38 = eta⁷
+	{0, 0, 7}, // PV1_39 = r⁷
 }
 
 // TPV holds a parsed TPV distortion: one coefficient array per axis.
@@ -120,8 +133,8 @@ func ParseTPV(w *wcs.Header) *TPV {
 	if !hasAny {
 		return nil
 	}
-	// Set unit-diagonal defaults: if PV_1 is not explicitly set, assume 1
-	// (identity). This matches the SCAMP convention.
+	// Registry defaults: PV1_1 and PV2_1 are 1 when absent (wcslib 8.10
+	// uses 0 instead; see the file comment).
 	if _, ok := w.PV[wcs.PVKey{Axis: w.LonAxis, Index: 1}]; !ok {
 		t.Axis1[1] = 1.0
 	}
@@ -140,9 +153,9 @@ func tpvPowers(xi, eta float64) (xiPow, etaPow, rPow [8]float64) {
 	r := math.Hypot(xi, eta)
 	xiPow[0], etaPow[0], rPow[0] = 1, 1, 1
 	for k := 1; k < 8; k++ {
-		xiPow[k] = xiPow[k-1] * xi
-		etaPow[k] = etaPow[k-1] * eta
-		rPow[k] = rPow[k-1] * r
+		xiPow[k] = float64(xiPow[k-1] * xi)
+		etaPow[k] = float64(etaPow[k-1] * eta)
+		rPow[k] = float64(rPow[k-1] * r)
 	}
 	return
 }
@@ -157,7 +170,7 @@ func evalTPV(coefs *[40]float64, xi, eta float64) float64 {
 			continue
 		}
 		term := tpvTerms[k]
-		v := c * xiPow[term.xiPow] * etaPow[term.etaPow]
+		v := float64(c * xiPow[term.xiPow] * etaPow[term.etaPow])
 		if term.rPow > 0 {
 			v *= rPow[term.rPow]
 		}
@@ -197,16 +210,16 @@ func evalTPVWithJacobian(coefs *[40]float64, xi, eta float64) (val, dvdxi, dvdet
 
 		if p == 0 {
 			// Non-radial monomial.
-			val += c * xiPow[a] * etaPow[b]
+			val += float64(c * xiPow[a] * etaPow[b])
 			if a >= 1 {
-				dvdxi += c * float64(a) * xiPow[a-1] * etaPow[b]
+				dvdxi += float64(c * float64(a) * xiPow[a-1] * etaPow[b])
 			}
 			if b >= 1 {
-				dvdeta += c * xiPow[a] * float64(b) * etaPow[b-1]
+				dvdeta += float64(c * xiPow[a] * float64(b) * etaPow[b-1])
 			}
 		} else {
 			// Radial term: c·r^p (TPV has a=b=0 for all radial slots).
-			val += c * rPow[p]
+			val += float64(c * rPow[p])
 			if r > rMin {
 				if p == 1 {
 					dvdxi += c * xi / r
@@ -214,8 +227,8 @@ func evalTPVWithJacobian(coefs *[40]float64, xi, eta float64) (val, dvdxi, dvdet
 				} else {
 					// p ≥ 3 odd: c·p·r^(p-2)·(xi|eta)
 					rp2 := rPow[p-2]
-					dvdxi += c * float64(p) * rp2 * xi
-					dvdeta += c * float64(p) * rp2 * eta
+					dvdxi += float64(c * float64(p) * rp2 * xi)
+					dvdeta += float64(c * float64(p) * rp2 * eta)
 				}
 			}
 		}
@@ -227,36 +240,26 @@ func evalTPVWithJacobian(coefs *[40]float64, xi, eta float64) (val, dvdxi, dvdet
 // Input (xi, eta) is the pre-distortion position; output is the
 // distortion-corrected position, both in degrees.
 func (t *TPV) Forward(xi, eta float64) (xiOut, etaOut float64) {
-	return evalTPV(&t.Axis1, xi, eta), evalTPV(&t.Axis2, xi, eta)
+	// Axis 2 evaluates the shared term table with xi and eta exchanged.
+	return evalTPV(&t.Axis1, xi, eta), evalTPV(&t.Axis2, eta, xi)
 }
 
-// Inverse applies the inverse TPV correction via Newton iteration
-// against the forward polynomial, using the analytic Jacobian. Each
-// iteration evaluates both the residual and the 2×2 Jacobian in one
-// pass per axis, so total cost is 2 polynomial walks per iteration
-// (vs. 6 for the previous numerical-Jacobian version). The analytic
-// Jacobian is also numerically stable at any distance from the origin,
-// unlike finite differences which lose precision at the h ~ 1e-7
-// scale.
+// Inverse inverts the TPV polynomial by Newton iteration from (xi',
+// eta') with the analytic Jacobian (one polynomial walk per axis per
+// iteration; finite differences would lose precision at small steps). See
+// newton2 for the relative convergence test. ok is false when the
+// iteration does not converge (no inverse near the start point, e.g.
+// beyond a fold of the polynomial); the returned values are then
+// meaningless.
 func (t *TPV) Inverse(xiPrime, etaPrime float64) (xi, eta float64, ok bool) {
-	// Initial guess: pass-through (TPV is close to identity for
-	// small distortions).
-	xi, eta = xiPrime, etaPrime
-	for range 50 {
+	return newton2(func(xi, eta float64) (fx, fy, j11, j12, j21, j22 float64) {
 		fx, dfxdxi, dfxdeta := evalTPVWithJacobian(&t.Axis1, xi, eta)
-		fy, dfydxi, dfydeta := evalTPVWithJacobian(&t.Axis2, xi, eta)
-		rx := xiPrime - fx
-		ry := etaPrime - fy
-		if math.Abs(rx) < 1e-13 && math.Abs(ry) < 1e-13 {
-			return xi, eta, true
-		}
-		// 2×2 Newton step: solve J · Δ = residual, apply.
-		det := dfxdxi*dfydeta - dfxdeta*dfydxi
-		if det == 0 {
-			return 0, 0, false
-		}
-		xi += (dfydeta*rx - dfxdeta*ry) / det
-		eta += (-dfydxi*rx + dfxdxi*ry) / det
-	}
-	return xi, eta, true
+		// Axis 2 swaps xi and eta, so its partials come back swapped too.
+		fy, dfydeta, dfydxi := evalTPVWithJacobian(&t.Axis2, eta, xi)
+		return fx, fy, dfxdxi, dfxdeta, dfydxi, dfydeta
+	}, xiPrime, etaPrime, xiPrime, etaPrime, tpvNewtonFloor)
 }
+
+// tpvNewtonFloor is the coordinate size below which TPV convergence is
+// tested absolutely (degrees in the usual CD form: 1e-10 deg = 0.36 uas).
+const tpvNewtonFloor = 1e-10

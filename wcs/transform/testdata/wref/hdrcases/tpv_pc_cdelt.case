@@ -1,0 +1,39 @@
+# TPV in PC + CDELT form with CDELT != 1. The TPV registry defines the
+# polynomial on CD-matrix intermediate coordinates only; wcslib (dis.h,
+# "Historical idiosyncrasies") applies TPV as a sequent distortion BEFORE
+# CDELT, i.e. on PC*(p - CRPIX), and notes that the coefficients must then
+# be scaled for the change of units. We follow wcslib. The coefficients
+# here are in those pixel-like units (synthetic).
+NOTE pipeline: TPV with PC + CDELT, polynomial applied before CDELT (wcslib)
+GRID 1 2048 9 1 2048 9
+PIX 1024.5 1024.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 2048
+NAXIS2  = 2048
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CRVAL1  = 35.5
+CRVAL2  = -4.75
+CRPIX1  = 1024.5
+CRPIX2  = 1024.5
+CDELT1  = -7.3E-05
+CDELT2  = 7.3E-05
+PC1_1   = 1.0
+PC1_2   = -0.0015
+PC2_1   = 0.0016
+PC2_2   = 1.0
+PV1_0   = 0.3
+PV1_1   = 1.0012
+PV1_2   = -2.1E-03
+PV1_4   = 3.0E-06
+PV1_5   = -2.2E-06
+PV1_7   = -1.0E-09
+PV1_11  = 2.0E-10
+PV2_0   = -0.2
+PV2_1   = 1.0008
+PV2_2   = 1.7E-03
+PV2_4   = 2.5E-06
+PV2_6   = -1.2E-06
+PV2_10  = 3.0E-09
+PV2_11  = -1.0E-10

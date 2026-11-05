@@ -3,11 +3,9 @@ package fits
 import (
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 
 	"github.com/dmarkham/fits/header"
-	"github.com/dmarkham/fits/internal/bigendian"
 	"github.com/dmarkham/fits/internal/bitpix"
 	"github.com/dmarkham/fits/internal/block"
 )
@@ -21,10 +19,67 @@ import (
 // callers must NOT add these to hdr themselves. Any keywords in hdr other
 // than the mandatory structural ones are emitted after the structural block.
 //
-// BSCALE/BZERO, if present in hdr, are honored on the write side: the
-// library applies the inverse scaling to each value before encoding (so that
-// reading the file back through ReadPixels[T] with the same BSCALE/BZERO
-// returns the original values exactly).
+// Caller cards are copied with header.AddCard. A card read from a file is
+// written as its bytes. An edited Cards() copy (Key/Type/Value/Comment
+// changed) is written from its fields under the upper-cased keyword, and
+// is left out like any caller card for a keyword the writer computes
+// itself. An unedited lowercase-keyword (non-HIERARCH) card makes the
+// writer return an error wrapping header.ErrInvalidKeyword: cfitsio and
+// astropy read such a card differently.
+//
+// BITPIX follows T: uint8 -> 8, int16 -> 16, int32 -> 32, int64 -> 64,
+// float32 -> -32, float64 -> -64. Types FITS has no BITPIX for are written
+// with the standard offset conventions (FITS 4.0 §5.3, Table 11), exactly
+// as cfitsio and astropy write them: int8 -> BITPIX 8 with BZERO = -128,
+// uint16 -> 16 with BZERO = 32768, uint32 -> 32 with BZERO = 2147483648,
+// uint64 -> 64 with BZERO = 9223372036854775808 (and BSCALE = 1), so that
+// every FITS reader sees the original values.
+//
+// When hdr carries BSCALE and/or BZERO (a missing one defaults to 1 / 0)
+// those are used instead of the convention, read from the encoded cards by
+// the scaling-card rule every reader applies (scalingCards, scaling.go;
+// D exponents are read, a card the rule refuses is refused here; proven
+// by TestWriteImageKeywordsMatchCfitsio), and each value is stored as
+// (value - BZERO) / BSCALE: for integer BITPIX rounded half away from
+// zero, for float BITPIX stored as the float result. This is cfitsio's
+// fits_write_img arithmetic, and the bytes written equal cfitsio's for
+// the same values and cards, with one deliberate exception: with BSCALE =
+// 1 and an integral BZERO, integer data is offset exactly, so for BITPIX
+// 64 with an integral BZERO other than 0 and 2^63 a value that no double
+// holds is stored as v - BZERO exactly, where cfitsio rounds v - BZERO
+// through a double (v = 2^62 + 1, BZERO 1000: v - 1000 here,
+// 4611686018427386880 in cfitsio). Reading the file back with
+// ReadPixels[T] returns the original values whenever they were
+// representable (not rounded).
+//
+// A value that cannot be stored is never clamped: WriteImage returns an
+// error wrapping ErrNumOverflow, naming the first such value, and writes
+// nothing. For integer BITPIX that is a stored value outside the stored
+// range (BITPIX 8: 0..255, 16: int16, 32: int32, 64: int64) by more than
+// cfitsio's 0.49 rounding margin, exactly where cfitsio's fits_write_img
+// stores the range limit and reports NUM_OVERFLOW (412), and in two places
+// where cfitsio stores a wrong value without reporting it: a BITPIX 64
+// scaled value of exactly 2^63 (cfitsio's out-of-range cast stores
+// INT64_MIN) and an exact int64 offset beyond the range that cfitsio's
+// double arithmetic absorbs (v = -2^63 with BZERO 1000). For float BITPIX
+// it is a finite value whose scaled form is infinite in the stored type
+// (cfitsio stores the infinity). Proven per value against cfitsio by
+// TestWriteImageOverflowMatchesCfitsio.
+//
+// WriteImage returns an error wrapping ErrInvalidScaling, and writes
+// nothing, when hdr's BSCALE/BZERO/BLANK cards cannot store the data so
+// that cfitsio reads it back: BSCALE = 0 (cfitsio's fits_set_bscale
+// refuses it, ZERO_SCALE), a BSCALE, BZERO or BLANK given twice (cfitsio
+// applies the last card), a value cfitsio cannot convert (a quoted string,
+// a lowercase 'd' exponent, Inf, NaN, an over- or underflowing number; it
+// would substitute the default), a BLANK that is not an integer,
+// BLANK = 1234554321 (cfitsio's NULL_UNDEFINED), and a scaling card that
+// cannot be encoded (it would never reach the disk).
+//
+// The written data are proven byte-identical to cfitsio's (outside the
+// BITPIX 64 exception above), and read back identically by cfitsio,
+// fitsverify and astropy, for every BITPIX and convention
+// (testdata/images/cases.json).
 func WriteImage[T Numeric](dst WriteTarget, hdr *header.Header, shape []int64, data []T) (*ImageHDU, error) {
 	bp := pickBitpix[T]()
 	if !bp.Valid() {
@@ -45,59 +100,100 @@ func WriteImage[T Numeric](dst WriteTarget, hdr *header.Header, shape []int64, d
 		}
 	}
 	if int64(len(data)) != npix {
-		return nil, fmt.Errorf("fits: WriteImage: data length %d != product of shape %d", len(data), npix)
+		return nil, fmt.Errorf("fits: WriteImage: %w: data length %d != product of shape %d", ErrShapeMismatch, len(data), npix)
 	}
-	// If BSCALE/BZERO is present, apply inverse scaling so that
-	// ReadPixels with the same BSCALE/BZERO recovers the original
-	// values. For integer BITPIX, clamp the result to the target
-	// type's range (matching Siril's savefits behavior). Float
-	// BITPIX preserves the full range — no clamping.
+	s, cards, err := writeScaling[T](hdr)
+	if err != nil {
+		return nil, err
+	}
+	// Encode before anything is written, so that a value that cannot be
+	// stored refuses the whole write.
+	enc, err := encodeOrOverflow(bp, s, data)
+	if err != nil {
+		return nil, fmt.Errorf("fits: WriteImage: %w", err)
+	}
+	d := anyData{
+		bp:    bp,
+		n:     int64(len(data)),
+		cards: cards,
+		emit: func(w io.Writer) error {
+			if len(enc) == 0 {
+				return nil
+			}
+			_, err := w.Write(enc)
+			return err
+		},
+	}
+	return dst.writeImage(bp, hdr, shape, d)
+}
+
+// writeScaling picks the scaling WriteImage stores T with: the caller's
+// BSCALE/BZERO when hdr has either, else the int8/unsigned offset
+// convention for T (returned with the BZERO/BSCALE cards to add), else none.
+//
+// The caller's cards are read from their encoded bytes by the scaling-card
+// rule every reader applies (scalingCards), so the values are stored with
+// the scaling the written file is read with. A card the rule refuses is
+// refused here (a wrapped ErrInvalidScaling), and so are a keyword given
+// twice (the readers apply the last; a caller who wrote two meant one of
+// them) and BSCALE = 0.
+func writeScaling[T Numeric](hdr *header.Header) (scaling, []header.Card, error) {
 	if hdr != nil {
-		bscale, errS := hdr.Float("BSCALE")
-		bzero, errZ := hdr.Float("BZERO")
-		hasScale := errS == nil || errZ == nil
-		if errS != nil {
-			bscale = 1
+		k, err := scalingCards(encodedCards(hdr, isMandatoryImageKey), pickBitpix[T](), false)
+		if err != nil {
+			return scaling{}, nil, err
 		}
-		if errZ != nil {
-			bzero = 0
+		if err := checkWriteScaling(k); err != nil {
+			return scaling{}, nil, err
 		}
-		if hasScale && !(bscale == 1 && bzero == 0) {
-			data = applyInverseScaling(data, bp, bscale, bzero)
+		if k.count[keyBscale] > 0 || k.count[keyBzero] > 0 {
+			return newScaling(k.bscale, k.bzero), nil, nil
 		}
 	}
-	return dst.writeImage(bp, hdr, shape, anyDataFor(data))
+	var z T
+	var off float64
+	var text, comment string
+	switch any(z).(type) {
+	case int8:
+		off, text, comment = -128, "-128", "offset data range to that of signed byte"
+	case uint16:
+		off, text, comment = 32768, "32768", "offset data range to that of unsigned short"
+	case uint32:
+		off, text, comment = 2147483648, "2147483648", "offset data range to that of unsigned long"
+	case uint64:
+		off, text, comment = 0x1p63, "9223372036854775808", "offset data range to that of unsigned long long"
+	default:
+		return newScaling(1, 0), nil, nil
+	}
+	return newScaling(1, off), []header.Card{
+		rawNumberCard(header.KeyBzero, text, off, comment),
+		rawNumberCard(header.KeyBscale, "1", 1, "default scaling factor"),
+	}, nil
 }
 
-// applyInverseScaling converts physical values back to on-disk
-// representation: on_disk = (physical - bzero) / bscale. For integer
-// BITPIX, the result is clamped to the target type's range to prevent
-// wraparound. Returns a new slice (never mutates the input).
-func applyInverseScaling[T Numeric](data []T, bp bitpix.BITPIX, bscale, bzero float64) []T {
-	out := make([]T, len(data))
-	invScale := 1.0 / bscale
-	for i, v := range data {
-		raw := (float64(v) - bzero) * invScale
-		out[i] = clampToType[T](raw, bp)
+// checkWriteScaling refuses scaling cards that the rule accepts but that
+// cannot store the data as the caller meant (see writeScaling).
+func checkWriteScaling(k imageCards) error {
+	for i, name := range cardKeys {
+		if k.count[i] > 1 {
+			return fmt.Errorf("%w: %d %s cards (the readers apply the last one)", ErrInvalidScaling, k.count[i], name)
+		}
 	}
-	return out
+	if k.count[keyBscale] > 0 && k.bscale == 0 {
+		return fmt.Errorf("%w: BSCALE = 0 would store every value as BZERO (cfitsio refuses it: ZERO_SCALE)", ErrInvalidScaling)
+	}
+	return nil
 }
 
-// clampToType converts a float64 value to T, clamping to the target
-// integer type's range. Float types pass through without clamping.
-func clampToType[T Numeric](v float64, bp bitpix.BITPIX) T {
-	switch bp {
-	case bitpix.Int8:
-		v = math.Max(-128, math.Min(127, math.Round(v)))
-	case bitpix.Int16:
-		v = math.Max(-32768, math.Min(32767, math.Round(v)))
-	case bitpix.Int32:
-		v = math.Max(-2147483648, math.Min(2147483647, math.Round(v)))
-	case bitpix.Int64:
-		v = math.Max(-9223372036854775808, math.Min(9223372036854775807, math.Round(v)))
-	}
-	// Float types: no clamping, no rounding.
-	return T(v)
+// rawNumberCard builds a numeric card whose on-disk text is exactly text
+// (right-justified in columns 11-30, as cfitsio writes it). The integer
+// 9223372036854775808 does not fit an int64 card value, so the card keeps
+// its text in Raw and its value as the float64 the reader uses.
+func rawNumberCard(key, text string, v float64, comment string) header.Card {
+	line := fmt.Sprintf("%-8s= %20s / %s", key, text, comment)
+	var raw [header.CardWidth]byte
+	copy(raw[:], fmt.Sprintf("%-80s", line))
+	return header.Card{Key: key, Value: v, Type: header.TypeFloat, Comment: comment, Raw: raw}
 }
 
 // pickBitpix returns the matching BITPIX enum for the generic numeric type T.
@@ -121,105 +217,13 @@ func pickBitpix[T Numeric]() bitpix.BITPIX {
 }
 
 // anyData wraps a typed []T as an interface-ish container for the write
-// pipeline. We carry the type tag and a bytes-producing method.
+// pipeline. We carry the type tag, extra header cards (the BZERO/BSCALE of
+// an offset convention) and a bytes-producing method.
 type anyData struct {
-	bp   bitpix.BITPIX
-	n    int64
-	emit func(w io.Writer) error
-}
-
-func anyDataFor[T Numeric](data []T) anyData {
-	return anyData{
-		bp: pickBitpix[T](),
-		n:  int64(len(data)),
-		emit: func(w io.Writer) error {
-			return emitPixels(w, data)
-		},
-	}
-}
-
-// emitPixels writes data as big-endian bytes to w. The function is generic
-// over T but, because Go generics don't dispatch on method sets of
-// encoding/binary primitives, we branch on the runtime type once.
-func emitPixels[T Numeric](w io.Writer, data []T) error {
-	if len(data) == 0 {
-		return nil
-	}
-	var zero T
-	switch any(zero).(type) {
-	case int8:
-		buf := make([]byte, len(data))
-		for i, v := range data {
-			buf[i] = byte(int8(any(v).(int8)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case uint8:
-		// uint8 data on disk is unsigned byte; map 1:1.
-		buf := make([]byte, len(data))
-		for i, v := range data {
-			buf[i] = byte(any(v).(uint8))
-		}
-		_, err := w.Write(buf)
-		return err
-	case int16:
-		buf := make([]byte, len(data)*2)
-		for i, v := range data {
-			bigendian.PutInt16(buf[i*2:], int16(any(v).(int16)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case uint16:
-		buf := make([]byte, len(data)*2)
-		for i, v := range data {
-			bigendian.PutUint16(buf[i*2:], uint16(any(v).(uint16)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case int32:
-		buf := make([]byte, len(data)*4)
-		for i, v := range data {
-			bigendian.PutInt32(buf[i*4:], int32(any(v).(int32)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case uint32:
-		buf := make([]byte, len(data)*4)
-		for i, v := range data {
-			bigendian.PutUint32(buf[i*4:], uint32(any(v).(uint32)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case int64:
-		buf := make([]byte, len(data)*8)
-		for i, v := range data {
-			bigendian.PutInt64(buf[i*8:], int64(any(v).(int64)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case uint64:
-		buf := make([]byte, len(data)*8)
-		for i, v := range data {
-			bigendian.PutUint64(buf[i*8:], uint64(any(v).(uint64)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case float32:
-		buf := make([]byte, len(data)*4)
-		for i, v := range data {
-			bigendian.PutFloat32(buf[i*4:], float32(any(v).(float32)))
-		}
-		_, err := w.Write(buf)
-		return err
-	case float64:
-		buf := make([]byte, len(data)*8)
-		for i, v := range data {
-			bigendian.PutFloat64(buf[i*8:], float64(any(v).(float64)))
-		}
-		_, err := w.Write(buf)
-		return err
-	}
-	return fmt.Errorf("fits: emitPixels: unsupported type %T", zero)
+	bp    bitpix.BITPIX
+	n     int64
+	cards []header.Card
+	emit  func(w io.Writer) error
 }
 
 // WriteTarget abstracts the two sinks WriteImage can emit into: a *File
@@ -248,7 +252,10 @@ func (f *File) writeImage(bp bitpix.BITPIX, hdr *header.Header, shape []int64, d
 	}
 
 	isPrimary := f.mode == ModeCreate && len(f.hdus) == 0
-	rec, err := emitImageHDU(f.bw, bp, hdr, shape, data, isPrimary, len(f.hdus))
+	// In ModeEdit the append runs under the undo journal (journal.go).
+	rec, err := f.journaledAppend(f.bw.Pos(), func() (*hduRecord, error) {
+		return emitImageHDU(f.bw, bp, hdr, shape, data, isPrimary, len(f.hdus))
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -263,20 +270,24 @@ func emitImageHDU(bw *block.Writer, bp bitpix.BITPIX, userHdr *header.Header, sh
 	start := bw.Pos()
 
 	// Build the mandatory structural header cards in the required order.
-	h := header.New()
+	hb := newHeaderBuilder()
 	if isPrimary {
-		h.Set(header.KeySimple, true, "conforms to FITS standard")
+		hb.set(header.KeySimple, true, "conforms to FITS standard")
 	} else {
-		h.Set(header.KeyXtension, "IMAGE   ", "image extension")
+		hb.set(header.KeyXtension, "IMAGE   ", "image extension")
 	}
-	h.Set(header.KeyBitpix, int64(bp), "bits per pixel")
-	h.Set(header.KeyNaxis, int64(len(shape)), "number of axes")
+	hb.set(header.KeyBitpix, int64(bp), "bits per pixel")
+	hb.set(header.KeyNaxis, int64(len(shape)), "number of axes")
 	for i, n := range shape {
-		h.Set("NAXIS"+strconv.Itoa(i+1), n, "")
+		hb.set("NAXIS"+strconv.Itoa(i+1), n, "")
 	}
 	if !isPrimary {
-		h.Set(header.KeyPcount, int64(0), "no parameter bytes")
-		h.Set(header.KeyGcount, int64(1), "one group")
+		hb.set(header.KeyPcount, int64(0), "no parameter bytes")
+		hb.set(header.KeyGcount, int64(1), "one group")
+	}
+	// The offset-convention BZERO/BSCALE cards (raw bytes, kept verbatim).
+	for _, c := range data.cards {
+		hb.add(c)
 	}
 	// Append user-supplied keywords, filtering out any that would duplicate
 	// the mandatory ones.
@@ -285,13 +296,14 @@ func emitImageHDU(bw *block.Writer, bp bitpix.BITPIX, userHdr *header.Header, sh
 			if isMandatoryImageKey(c.Key) {
 				continue
 			}
-			if err := h.Add(c.Key, c.Value, c.Comment); err != nil {
-				return nil, err
-			}
+			hb.add(c)
 		}
 	}
 
-	hdrBytes, err := header.Encode(h)
+	if hb.err != nil {
+		return nil, fmt.Errorf("fits: image header: %w", hb.err)
+	}
+	hdrBytes, err := header.Encode(hb.h)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +342,7 @@ func emitImageHDU(bw *block.Writer, bp bitpix.BITPIX, userHdr *header.Header, sh
 		shape:       append([]int64(nil), shape...),
 		gcount:      1,
 		rawHeader:   hdrBytes,
-		parsed:      h,
+		parsed:      hb.h,
 	}
 	// Mark parsed once so lazy loader doesn't re-parse in place.
 	rec.once.Do(func() {})
@@ -360,4 +372,3 @@ func isMandatoryImageKey(key string) bool {
 	}
 	return false
 }
-

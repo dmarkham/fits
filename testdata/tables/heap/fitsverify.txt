@@ -1,0 +1,11 @@
+verification OK: heap_end_exact.fits 
+verification FAILED: heap_end_plus1.fits , 0 warnings and 1 errors
+verification FAILED: heap_neg_off.fits   , 1 warnings and 1 errors
+verification FAILED: heap_neg_off_gap.fits, 1 warnings and 1 errors
+verification FAILED: heap_off_eq.fits    , 0 warnings and 1 errors
+verification OK: heap_theap_end.fits 
+verification OK: heap_theap_end_plus1.fits
+verification FAILED: heap_theap_fixed_minus1.fits, 0 warnings and 1 errors
+verification FAILED: heap_theap_float.fits, 0 warnings and 1 errors
+verification OK: heap_theap_gap_exact.fits
+verification OK: heap_theap_gap_plus1.fits

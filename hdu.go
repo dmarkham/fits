@@ -67,8 +67,21 @@ func makeHDU(r *hduRecord) (HDU, error) {
 		return &CompressedImageHDU{rec: r, tbl: &BinaryTableHDU{rec: r}}, nil
 	case kindRandomGroups:
 		return nil, ErrRandomGroups
+	case kindTiledTable:
+		return nil, fmt.Errorf("%w (HDU %d)", ErrTiledTableCompression, r.index)
 	}
-	return nil, fmt.Errorf("fits: unknown HDU kind %v at index %d", r.kind, r.index)
+	return nil, &UnsupportedExtensionError{Index: r.index, XTension: r.xtension}
+}
+
+// HeaderOf returns h's parsed header like h.Header(), but returns the
+// parse error instead of panicking when package header cannot parse one of
+// the header's cards.
+func HeaderOf(h HDU) (*header.Header, error) {
+	rec := hduRecordOf(h)
+	if rec == nil {
+		return nil, fmt.Errorf("fits: HeaderOf: unsupported HDU type %T", h)
+	}
+	return rec.loadHeader()
 }
 
 // loadHeader parses the retained raw header bytes into a full

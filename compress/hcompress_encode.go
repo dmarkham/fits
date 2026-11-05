@@ -6,25 +6,33 @@ import (
 )
 
 // HCOMPRESS_1 encoder. Symmetric counterpart of the decoder in
-// hcompress.go, ported from cfitsio/fits_hcompress.c.
+// hcompress.go, ported from cfitsio/fits_hcompress.c: fits_hcompress
+// (32-bit transform, used by cfitsio for BITPIX 8 and 16 tiles) and
+// fits_hcompress64 (64-bit transform, used for BITPIX 32 tiles). The
+// output is byte-identical to libcfitsio 4.7.0 for both
+// (TestHcompressEncodeMatchesCfitsio, golden streams from
+// compress/testdata/cref), including full-range int32 tiles.
 //
 // Pipeline:
 //
 //  1. htrans   — forward H-transform (log2n passes of 2x2 butterfly +
-//                row/column shuffle). Produces signed wavelet coefficients.
+//     row/column shuffle). Produces signed wavelet coefficients.
 //  2. digitize — divide by scale (0 = lossless, leaves coefficients
-//                unchanged).
+//     unchanged).
 //  3. encode   — write header (magic + nx + ny + scale + sumall), pull
-//                sign bits into a separate buffer, compute per-quadrant
-//                nbitplanes[3], then call doencode.
+//     sign bits into a separate buffer, compute per-quadrant
+//     nbitplanes[3], then call doencode.
 //  4. doencode — for each quadrant, call qtreeEncodeHC which walks the
-//                bit planes from MSB to LSB. For each plane, try
-//                quadtree-Huffman coding; if that would exceed the
-//                direct-bit-map size, write the raw bit map instead.
-//                Append EOF nybble + sign bits.
+//     bit planes from MSB to LSB. For each plane, try
+//     quadtree-Huffman coding; if that would exceed the
+//     direct-bit-map size, write the raw bit map instead.
+//     Append EOF nybble + sign bits.
 //
 // HCOMPRESS is 2D — the caller must set nx and ny via SetShape before
-// calling Encode. nelem must equal nx*ny.
+// calling Encode (nx = slow axis, ny = fast axis, cfitsio's naming).
+// nelem must equal nx*ny. SCALE is the absolute digitization scale (the
+// integer cfitsio stores in the stream); 0 or 1 is lossless. SMOOTH is a
+// decode-time option and does not change the encoded stream.
 type hcompress1Encoder struct {
 	scale  int
 	smooth int
@@ -47,45 +55,63 @@ func newHCOMPRESS1Encoder(params Params) Encoder {
 }
 
 func (h *hcompress1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) {
-	work := make([]int32, nelem)
-	for i := 0; i < nelem; i++ {
-		switch elemSize {
-		case 1:
-			work[i] = int32(int8(src[i]))
-		case 2:
-			work[i] = int32(int16(uint16(src[i*2])<<8 | uint16(src[i*2+1])))
-		case 4:
-			work[i] = int32(binary.BigEndian.Uint32(src[i*4:]))
-		case 8:
-			work[i] = int32(binary.BigEndian.Uint64(src[i*8:]))
-		default:
-			return 0, fmt.Errorf("%w: HCOMPRESS_1 unsupported elemSize %d", ErrCorrupt, elemSize)
-		}
-	}
 	nx := h.nx
 	ny := h.ny
 	if nx == 0 || ny == 0 {
-		// Fall back to treating it as a 1D strip (nx=1, ny=nelem) if the
-		// caller did not set a 2D shape. The H-transform still works on
-		// degenerate dimensions.
-		nx = 1
-		ny = nelem
+		return 0, fmt.Errorf("%w: HCOMPRESS_1 needs a 2-D tile shape (SetShape) before Encode", ErrCorrupt)
 	}
 	if nx*ny != nelem {
 		return 0, fmt.Errorf("%w: HCOMPRESS_1 nx*ny=%d != nelem=%d", ErrCorrupt, nx*ny, nelem)
 	}
-	if err := htransHC(work, nx, ny); err != nil {
-		return 0, err
+	if len(src) < nelem*elemSize {
+		return 0, fmt.Errorf("%w: HCOMPRESS_1 src length %d < %d", ErrCorrupt, len(src), nelem*elemSize)
 	}
-	digitizeHC(work, nx, ny, h.scale)
 	w := &hcompressWriter{dst: dst}
-	if err := encodeHC(w, work, nx, ny, h.scale); err != nil {
-		return 0, err
+	switch elemSize {
+	case 1, 2:
+		// imcompress.c converts BITPIX 8 (unsigned bytes) and 16 tiles to
+		// int and calls fits_hcompress, whose transform is 32-bit.
+		work := make([]int32, nelem)
+		for i := 0; i < nelem; i++ {
+			if elemSize == 1 {
+				work[i] = int32(src[i])
+			} else {
+				work[i] = int32(int16(uint16(src[i*2])<<8 | uint16(src[i*2+1])))
+			}
+		}
+		if err := hcompressTile(w, work, nx, ny, h.scale); err != nil {
+			return 0, err
+		}
+	case 4:
+		// BITPIX 32 tiles go through fits_hcompress64: the H-transform sums
+		// of four int32 pixels need 64 bits.
+		work := make([]int64, nelem)
+		for i := 0; i < nelem; i++ {
+			work[i] = int64(int32(binary.BigEndian.Uint32(src[i*4:])))
+		}
+		if err := hcompressTile(w, work, nx, ny, h.scale); err != nil {
+			return 0, err
+		}
+	default:
+		// cfitsio cannot write compressed 64-bit images; no reference.
+		return 0, fmt.Errorf("%w: HCOMPRESS_1 encoder supports BYTEPIX 1, 2, 4 (as cfitsio does), not %d", ErrUnsupportedCompression, elemSize)
 	}
 	if w.overflow {
 		return 0, ErrBufferTooSmall
 	}
 	return w.byteIdx, nil
+}
+
+// hcInt is the coefficient type of the forward transform: int32 mirrors
+// cfitsio's fits_hcompress, int64 its fits_hcompress64.
+type hcInt interface{ ~int32 | ~int64 }
+
+func hcompressTile[T hcInt](w *hcompressWriter, work []T, nx, ny, scale int) error {
+	if err := htransHC(work, nx, ny); err != nil {
+		return err
+	}
+	digitizeHC(work, nx, ny, scale)
+	return encodeHC(w, work, nx, ny, scale)
 }
 
 // ------------------ htrans (forward H-transform) ------------------
@@ -96,7 +122,7 @@ func (h *hcompress1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, e
 // column shuffle to group coefficients by order.
 //
 // In-place on a[nx*ny]. Port of cfitsio's htrans().
-func htransHC(a []int32, nx, ny int) error {
+func htransHC[T hcInt](a []T, nx, ny int) error {
 	nmax := nx
 	if ny > nmax {
 		nmax = ny
@@ -105,12 +131,12 @@ func htransHC(a []int32, nx, ny int) error {
 	for 1<<uint(log2n) < nmax {
 		log2n++
 	}
-	tmp := make([]int32, (nmax+1)/2)
+	tmp := make([]T, (nmax+1)/2)
 
 	shift := 0
-	mask := int32(-2)
+	mask := T(-2)
 	mask2 := mask << 1
-	prnd := int32(1)
+	prnd := T(1)
 	prnd2 := prnd << 1
 	nrnd2 := prnd2 - 1
 
@@ -212,7 +238,7 @@ func htransHC(a []int32, nx, ny int) error {
 // It groups even-indexed elements in the first half and odd-indexed in
 // the second half — moving interleaved coefficients back into sorted
 // order.
-func shuffleInts(a []int32, n, n2 int, tmp []int32) {
+func shuffleInts[T hcInt](a []T, n, n2 int, tmp []T) {
 	nhalf := (n + 1) >> 1
 	// Copy odd (second-half destined) elements to tmp.
 	pt := 0
@@ -242,15 +268,17 @@ func shuffleInts(a []int32, n, n2 int, tmp []int32) {
 
 // ------------------ digitize ------------------
 
-// digitizeHC divides every element by scale, rounding toward zero with
-// a half-step bias so that both positive and negative values round
-// symmetrically. scale <= 1 is a no-op (lossless HCOMPRESS).
-func digitizeHC(a []int32, nx, ny, scale int) {
+// digitizeHC divides every coefficient by scale, rounding to the nearest
+// multiple of scale the way cfitsio's digitize/digitize64 do:
+// d = (scale+1)/2 - 1, then (a+d)/scale for a > 0 and (a-d)/scale
+// otherwise (C integer division truncates toward zero, as Go's does).
+// scale <= 1 is a no-op (lossless HCOMPRESS).
+func digitizeHC[T hcInt](a []T, nx, ny, scale int) {
 	if scale <= 1 {
 		return
 	}
-	d := int32(scale / 2)
-	s := int32(scale)
+	d := T((scale+1)/2 - 1)
+	s := T(scale)
 	for i := 0; i < nx*ny; i++ {
 		if a[i] > 0 {
 			a[i] = (a[i] + d) / s
@@ -264,7 +292,7 @@ func digitizeHC(a []int32, nx, ny, scale int) {
 
 // encodeHC writes the HCOMPRESS header + quadtree body + sign bits to
 // the output.
-func encodeHC(w *hcompressWriter, a []int32, nx, ny, scale int) error {
+func encodeHC[T hcInt](w *hcompressWriter, a []T, nx, ny, scale int) error {
 	// Magic, nx, ny, scale.
 	w.writeBytes(hcompressMagic[:])
 	w.writeInt32BE(int32(nx))
@@ -301,7 +329,7 @@ func encodeHC(w *hcompressWriter, a []int32, nx, ny, scale int) error {
 	}
 
 	// Per-quadrant max → nbitplanes[3].
-	var vmax [3]int32
+	var vmax [3]T
 	nx2 := (nx + 1) / 2
 	ny2 := (ny + 1) / 2
 	jj := 0
@@ -370,7 +398,7 @@ var hcHuffNBits = [16]int{
 
 // qtreeEncodeHC encodes the coefficients of one quadrant, bit plane by
 // bit plane from MSB down.
-func qtreeEncodeHC(w *hcompressWriter, a []int32, base, n, nqx, nqy, nbitplanes int) error {
+func qtreeEncodeHC[T hcInt](w *hcompressWriter, a []T, base, n, nqx, nqy, nbitplanes int) error {
 	if nbitplanes <= 0 {
 		return nil
 	}
@@ -444,8 +472,8 @@ func qtreeEncodeHC(w *hcompressWriter, a []int32, base, n, nqx, nqy, nbitplanes 
 // qtreeOnebitHC packs bit `bit` of A's coefficient quadrant into
 // scratch, expanding each 2x2 block of A to a 4-bit value in one byte
 // of scratch.
-func qtreeOnebitHC(a []int32, n, nx, ny int, b []byte, bit int) {
-	b0 := int32(1) << uint(bit)
+func qtreeOnebitHC[T hcInt](a []T, n, nx, ny int, b []byte, bit int) {
+	b0 := T(1) << uint(bit)
 	b1 := b0 << 1
 	b2 := b0 << 2
 	b3 := b0 << 3
@@ -576,7 +604,7 @@ func bufcopyHC(a []byte, n int, buffer []byte, b *int, bmax int, bitbuffer, bits
 
 // writeBdirectHC writes the direct-bit-map representation of one bit
 // plane: 0 nybble followed by one 4-bit nybble per 2x2 block.
-func writeBdirectHC(w *hcompressWriter, a []int32, n, nqx, nqy int, scratch []byte, bit int) {
+func writeBdirectHC[T hcInt](w *hcompressWriter, a []T, n, nqx, nqy int, scratch []byte, bit int) {
 	w.outputNybble(0)
 	qtreeOnebitHC(a, n, nqx, nqy, scratch, bit)
 	nNybbles := ((nqx + 1) / 2) * ((nqy + 1) / 2)

@@ -1,0 +1,21 @@
+# Conic COE (theta_a = 45 => theta_0 = 45) with CRVAL2 = 20, LONPOLE = 120
+# and LATPOLE = -10 (synthetic). Exercises the general
+# (phi_p != phi_0, theta_0 != 0) branch of the native-pole solution.
+NOTE pipeline: conic with LONPOLE and LATPOLE both explicit
+GRID 156 356 9 156 356 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---COE'
+CTYPE2  = 'DEC--COE'
+CRVAL1  = 30.0
+CRVAL2  = 20.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV2_1   = 45.0
+LONPOLE = 120.0
+LATPOLE = -10.0

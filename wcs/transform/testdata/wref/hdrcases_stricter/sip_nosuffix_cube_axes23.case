@@ -1,0 +1,35 @@
+# A FREQ x RA x DEC cube whose celestial axes are pixel axes 2 and 3, with
+# SIP keywords and no '-SIP' suffix (synthetic). wcslib 8.10 ACCEPTS it: SIP
+# has no axis mapping, so wcspih applies the polynomial to pixel axes 1 and
+# 2 (here FREQ and RA), which mixes the spectral pixel axis into the sky
+# position. We refuse a SIP header whose celestial axes are not pixel axes
+# 1 and 2 rather than guess (rule 7). AP/BP are given so hdr2sky injects
+# nothing.
+# EXPECT-GO-ERROR: SIP is defined on pixel axes 1,2 only
+NOTE stricter: sip_nosuffix_cube_axes23
+GRID 1 256 5 1 256 5
+HEADER
+NAXIS   = 3
+NAXIS1  = 16
+NAXIS2  = 256
+NAXIS3  = 256
+CTYPE1  = 'FREQ'
+CTYPE2  = 'RA---TAN'
+CTYPE3  = 'DEC--TAN'
+CRVAL1  = 1.4E9
+CRVAL2  = 180.0
+CRVAL3  = 30.0
+CRPIX1  = 1.0
+CRPIX2  = 128.5
+CRPIX3  = 128.5
+CDELT1  = 1.0E6
+CDELT2  = -0.001
+CDELT3  = 0.001
+A_ORDER = 2
+A_2_0   = 1.0E-5
+B_ORDER = 2
+B_0_2   = 1.0E-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

@@ -85,9 +85,11 @@ func TestParseSIPAbsent(t *testing.T) {
 	}
 }
 
-// TestSIPAPInversePolynomial: when AP/BP are present, the inverse uses
-// the supplied polynomial instead of Newton iteration.
-func TestSIPAPInversePolynomial(t *testing.T) {
+// TestSIPAPInverseIsStartingGuessOnly: AP/BP give the starting point of
+// the inversion, not the answer (wcslib disx2p). With A_1_0 = 1e-3,
+// B_0_1 = 2e-3 the exact inverse of (100, 50) is (100/1.001, 50/1.002);
+// the header's AP/BP (-1e-3, -2e-3) would give (99.9, 49.9), 1e-4 px off.
+func TestSIPAPInverseIsStartingGuessOnly(t *testing.T) {
 	h := header.New()
 	h.Set("A_ORDER", int64(1), "")
 	h.Set("B_ORDER", int64(1), "")
@@ -98,20 +100,18 @@ func TestSIPAPInversePolynomial(t *testing.T) {
 	h.Set("AP_1_0", -1e-3, "") // approximate inverse
 	h.Set("BP_0_1", -2e-3, "")
 
-	sip, _ := ParseSIP(h)
+	sip, err := ParseSIP(h)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if sip.AP == nil || sip.BP == nil {
 		t.Fatal("AP/BP not parsed")
 	}
-	// Inverse at (100, 50) should use AP/BP directly.
 	u, v, ok := sip.Inverse(100, 50)
 	if !ok {
 		t.Fatal("inverse failed")
 	}
-	// Expect u = 100 + AP_1_0*100 = 100 - 0.1 = 99.9
-	if math.Abs(u-99.9) > 1e-9 {
-		t.Fatalf("AP inverse: u=%v", u)
-	}
-	if math.Abs(v-49.9) > 1e-9 {
-		t.Fatalf("BP inverse: v=%v", v)
+	if wu, wv := 100/1.001, 50/1.002; math.Abs(u-wu) > 1e-12 || math.Abs(v-wv) > 1e-12 {
+		t.Fatalf("Inverse(100, 50) = (%.15g, %.15g), want exact (%.15g, %.15g)", u, v, wu, wv)
 	}
 }

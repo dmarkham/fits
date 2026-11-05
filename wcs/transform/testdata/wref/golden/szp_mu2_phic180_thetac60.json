@@ -1,0 +1,4 @@
+{"name": "szp_mu2_phic180_thetac60", "code": "SZP", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 2], [2, 180], [3, 60]],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 2, 180, 60]},
+"forward": 1107, "inverse": 1213, "roundtrip": 664, "payload": "szp_mu2_phic180_thetac60.bin", "payload_bytes": 67588}

@@ -1,0 +1,47 @@
+# Alternate WCS 'A' whose answer depends on LONPOLEA and LATPOLEA, with a
+# primary description that carries DIFFERENT LONPOLE, LATPOLE, PCi_j,
+# CDi_j and PVi_m cards that 'A' does not set. Alternate A is the
+# two-solution CAR of latpole_car_two_solutions (CRVAL2A = 10,
+# LONPOLEA = 0, LATPOLEA = -30 selects the southern native pole) in plain
+# CDELTiA form. Any primary keyword read into 'A' changes the answer:
+# LONPOLE = 150 / LATPOLE = 60 move or flip the native pole, PC1_2 / CD
+# shear the linear part, PV1_1 = 30 moves phi_0. Synthetic.
+NOTE pipeline: alternate WCS A, primary LONPOLE/LATPOLE/PC/CD/PV must not leak
+ALT A
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+SKYGRID 330 359 4 -10 30 5
+SKYGRID 0 30 4 -10 30 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PC1_1   = 1.0
+PC1_2   = 0.2
+PC2_1   = -0.1
+PC2_2   = 1.0
+CD1_1   = -0.002
+CD1_2   = 0.0005
+CD2_1   = 0.0004
+CD2_2   = 0.002
+PV1_1   = 30.0
+LONPOLE = 150.0
+LATPOLE = 60.0
+CTYPE1A = 'RA---CAR'
+CTYPE2A = 'DEC--CAR'
+CRVAL1A = 0.0
+CRVAL2A = 10.0
+CRPIX1A = 256.5
+CRPIX2A = 256.5
+CDELT1A = -0.1
+CDELT2A = 0.1
+LONPOLEA= 0.0
+LATPOLEA= -30.0

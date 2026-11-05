@@ -1,0 +1,1 @@
+{"astropy":"8.0.2","columns":[{"col":1,"hdu":1,"kind":"float","name":"C","rows":[["0x1.c000000000000p+1"],["-0x1.8000000000000p+0"]],"tnull":null},{"col":2,"hdu":1,"kind":"float","name":"M","rows":[["-0x1.1000000000000p+2"],["0x1.0000000000000p-2"]],"tnull":null}],"hdus":["PrimaryHDU","BinTableHDU"],"numpy":"2.4.6"}

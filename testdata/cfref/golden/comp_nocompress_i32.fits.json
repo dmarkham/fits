@@ -1,0 +1,63 @@
+{
+ "file": "comp_nocompress_i32.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 22,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                   12 / number of rows in table",
+    "PCOUNT  =                  768 / number of group parameters",
+    "GCOUNT  =                    1 / number of groups",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'",
+    "TFORM1  = '1PB(64) '",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTENSION= 'IMAGE   '           / Image extension",
+    "ZBITPIX =                   32 / array data type",
+    "ZNAXIS  =                    2 / number of array dimensions",
+    "ZNAXIS1 =                   16",
+    "ZNAXIS2 =                   12",
+    "ZPCOUNT =                    0 / number of parameters",
+    "ZGCOUNT =                    1 / number of groups",
+    "ZTILE1  =                   16 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'NOCOMPRESS'         / compression algorithm",
+    "EXTNAME = 'IMG     '           / name of this binary table extension"
+   ],
+   "image": {"bitpix": 32, "equivtype": 32, "compressed": true, "naxis": 2, "naxes": [16,12], "npix": 192, "bscale": 1, "bzero": 0,
+    "phys": null,
+    "i64": null
+   },
+   "errors": ["read_img TDOUBLE: status 414: error uncompressing image", "read_img TLONG: status 414: error uncompressing image"]
+  }
+ ]
+}

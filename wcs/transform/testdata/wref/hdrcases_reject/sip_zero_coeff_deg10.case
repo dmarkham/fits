@@ -1,0 +1,32 @@
+# A SIP coefficient of degree 10, A_5_5 = 0.0, on an order-2 SIP header
+# (synthetic, from the round-3 verifier probe p21_zero_deg10). wcslib
+# 8.10 sipset refuses any SIP coefficient with p + q > 9, whatever its
+# value and A_ORDER. AP/BP are given so hdr2sky injects nothing.
+# EXPECT-WCSLIB-ERROR: Invalid powers (5, 5) for SIP on axis 1
+NOTE reject: sip_zero_coeff_deg10
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+A_5_5   = 0.0
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

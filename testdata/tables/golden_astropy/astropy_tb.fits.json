@@ -1,0 +1,1 @@
+{"astropy":"8.0.2","columns":[{"col":1,"hdu":1,"kind":"int","name":"c1","rows":[[1],[2]],"tnull":-2147483647},{"col":2,"hdu":1,"kind":"str","name":"c2","rows":[["abc"],["xy"]],"tnull":null},{"col":3,"hdu":1,"kind":"float","name":"c3","rows":[["0x1.d9999a3333333p+1"],["0x1.accccb999999ap+2"]],"tnull":null}],"hdus":["PrimaryHDU","BinTableHDU"],"numpy":"2.4.6"}

@@ -9,7 +9,15 @@ import (
 //
 // Reference: cfitsio/fits_hdecompress.c (White 1992, "High-Performance
 // Compression of Astronomical Images", Journal of ASP 104:630). This Go
-// port follows the cfitsio reference function-for-function.
+// port follows cfitsio's fits_hdecompress64 path (64-bit coefficients,
+// which cfitsio uses for every tile wider than 16 bits and which agrees
+// with its 32-bit path wherever that one does not overflow), including
+// hsmooth64 when the tile was written with SMOOTH (ZVAL2) != 0.
+//
+// Proof: TestCompressedCorpusRead (root package) decodes cfitsio-written
+// HCOMPRESS_1 tiles for BITPIX 8/16/32 (including uint16/uint32 via
+// BZERO, lossy scale 4, and SMOOTH = 1) and quantized BITPIX -32/-64
+// (with NaN), and compares every pixel bit-exact with libcfitsio 4.7.0.
 //
 // # Stream format (as emitted by cfitsio's fits_hcompress):
 //
@@ -35,7 +43,8 @@ import (
 //     separately for precision).
 //  4. undigitize multiplies every coefficient by scale (if scale > 1).
 //  5. hinv applies the inverse H-transform via log2n butterfly passes,
-//     producing the reconstructed image in row-major order.
+//     producing the reconstructed image in row-major order; with SMOOTH
+//     set, hsmooth adjusts the coefficients at each pass first.
 //
 // Note on axis order: cfitsio's HCOMPRESS convention has ny as the fastest
 // varying dimension, opposite the FITS NAXIS1/NAXIS2 intuition. When
@@ -45,7 +54,7 @@ var hcompressMagic = [2]byte{0xDD, 0x99}
 
 // hcompress1Decoder decodes HCOMPRESS_1 tiles.
 type hcompress1Decoder struct {
-	smooth int // 0 = no smoothing, else smooth during inversion
+	smooth int // Params SMOOTH (the fits layer passes ZVAL2): 0 = none, else hsmooth during inversion
 }
 
 func newHCOMPRESS1(params Params) Decoder {
@@ -55,8 +64,10 @@ func newHCOMPRESS1(params Params) Decoder {
 }
 
 func (h hcompress1Decoder) Decode(src, dst []byte, nelem, elemSize int) error {
-	// Allocate the working int32 array with enough headroom.
-	work := make([]int32, nelem)
+	// cfitsio decodes 8/16-bit tiles with int and wider tiles with
+	// LONGLONG (fits_hdecompress64); int64 covers both, and gives the same
+	// result as the int path wherever that path does not overflow.
+	work := make([]int64, nelem)
 	nx, ny, scale, err := decodeHCOMPRESS(src, work, h.smooth)
 	if err != nil {
 		return err
@@ -68,6 +79,10 @@ func (h hcompress1Decoder) Decode(src, dst []byte, nelem, elemSize int) error {
 	_ = scale // only used internally by hinv
 
 	// Pack work into dst at the caller's element size (big-endian FITS).
+	// Sizes 1, 2 and 4 truncate (as cfitsio's casts do); the fits layer
+	// decodes integer images with elemSize 8 and range-checks the values
+	// itself (compressed_read.go hcompPlioTile: clip as funpack and
+	// cfitsio's TSHORT read do, refuse or keep).
 	switch elemSize {
 	case 1:
 		for i := 0; i < nelem; i++ {
@@ -95,7 +110,7 @@ func (h hcompress1Decoder) Decode(src, dst []byte, nelem, elemSize int) error {
 // quadtree-decodes the 4 bit-plane quadrants, reads sign bits, restores
 // the sum-of-all DC level, undigitizes, and runs the inverse H-transform.
 // Returns (nx, ny, scale).
-func decodeHCOMPRESS(src []byte, a []int32, smooth int) (int, int, int, error) {
+func decodeHCOMPRESS(src []byte, a []int64, smooth int) (int, int, int, error) {
 	r := &hcompressReader{src: src}
 	// Magic.
 	var magic [2]byte
@@ -138,11 +153,11 @@ func decodeHCOMPRESS(src []byte, a []int32, smooth int) (int, int, int, error) {
 		return 0, 0, 0, err
 	}
 	// Replace a[0] with sumall (the DC level).
-	a[0] = int32(sumall)
+	a[0] = sumall
 
 	// Undigitize: multiply by scale.
 	if scale > 1 {
-		s := int32(scale)
+		s := int64(scale)
 		for i := range a[:int(nx)*int(ny)] {
 			a[i] *= s
 		}
@@ -329,7 +344,7 @@ func (r *hcompressReader) inputHuffman() int {
 }
 
 // dodecodeHCOMPRESS decodes the 4 H-transform quadrants into a[].
-func dodecodeHCOMPRESS(r *hcompressReader, a []int32, nx, ny int, nbitplanes [3]byte) error {
+func dodecodeHCOMPRESS(r *hcompressReader, a []int64, nx, ny int, nbitplanes [3]byte) error {
 	nel := nx * ny
 	nx2 := (nx + 1) / 2
 	ny2 := (ny + 1) / 2
@@ -372,7 +387,7 @@ func dodecodeHCOMPRESS(r *hcompressReader, a []int32, nx, ny int, nbitplanes [3]
 // base is the index into a[] where this quadrant starts; n is the full
 // row stride (= ny); nqx, nqy are the quadrant dimensions; nbitplanes is
 // the number of bit planes to decode.
-func qtreeDecode(r *hcompressReader, a []int32, base, n, nqx, nqy, nbitplanes int) error {
+func qtreeDecode(r *hcompressReader, a []int64, base, n, nqx, nqy, nbitplanes int) error {
 	if nbitplanes <= 0 {
 		return nil
 	}
@@ -503,8 +518,8 @@ func qtreeCopy(a []byte, nx, ny int, b []byte, n int) {
 // qtreeBitins inserts 4-bit values from a[(nx+1)/2, (ny+1)/2] into
 // bitplane `bit` of b[nx, ny]. Each 4-bit value expands to 2x2 pixels.
 // a and b MUST NOT alias.
-func qtreeBitins(a []byte, nx, ny int, b []int32, n, bit int) {
-	planeVal := int32(1) << uint(bit)
+func qtreeBitins(a []byte, nx, ny int, b []int64, n, bit int) {
+	planeVal := int64(1) << uint(bit)
 	k := 0
 	i := 0
 	for ; i < nx-1; i += 2 {
@@ -567,7 +582,7 @@ func qtreeBitins(a []byte, nx, ny int, b []int32, n, bit int) {
 // a 2D butterfly operation performed log2n times, where each pass
 // un-shuffles and un-combines the wavelet coefficients to reconstruct
 // successively larger pixel blocks.
-func hinvHCOMPRESS(a []int32, nx, ny, smooth, scale int) error {
+func hinvHCOMPRESS(a []int64, nx, ny, smooth, scale int) error {
 	nmax := nx
 	if ny > nmax {
 		nmax = ny
@@ -578,10 +593,10 @@ func hinvHCOMPRESS(a []int32, nx, ny, smooth, scale int) error {
 	}
 
 	// Temporary unshuffle buffer.
-	tmp := make([]int32, (nmax+1)/2)
+	tmp := make([]int64, (nmax+1)/2)
 
 	shift := 1
-	bit0 := int32(1) << uint(log2n-1)
+	bit0 := int64(1) << uint(log2n-1)
 	bit1 := bit0 << 1
 	bit2 := bit0 << 2
 	mask0 := -bit0
@@ -633,8 +648,11 @@ func hinvHCOMPRESS(a []int32, nx, ny, smooth, scale int) error {
 		for j := 0; j < nytop; j++ {
 			unshuffleInts(a[j:], nxtop, ny, tmp)
 		}
-		// (smoothing omitted — we use the standard no-smooth path,
-		// matching cfitsio behavior when SMOOTH=0 in the header.)
+		// Smooth by interpolating coefficients when SMOOTH != 0
+		// (cfitsio hinv64: "if (smooth) hsmooth64(a,nxtop,nytop,ny,scale)").
+		if smooth != 0 {
+			hsmoothHCOMPRESS(a, nxtop, nytop, ny, scale)
+		}
 		oddx := nxtop % 2
 		oddy := nytop % 2
 
@@ -757,7 +775,7 @@ func hinvHCOMPRESS(a []int32, nx, ny, smooth, scale int) error {
 // an n-length stride-n2 array into the even positions, the second half
 // into the odd positions. Used by the inverse H-transform to interleave
 // wavelet coefficients back into pixel order.
-func unshuffleInts(a []int32, n, n2 int, tmp []int32) {
+func unshuffleInts(a []int64, n, n2 int, tmp []int64) {
 	nhalf := (n + 1) >> 1
 	// Copy second half of array to tmp.
 	pt := 0
@@ -783,4 +801,116 @@ func unshuffleInts(a []int32, n, n2 int, tmp []int32) {
 		p1 += (n2 + n2)
 		pt++
 	}
+}
+
+// hsmoothHCOMPRESS is cfitsio's hsmooth64 (fits_hdecompress.c): it adjusts
+// the x, y and curvature differences of the H-transform coefficient block
+// a[nxtop, nytop] (row length ny) toward values that interpolate the mean
+// levels of the neighbouring zones, limited to +/- scale/2 so the result
+// stays within the quantization the encoder applied. It runs at every
+// inverse pass when the tile was written with ZVAL2 (SMOOTH) != 0; cfitsio reads ZVAL2 by position.
+func hsmoothHCOMPRESS(a []int64, nxtop, nytop, ny, scale int) {
+	smax := int64(scale >> 1)
+	if smax <= 0 {
+		return
+	}
+	ny2 := ny << 1
+	// Adjust x difference hx.
+	for i := 2; i < nxtop-2; i += 2 {
+		s00 := ny * i
+		s10 := s00 + ny
+		for j := 0; j < nytop; j += 2 {
+			hm := a[s00-ny2]
+			h0 := a[s00]
+			hp := a[s00+ny2]
+			diff := hp - hm
+			dmax := max64(min64(hp-h0, h0-hm), 0) << 2
+			dmin := min64(max64(hp-h0, h0-hm), 0) << 2
+			if dmin < dmax {
+				diff = max64(min64(diff, dmax), dmin)
+				s := diff - (a[s10] << 3)
+				if s >= 0 {
+					s >>= 3
+				} else {
+					s = (s + 7) >> 3
+				}
+				s = max64(min64(s, smax), -smax)
+				a[s10] += s
+			}
+			s00 += 2
+			s10 += 2
+		}
+	}
+	// Adjust y difference hy.
+	for i := 0; i < nxtop; i += 2 {
+		s00 := ny*i + 2
+		for j := 2; j < nytop-2; j += 2 {
+			hm := a[s00-2]
+			h0 := a[s00]
+			hp := a[s00+2]
+			diff := hp - hm
+			dmax := max64(min64(hp-h0, h0-hm), 0) << 2
+			dmin := min64(max64(hp-h0, h0-hm), 0) << 2
+			if dmin < dmax {
+				diff = max64(min64(diff, dmax), dmin)
+				s := diff - (a[s00+1] << 3)
+				if s >= 0 {
+					s >>= 3
+				} else {
+					s = (s + 7) >> 3
+				}
+				s = max64(min64(s, smax), -smax)
+				a[s00+1] += s
+			}
+			s00 += 2
+		}
+	}
+	// Adjust curvature difference hc.
+	for i := 2; i < nxtop-2; i += 2 {
+		s00 := ny*i + 2
+		s10 := s00 + ny
+		for j := 2; j < nytop-2; j += 2 {
+			hmm := a[s00-ny2-2]
+			hpm := a[s00+ny2-2]
+			hmp := a[s00-ny2+2]
+			hpp := a[s00+ny2+2]
+			h0 := a[s00]
+			diff := hpp + hmm - hmp - hpm
+			hx2 := a[s10] << 1
+			hy2 := a[s00+1] << 1
+			m1 := min64(max64(hpp-h0, 0)-hx2-hy2, max64(h0-hpm, 0)+hx2-hy2)
+			m2 := min64(max64(h0-hmp, 0)-hx2+hy2, max64(hmm-h0, 0)+hx2+hy2)
+			dmax := min64(m1, m2) << 4
+			m1 = max64(min64(hpp-h0, 0)-hx2-hy2, min64(h0-hpm, 0)+hx2-hy2)
+			m2 = max64(min64(h0-hmp, 0)-hx2+hy2, min64(hmm-h0, 0)+hx2+hy2)
+			dmin := max64(m1, m2) << 4
+			if dmin < dmax {
+				diff = max64(min64(diff, dmax), dmin)
+				s := diff - (a[s10+1] << 6)
+				if s >= 0 {
+					s >>= 6
+				} else {
+					s = (s + 63) >> 6
+				}
+				s = max64(min64(s, smax), -smax)
+				a[s10+1] += s
+			}
+			s00 += 2
+			s10 += 2
+		}
+	}
+}
+
+func min64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }

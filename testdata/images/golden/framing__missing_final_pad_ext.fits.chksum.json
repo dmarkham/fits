@@ -1,0 +1,1 @@
+{"file":"missing_final_pad_ext.fits","cfitsio":"4.7.0","hdus":[{"index":0,"datasum":4294770690,"hdusum":2196983825,"verify_datasum":0,"verify_hdusum":0},{"index":1,"error":"get_chksum status 108: error reading from FITS file"}]}

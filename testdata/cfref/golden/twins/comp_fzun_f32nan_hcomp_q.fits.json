@@ -1,0 +1,33 @@
+{
+ "file": "comp_fzun_f32nan_hcomp_q.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 11,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                  -32 / number of bits per data pixel",
+    "NAXIS   =                    2 / number of data axes",
+    "NAXIS1  =                   40 / length of data axis 1",
+    "NAXIS2  =                   24 / length of data axis 2",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "HISTORY Image was compressed by CFITSIO using scaled integer quantization:",
+    "HISTORY   q = 4.000000 / quantized level scaling parameter",
+    "HISTORY 'SUBTRACTIVE_DITHER_1' / Pixel Quantization Algorithm"
+   ],
+   "image": {"bitpix": -32, "equivtype": -32, "compressed": false, "naxis": 2, "naxes": [40,24], "npix": 960, "bscale": 1, "bzero": 0,
+    "phys": {"n": 960, "sha256": "031157027b08789ee0e7c8fb7537c2a969d664c68f49bc2db8d6b17665421510", "pool": "f64"}
+   },
+   "errors": []
+  }
+ ]
+}

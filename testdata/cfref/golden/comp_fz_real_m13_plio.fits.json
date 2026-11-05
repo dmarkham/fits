@@ -1,0 +1,82 @@
+{
+ "file": "comp_fz_real_m13_plio.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 6,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                   16 / number of bits per data pixel",
+    "NAXIS   =                    0 / number of data axes",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 8640,
+   "data_end": 31680,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 39,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / 8-bit bytes",
+    "NAXIS   =                    2 / 2-dimensional binary table",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                   40 / number of rows in table",
+    "PCOUNT  =                20634 / size of special data area",
+    "GCOUNT  =                    1 / one data group (required keyword)",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'    / label for field   1",
+    "TFORM1  = '1PI(271)'           / data format of field: variable length array",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTILE1  =                  300 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'PLIO_1  '           / compression algorithm",
+    "EXTNAME = 'COMPRESSED_IMAGE'",
+    "ZSIMPLE =                    T / file does conform to FITS standard",
+    "ZBITPIX =                   16 / number of bits per data pixel",
+    "ZNAXIS  =                    2 / number of data axes",
+    "ZNAXIS1 =                  300 / length of data axis 1",
+    "ZNAXIS2 =                   40 / length of data axis 2",
+    "ZEXTEND =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "COMMENT",
+    "COMMENT This file was produced by the SkyView survey analysis system from",
+    "COMMENT available astronomical surveys.  The data are formatted",
+    "COMMENT as a simple two-dimensional FITS image with the same units as",
+    "COMMENT the orginal survey.",
+    "CTYPE1  = 'RA---TAN'           / X-axis type",
+    "CTYPE2  = 'DEC--TAN'           / Y-axis type",
+    "CRVAL1  =             250.4226 / Reference pixel value",
+    "CRVAL2  =              36.4602 / Reference pixel value",
+    "CRPIX1  =              150.500 / Reference pixel",
+    "CRPIX2  =              150.500 / Reference pixel",
+    "CDELT1  =       -0.00027770002 / Degrees/pixel",
+    "CDELT2  =        0.00027770002 / Degrees/pixel",
+    "CROTA1  =              0.00000 / Rotation in degrees.",
+    "EQUINOX =              2000.00 /Equinox of coordinates",
+    "ZHECKSUM= '2f4R3c4O2c4O2c4O'   / HDU checksum updated 2006-11-15T17:18:55"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": true, "naxis": 2, "naxes": [300,40], "npix": 12000, "bscale": 1, "bzero": 0,
+    "phys": {"n": 12000, "sha256": "87f9f65a95de6d28c1d580c1fa281f5e86353e393cbf50064a34d050105882d8", "nulls": [], "sample": [[0,112],[1,112],[2,113],[3,113],[4,112],[5,112],[6,113],[7,113],[190,113],[299,112],[380,136],[554,109],[571,117],[761,112],[952,169],[1142,115],[1333,115],[1523,112],[1714,159],[1904,118],[2095,114],[2285,113],[2475,118],[2666,123],[2856,167],[3047,115],[3237,147],[3428,116],[3618,121],[3809,116],[3999,115],[4190,112],[4380,114],[4571,117],[4761,115],[4951,118],[5142,117],[5332,115],[5523,114],[5713,114],[5904,115],[6094,119],[6285,113],[6475,118],[6666,115],[6856,113],[7047,121],[7237,117],[7427,113],[7618,118],[7808,112],[7999,113],[8189,118],[8380,118],[8570,119],[8761,131],[8951,118],[9142,123],[9182,2491],[9332,117],[9523,116],[9713,116],[9903,111],[10094,118],[10284,120],[10475,112],[10665,116],[10856,115],[11046,115],[11237,133],[11427,113],[11618,119],[11700,112],[11808,117],[11992,116],[11993,116],[11994,113],[11995,113],[11996,109],[11997,109],[11998,110],[11999,110]]},
+    "i64": {"n": 12000, "sha256": "7325b346f52ee0efa26e1552d6751d7ea13486a48464cb29ab5db1a103fe9db2", "nulls": [], "sample": [[0,112],[1,112],[2,113],[3,113],[4,112],[5,112],[6,113],[7,113],[190,113],[299,112],[380,136],[554,109],[571,117],[761,112],[952,169],[1142,115],[1333,115],[1523,112],[1714,159],[1904,118],[2095,114],[2285,113],[2475,118],[2666,123],[2856,167],[3047,115],[3237,147],[3428,116],[3618,121],[3809,116],[3999,115],[4190,112],[4380,114],[4571,117],[4761,115],[4951,118],[5142,117],[5332,115],[5523,114],[5713,114],[5904,115],[6094,119],[6285,113],[6475,118],[6666,115],[6856,113],[7047,121],[7237,117],[7427,113],[7618,118],[7808,112],[7999,113],[8189,118],[8380,118],[8570,119],[8761,131],[8951,118],[9142,123],[9182,2491],[9332,117],[9523,116],[9713,116],[9903,111],[10094,118],[10284,120],[10475,112],[10665,116],[10856,115],[11046,115],[11237,133],[11427,113],[11618,119],[11700,112],[11808,117],[11992,116],[11993,116],[11994,113],[11995,113],[11996,109],[11997,109],[11998,110],[11999,110]]}
+   },
+   "errors": []
+  }
+ ]
+}

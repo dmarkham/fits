@@ -1,0 +1,1 @@
+{"name": "gzip2_u16_t16x8", "type": "u16", "naxes": [40, 25], "algo": "GZIP_2", "tile": [16, 8], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 0, "gen_seed": 5021, "in_sha256": "b7ddaa92fdd30994d5b477afe2c2f6b9a66887ef84479f7c1f4eced999a11457"}

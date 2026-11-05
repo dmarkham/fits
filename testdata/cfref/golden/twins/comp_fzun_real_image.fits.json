@@ -1,0 +1,48 @@
+{
+ "file": "comp_fzun_real_image.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 7,
+   "cards": [
+    "XTENSION= 'IMAGE   '           / Image extension",
+    "BITPIX  =                   16 / data type of original image",
+    "NAXIS   =                    2 / dimension of original image",
+    "NAXIS1  =                   10 / length of original image axis",
+    "NAXIS2  =                   10 / length of original image axis",
+    "PCOUNT  =                    0 / number of parameters",
+    "GCOUNT  =                    1 / number of groups"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 2, "naxes": [10,10], "npix": 100, "bscale": 1, "bzero": 0,
+    "phys": {"n": 100, "sha256": "7b5d27681d805d38a2d736a9c60a0e437e0f30f8b1a2b5a6e1c644193dbd1ecb", "pool": "f64"},
+    "i64": {"n": 100, "sha256": "c0b27d0e7705a17d3f11d361f5463b3c54953a9dace6f391fc1c977023c643bd", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

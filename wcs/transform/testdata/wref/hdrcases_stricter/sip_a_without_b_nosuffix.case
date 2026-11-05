@@ -1,0 +1,30 @@
+# Plain TAN CTYPEs (no '-SIP' suffix; wcslib applies SIP keywords without
+# it) with A_ORDER / A_p_q but no B_ORDER: sip_a_without_b without the
+# suffix (synthetic).
+# wcslib 8.10 ACCEPTS this header once an inverse is present (AP/BP are
+# given explicitly here so hdr2sky injects nothing): it reads the missing
+# B polynomial as zero and gives the same answer as B_ORDER = 0. We refuse
+# it on purpose (rule 7: a polynomial declared on one axis only is an
+# ambiguous header, not a silently-zero one).
+# EXPECT-GO-ERROR: B_ORDER is missing
+NOTE stricter: sip_a_without_b_nosuffix
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -0.001
+CD2_2   = 0.001
+A_ORDER = 2
+A_2_0   = 1.0E-4
+A_0_2   = 2.0E-4
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

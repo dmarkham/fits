@@ -1,0 +1,19 @@
+# CAR, CRVAL2 = -1e-9, LONPOLE = 0 (= phi_0): both native-pole latitudes,
+# latp1 = 90 + 1e-9 and latp2 = -90 - 1e-9, are outside 90 + 1e-10, so
+# wcslib refuses the header (cel.c, final latp check). Synthetic.
+# EXPECT-WCSLIB-ERROR: No valid solution for latp
+NOTE reject: celpole_latp_tol_out
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = -0.000000001
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 0.0

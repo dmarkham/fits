@@ -43,11 +43,17 @@ func selectFrameImage(f *File) (frameImage, error) {
 }
 
 // ReadFrame reads a 2D mono image from a FITS file path and returns the
-// pixels normalized to [0, 1] via ReadFloat32.
+// pixels converted by ReadFloat32 (integer BITPIX mapped onto [0, 1], float
+// BITPIX passed through, BLANK pixels NaN — see ReadFloat32 for the exact
+// rules and how they relate to Siril).
 //
 // Returned dims follow the FITS convention: width == NAXIS1 (columns, the
-// fastest-varying axis), height == NAXIS2 (rows). Pixels are row-major:
-// index pixel (x, y) as pix[y*width + x].
+// fastest-varying axis), height == NAXIS2 (rows). Pixels are row-major in
+// file order: pixel (x, y), 0-based, with x along NAXIS1 and y along
+// NAXIS2, is pix[y*width + x], and pix[0] is the first pixel stored in the
+// file. No flip is applied for display conventions or for a ROWORDER
+// keyword (e.g. ROWORDER='TOP-DOWN' written by INDI cameras): FITS puts
+// y=0 at the bottom, so callers that render top-down must flip themselves.
 //
 // Accepts:
 //   - NAXIS == 2
@@ -55,9 +61,10 @@ func selectFrameImage(f *File) (frameImage, error) {
 //
 // The image is taken from the primary HDU if it has image data, otherwise
 // from HDU 1 (the standard tile-compressed layout). Tile-compressed images
-// are supported transparently. Integer BITPIX is normalized to [0, 1];
-// float BITPIX passes through unchanged. NaN and BLANK pixels are not
-// masked — callers who need that should use ReadPixelsMasked directly.
+// are supported transparently. Checked on a real camera frame (ZWO
+// ASI533MC Pro, BITPIX=16 BZERO=32768, plain and fpack RICE) against
+// Siril's loader in TestReadFrame_RealCamera, and for orientation in
+// TestReadFrame_RowOrientation.
 //
 // Returns an error for NAXIS != 2 (or NAXIS == 3 with NAXIS3 != 1),
 // with a hint pointing at ReadFrameRGB for 3-plane color cubes.
@@ -99,8 +106,7 @@ func ReadFrame(path string) (pix []float32, width, height int, err error) {
 }
 
 // ReadFrameRGB reads a 3D planar RGB image (NAXIS=3, NAXIS3=3) from a FITS
-// file path and returns the three color planes normalized to [0, 1] via
-// ReadFloat32.
+// file path and returns the three color planes converted by ReadFloat32.
 //
 // Returned dims follow the FITS convention: width == NAXIS1 (columns, the
 // fastest-varying axis), height == NAXIS2 (rows). Each plane is row-major:
@@ -109,8 +115,8 @@ func ReadFrame(path string) (pix []float32, width, height int, err error) {
 // Layout on disk is R plane, then G plane, then B plane (NAXIS1 fastest,
 // NAXIS3=3 slowest) — the standard FITS/Siril/astropy convention.
 //
-// HDU selection, normalization, and masking semantics match ReadFrame.
-// Returns an error for NAXIS != 3 or NAXIS3 != 3.
+// HDU selection, conversion, BLANK masking and orientation match
+// ReadFrame. Returns an error for NAXIS != 3 or NAXIS3 != 3.
 func ReadFrameRGB(path string) (r, g, b []float32, width, height int, err error) {
 	f, err := Open(path)
 	if err != nil {

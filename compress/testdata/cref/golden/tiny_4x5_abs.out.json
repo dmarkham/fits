@@ -1,0 +1,4 @@
+{"name": "tiny_4x5_abs", "nx": 4, "ny": 5, "nullcheck": 0, "nullvalue": 0, "qlevel": -0.5, "dither_method": 0, "row": 0, "fill": "fill_tiny_4x5", "in_sha256": "f8f18e9554b85cc867aef56814455197be3f436175a6641e3242715a151d1e5e",
+ "stats": {"ngood": 20, "min": -7, "max": 50, "mean": 11.949999999999999, "sigma": 9.5889259043961754, "noise1": 0.99999999832196851, "noise2": 1.0483579000000001, "noise3": 1.8158091000000001, "noise5": 1.5948431999999999},
+ "quantize": {"return": 1, "bscale": 0.5, "bzero": -6.5, "iminval": -1, "imaxval": 113},
+ "out": [33,35,37,33,35,37,33,35,37,33,35,37,33,113,37,33,35,-1,33,35]}

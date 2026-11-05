@@ -1,0 +1,19 @@
+# AIPS legacy NCP south of the equator with stray PV2_1/PV2_2 cards:
+# wcslib 8.10 wcsset overwrites them with the NCP values (PV2_1 = 0,
+# PV2_2 = cot(CRVAL2)), so they must have no effect.
+NOTE alias NCP: DEC = -25, PV2_1/PV2_2 overwritten
+GRID 1.0 200.0 9 1.0 300.0 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 200
+NAXIS2  = 300
+CTYPE1  = 'RA---NCP'
+CTYPE2  = 'DEC--NCP'
+CRVAL1  = 12.5
+CRVAL2  = -25.0
+CRPIX1  = 100.5
+CRPIX2  = 150.5
+CDELT1  = -0.02
+CDELT2  = 0.02
+PV2_1   = 0.3
+PV2_2   = 0.4

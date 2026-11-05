@@ -1,0 +1,67 @@
+{
+ "file": "comp_fz_real_image.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 26,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                    8 / width of table in bytes",
+    "NAXIS2  =                   10 / number of rows in table",
+    "PCOUNT  =                   60 / number of group parameters",
+    "GCOUNT  =                    1 / number of groups",
+    "TFIELDS =                    1 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'    / label for field 1",
+    "TFORM1  = '1PB(6)  '           / data format of field: variable length array",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTENSION= 'IMAGE   '           / Image extension",
+    "ZBITPIX =                   16 / data type of original image",
+    "ZNAXIS  =                    2 / dimension of original image",
+    "ZNAXIS1 =                   10 / length of original image axis",
+    "ZNAXIS2 =                   10 / length of original image axis",
+    "ZPCOUNT =                    0 / number of parameters",
+    "ZGCOUNT =                    1 / number of groups",
+    "ZTILE1  =                   10 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'RICE_1  '           / compression algorithm",
+    "ZNAME1  = 'BLOCKSIZE'          / compression block size",
+    "ZVAL1   =                   32 / pixels per block",
+    "ZNAME2  = 'BYTEPIX '           / bytes per pixel (1, 2, 4, or 8)",
+    "ZVAL2   =                    2 / bytes per pixel (1, 2, 4, or 8)",
+    "EXTNAME = 'COMPRESSED_IMAGE'   / name of this binary table extension"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": true, "naxis": 2, "naxes": [10,10], "npix": 100, "bscale": 1, "bzero": 0,
+    "phys": {"n": 100, "sha256": "7b5d27681d805d38a2d736a9c60a0e437e0f30f8b1a2b5a6e1c644193dbd1ecb", "pool": "f64"},
+    "i64": {"n": 100, "sha256": "c0b27d0e7705a17d3f11d361f5463b3c54953a9dace6f391fc1c977023c643bd", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

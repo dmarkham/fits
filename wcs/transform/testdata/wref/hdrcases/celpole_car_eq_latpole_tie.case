@@ -1,0 +1,21 @@
+# As celpole_car_eq_south with LATPOLE = 0: exactly halfway between the two
+# solutions latp = +90 and -90. wcslib takes latp1 only when it is
+# STRICTLY closer (cel.c: fabs(latp-latp1) < fabs(latp-latp2)), so the tie
+# goes to latp2 = -90. Synthetic.
+NOTE pipeline: LATPOLE equidistant from both native-pole solutions
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 0.0
+LATPOLE = 0.0

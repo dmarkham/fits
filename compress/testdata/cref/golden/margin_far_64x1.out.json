@@ -1,0 +1,4 @@
+{"name": "margin_far_64x1", "nx": 64, "ny": 1, "nullcheck": 0, "nullvalue": 0, "qlevel": 1.0000109672546387, "dither_method": 0, "row": 0, "fill": "fill_margin_far", "in_sha256": "10ec3981961f6e53f18eb8609077321791a4dc44d13078ea2f9cc71e6def8413",
+ "stats": {"ngood": 64, "min": 0, "max": 4502613504, "mean": 70353336.5, "sigma": 558412292.81630886, "noise1": 0.49588470284835456, "noise2": 1.0483579000000001, "noise3": 1.2105394, "noise5": 1.4176384},
+ "quantize": {"return": 0, "bscale": 0, "bzero": 0, "iminval": 0, "imaxval": 0},
+ "out": null}

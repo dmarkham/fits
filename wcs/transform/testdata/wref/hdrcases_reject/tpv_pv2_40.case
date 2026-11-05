@@ -1,0 +1,19 @@
+# TPV PV2_40 on the LATITUDE axis: TPV defines PVi_0..39 on both axes;
+# wcslib tpvset refuses index 40 (twin of tpv_pv1_40, synthetic).
+# EXPECT-WCSLIB-ERROR: Invalid parameter number (40) for TPV
+NOTE reject: tpv_pv2_40
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CRVAL1  = 40.0
+CRVAL2  = 0.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -0.001
+CD2_2   = 0.001
+PV2_1   = 1.0
+PV2_40  = 0.5

@@ -1,0 +1,49 @@
+{
+ "file": "comp_raw_rice_odd.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 4,
+   "cards": [
+    "SIMPLE  =                    T / conforms to FITS standard",
+    "BITPIX  =                    8 / array data type",
+    "NAXIS   =                    0 / number of array dimensions",
+    "EXTEND  =                    T"
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 8,
+   "cards": [
+    "XTENSION= 'IMAGE   '           / Image extension",
+    "BITPIX  =                   16 / array data type",
+    "NAXIS   =                    2 / number of array dimensions",
+    "NAXIS1  =                   23",
+    "NAXIS2  =                   19",
+    "PCOUNT  =                    0 / number of parameters",
+    "GCOUNT  =                    1 / number of groups",
+    "EXTNAME = 'IMG     '           / extension name"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 2, "naxes": [23,19], "npix": 437, "bscale": 1, "bzero": 0,
+    "phys": {"n": 437, "sha256": "018246eb8e71a055ca62695d6590669a616a27f8b44a5d935385dc96657759d1", "pool": "f64"},
+    "i64": {"n": 437, "sha256": "e21ec1a3d8843290aca1f8888e838d9b4dfe5a43a2b36f2e16605f414a09372f", "pool": "i64"}
+   },
+   "errors": []
+  }
+ ]
+}

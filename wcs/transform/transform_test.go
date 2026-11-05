@@ -280,8 +280,8 @@ func assertRoundTrip(t *testing.T, code string, crval1, crval2, crpix1, crpix2, 
 
 // TestAllPaperIICodesImplemented verifies that every 3-letter code in
 // allProjectionCodes constructs successfully via Select (with sensible
-// default PV parameters). All 27 Paper II projections plus HPX/XPH
-// are implemented; none may return ErrUnsupportedProjection.
+// default PV parameters). All 28 codes (Paper II, HPX, XPH) are
+// implemented; none may return ErrUnsupportedProjection.
 func TestAllPaperIICodesImplemented(t *testing.T) {
 	// Conic projections require a non-zero PV2_1 (theta_a); supply one.
 	conicPV := map[wcs.PVKey]float64{
@@ -294,7 +294,8 @@ func TestAllPaperIICodesImplemented(t *testing.T) {
 	for code := range allProjectionCodes {
 		var pv map[wcs.PVKey]float64
 		switch code {
-		case "COP", "COE", "COD", "COO":
+		case "COP", "COE", "COD", "COO", "BON":
+			// BON's theta_1 (PV2_1) is required too (wcslib bonset).
 			pv = conicPV
 		case "ZPN":
 			pv = zpnPV
@@ -337,6 +338,79 @@ func TestNewAcceptsMERHeader(t *testing.T) {
 	w, _ := wcs.Parse(h)
 	if _, err := New(w); err != nil {
 		t.Fatalf("MER should be supported now: %v", err)
+	}
+}
+
+// makeTPVHeader builds a parsed TPV header with a quadratic distortion:
+// PV1_1 = PV2_1 = 1 (identity) plus PV1_4 (xi²) and PV2_4 (eta²).
+func makeTPVHeader(t *testing.T, ctype1, ctype2 string, withPV bool) *wcs.Header {
+	t.Helper()
+	pairs := []any{
+		"NAXIS", int64(2),
+		"CTYPE1", ctype1,
+		"CTYPE2", ctype2,
+		"CRVAL1", 150.0,
+		"CRVAL2", 2.0,
+		"CRPIX1", -2000.0,
+		"CRPIX2", 1500.0,
+		"CD1_1", -0.0005,
+		"CD1_2", 0.0,
+		"CD2_1", 0.0,
+		"CD2_2", 0.0005,
+	}
+	if withPV {
+		pairs = append(pairs,
+			"PV1_1", 1.0, "PV1_4", 0.02,
+			"PV2_1", 1.0, "PV2_4", -0.015)
+	}
+	w, err := wcs.Parse(newHeader(pairs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+// TestNewAcceptsTPVHeader: New() builds TPV as TAN plus the polynomial,
+// reports it as TPV, and SkyToPixel inverts PixelToSky.
+func TestNewAcceptsTPVHeader(t *testing.T) {
+	tr, err := New(makeTPVHeader(t, "RA---TPV", "DEC--TPV", true))
+	if err != nil {
+		t.Fatalf("TPV should be supported: %v", err)
+	}
+	if tr.Code() != "TPV" {
+		t.Errorf("Code() = %q, want TPV", tr.Code())
+	}
+	for _, p := range [][2]float64{{0, 0}, {50, 50}, {99, 0}, {0, 99}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		x, y, err := tr.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(x-p[0]) > 1e-7 || math.Abs(y-p[1]) > 1e-7 {
+			t.Errorf("round-trip %v → (%v, %v) → (%v, %v)", p, a, d, x, y)
+		}
+	}
+}
+
+// TestTPVDistortionIsApplied: the same header without its PV terms, as
+// plain TAN, must land measurably elsewhere — the polynomial is not
+// silently dropped.
+func TestTPVDistortionIsApplied(t *testing.T) {
+	tpv, err := New(makeTPVHeader(t, "RA---TPV", "DEC--TPV", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tan, err := New(makeTPVHeader(t, "RA---TAN", "DEC--TAN", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a1, d1, _ := tpv.PixelToSky(50, 50)
+	a2, d2, _ := tan.PixelToSky(50, 50)
+	if math.Hypot((a1-a2)*math.Cos(degToRad(d2)), d1-d2)*3600 < 1 {
+		t.Errorf("TPV and TAN agree to < 1\" at (50, 50): (%v, %v) vs (%v, %v)", a1, d1, a2, d2)
 	}
 }
 
@@ -406,5 +480,201 @@ func TestSingularLinearMatrixRejected(t *testing.T) {
 	w, _ := wcs.Parse(h)
 	if _, err := New(w); err == nil {
 		t.Fatal("expected singular matrix error")
+	}
+}
+
+// makeSIPHeader parses a TAN header with a quadratic SIP distortion on a
+// 4000 px detector (CRPIX at the centre), with or without the "-SIP"
+// CTYPE suffix and the AP/BP inverse.
+func makeSIPHeader(t *testing.T, suffix string, withInverse bool) *wcs.Header {
+	t.Helper()
+	pairs := []any{
+		"NAXIS", int64(2),
+		"CTYPE1", "RA---TAN" + suffix,
+		"CTYPE2", "DEC--TAN" + suffix,
+		"CRVAL1", 101.5,
+		"CRVAL2", 28.9,
+		"CRPIX1", 2000.5,
+		"CRPIX2", 2000.5,
+		"CD1_1", 4.5e-05,
+		"CD1_2", 1.7e-07,
+		"CD2_1", 1.7e-07,
+		"CD2_2", -4.5e-05,
+		"A_ORDER", int64(2), "A_2_0", -5.4e-07, "A_1_1", -1.0e-06, "A_0_2", -4.5e-07,
+		"B_ORDER", int64(2), "B_2_0", -1.5e-06, "B_1_1", -2.1e-06, "B_0_2", -7.1e-07,
+	}
+	if withInverse {
+		pairs = append(pairs,
+			"AP_ORDER", int64(2), "AP_2_0", 5.4e-07, "AP_1_1", 1.0e-06, "AP_0_2", 4.5e-07,
+			"BP_ORDER", int64(2), "BP_2_0", 1.5e-06, "BP_1_1", 2.1e-06, "BP_0_2", 7.1e-07)
+	}
+	w, err := wcs.Parse(newHeader(pairs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+// TestNewAppliesSIP: a "-SIP" header is distorted by its SIP polynomial
+// before the linear step, i.e. sky(p) = sky_TAN(CRPIX + SIP(p − CRPIX)).
+func TestNewAppliesSIP(t *testing.T) {
+	tr, err := New(makeSIPHeader(t, "-SIP", false))
+	if err != nil {
+		t.Fatalf("TAN-SIP should be supported: %v", err)
+	}
+	if tr.Code() != "TAN" {
+		t.Errorf("Code() = %q, want TAN", tr.Code())
+	}
+	// The same header without the suffix: SIP is still applied, as in
+	// wcslib (golden sip_nosuffix_tan), so it must equal the suffixed form.
+	nosuffix, err := New(makeSIPHeader(t, "", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range [][2]float64{{0, 0}, {3999, 3999}} {
+		a1, d1, _ := tr.PixelToSky(p[0], p[1])
+		a2, d2, _ := nosuffix.PixelToSky(p[0], p[1])
+		if a1 != a2 || d1 != d2 {
+			t.Errorf("pixel %v: no -SIP suffix gives (%v,%v), -SIP gives (%v,%v)", p, a2, d2, a1, d1)
+		}
+	}
+	// Undistorted reference: the same transform with the SIP step removed.
+	plainT := *nosuffix
+	plainT.sip = nil
+	plain := &plainT
+	sip := &SIP{
+		A: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, -4.5e-07}, {0, -1.0e-06, 0}, {-5.4e-07, 0, 0}}},
+		B: &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, -7.1e-07}, {0, -2.1e-06, 0}, {-1.5e-06, 0, 0}}},
+	}
+	const crpix = 1999.5 // 0-based
+	for _, p := range [][2]float64{{0, 0}, {3999, 0}, {0, 3999}, {3999, 3999}, {1200, 2800}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		u, v := sip.Forward(p[0]-crpix, p[1]-crpix)
+		wa, wd, err := plain.PixelToSky(crpix+u, crpix+v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(a-wa) > 1e-11 || math.Abs(d-wd) > 1e-11 {
+			t.Errorf("pixel %v: got (%v,%v), want (%v,%v)", p, a, d, wa, wd)
+		}
+	}
+	// The distortion is not negligible: ~8 px (> 1") at these corners.
+	for _, p := range [][2]float64{{0, 0}, {3999, 3999}} {
+		a, d, _ := tr.PixelToSky(p[0], p[1])
+		pa, pd, _ := plain.PixelToSky(p[0], p[1])
+		if math.Hypot((a-pa)*math.Cos(d*math.Pi/180), d-pd)*3600 < 1 {
+			t.Errorf("pixel %v: SIP moved the position by < 1\"", p)
+		}
+	}
+}
+
+// TestSIPSkyToPixelInvertsPixelToSky: without AP/BP the inverse is solved
+// by Newton iteration and inverts PixelToSky exactly.
+func TestSIPSkyToPixelInvertsPixelToSky(t *testing.T) {
+	tr, err := New(makeSIPHeader(t, "-SIP", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range [][2]float64{{0, 0}, {3999, 0}, {0, 3999}, {3999, 3999}, {1999.5, 1999.5}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		x, y, err := tr.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(x-p[0]) > 1e-7 || math.Abs(y-p[1]) > 1e-7 {
+			t.Errorf("pixel %v → (%v,%v) → (%v,%v)", p, a, d, x, y)
+		}
+	}
+}
+
+// TestSIPSkyToPixelAPBPIsOnlyAStartingGuess: AP/BP are an approximate
+// inverse. As in wcslib (dis.h: AP/BP "provide an initial estimate for
+// its more precise iterative inversion"), SkyToPixel must return the
+// exact inverse of PixelToSky, NOT p = CRPIX + U + AP(U, V). The two
+// differ by more than 1e-5 px at these pixels (the header's AP/BP are only first-order
+// negations of A/B); the full wcslib comparison is the hdr golden
+// sip4_rough_apbp.
+func TestSIPSkyToPixelAPBPIsOnlyAStartingGuess(t *testing.T) {
+	tr, err := New(makeSIPHeader(t, "-SIP", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := New(makeSIPHeader(t, "", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ap := &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 4.5e-07}, {0, 1.0e-06, 0}, {5.4e-07, 0, 0}}}
+	bp := &SIPPoly{Order: 2, Coeffs: [][]float64{{0, 0, 7.1e-07}, {0, 2.1e-06, 0}, {1.5e-06, 0, 0}}}
+	const crpix = 1999.5 // 0-based
+	for _, p := range [][2]float64{{0, 0}, {3999, 3999}, {600, 3500}} {
+		a, d, err := tr.PixelToSky(p[0], p[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		x, y, err := tr.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(x-p[0]) > 1e-9 || math.Abs(y-p[1]) > 1e-9 {
+			t.Errorf("pixel %v -> sky -> (%.12g, %.12g): not the exact inverse", p, x, y)
+		}
+		x0, y0, err := plain.SkyToPixel(a, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		u, v := x0-crpix, y0-crpix
+		wx, wy := crpix+u+ap.eval(u, v), crpix+v+bp.eval(u, v)
+		if math.Hypot(wx-p[0], wy-p[1]) < 1e-5 {
+			t.Errorf("pixel %v: AP/BP alone already inverts to %.3g px; the test needs a rough AP/BP", p, math.Hypot(wx-p[0], wy-p[1]))
+		}
+	}
+}
+
+// TestSIPSuffixWithoutCoefficientsIsUndistorted: as wcslib (hdr golden
+// sip_suffix_no_coeffs), a "-SIP"
+// CTYPE with no A_ORDER/B_ORDER maps exactly like plain TAN.
+func TestSIPSuffixWithoutCoefficientsIsUndistorted(t *testing.T) {
+	cards := func(suffix string) *wcs.Header {
+		w, err := wcs.Parse(newHeader("NAXIS", int64(2),
+			"CTYPE1", "RA---TAN"+suffix, "CTYPE2", "DEC--TAN"+suffix,
+			"CRVAL1", 10.0, "CRVAL2", 20.0, "CRPIX1", 50.0, "CRPIX2", 50.0,
+			"CDELT1", -1e-3, "CDELT2", 1e-3))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	sip, err := New(cards("-SIP"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tan, err := New(cards(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a1, d1, _ := sip.PixelToSky(0, 99)
+	a2, d2, _ := tan.PixelToSky(0, 99)
+	if a1 != a2 || d1 != d2 {
+		t.Errorf("-SIP without coefficients: (%v,%v), TAN: (%v,%v)", a1, d1, a2, d2)
+	}
+}
+
+// TestNewRejectsUnknownDistortion: a declared distortion New cannot apply
+// is an error, not silently dropped.
+func TestNewRejectsUnknownDistortion(t *testing.T) {
+	w, err := wcs.Parse(newHeader("NAXIS", int64(2),
+		"CTYPE1", "RA---TAN-XYZ", "CTYPE2", "DEC--TAN-XYZ",
+		"CDELT1", -1e-3, "CDELT2", 1e-3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(w); err == nil {
+		t.Fatal("expected an error for distortion XYZ")
 	}
 }

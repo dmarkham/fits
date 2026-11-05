@@ -1,0 +1,25 @@
+# '-SIP' CTYPEs with an A_p_q coefficient but neither A_ORDER nor B_ORDER
+# (synthetic). wcslib 8.10 ACCEPTS this header once an inverse is present
+# (AP/BP given explicitly, so hdr2sky injects nothing) and applies A_2_0
+# without any declared order. We refuse it on purpose (rule 7: a
+# coefficient with no declared polynomial order is ambiguous).
+# EXPECT-GO-ERROR: A_ORDER is missing
+NOTE stricter: sip_coeffs_without_orders
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN-SIP'
+CTYPE2  = 'DEC--TAN-SIP'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -0.001
+CD2_2   = 0.001
+A_2_0   = 1.0E-4
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

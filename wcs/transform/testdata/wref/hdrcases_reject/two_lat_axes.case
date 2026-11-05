@@ -1,0 +1,22 @@
+# Two latitude axes (DEC on axes 2 and 3) and one longitude axis: not one
+# celestial pair. Synthetic.
+# EXPECT-WCSLIB-ERROR: Inconsistent projection types
+NOTE reject: two_lat_axes
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 3
+NAXIS1  = 512
+NAXIS2  = 512
+NAXIS3  = 4
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRVAL3  = 31.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CRPIX3  = 1.0
+CDELT1  = -0.001
+CDELT2  = 0.001
+CDELT3  = 0.001
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CTYPE3  = 'DEC--TAN'

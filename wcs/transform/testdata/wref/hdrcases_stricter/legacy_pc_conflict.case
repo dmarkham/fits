@@ -1,0 +1,20 @@
+# PC1_1 and its defunct twin PC001001 with different values (synthetic).
+# wcslib 8.10 wcspih accepts both forms and silently keeps one. We refuse
+# the header (rule 7: which value was meant is ambiguous).
+# EXPECT-GO-ERROR: disagree
+NOTE stricter: legacy_pc_conflict
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PC1_1   = 1.0
+PC001001= 0.9

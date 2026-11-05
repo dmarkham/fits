@@ -1,0 +1,1 @@
+{"name": "plio_i16_cube", "type": "i16", "naxes": [12, 9, 3], "algo": "PLIO_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 1, "gen_seed": 5071, "in_sha256": "0e32b47ff35a7c769d3511cee753d0b028a78146aa782decfea818cea231bf9f"}

@@ -1,0 +1,25 @@
+# CAR with PV1_0 = 1 and only PV1_1 given (phi_0 = 10), no PV1_2
+# (synthetic, hand-written). wcslib 8.10 celset passes (phi_0, theta_0)
+# to the projection only with PV1_0 = 1, and prjoff then computes the
+# offset (x_0, y_0) = the projection of (phi_0, theta_0) only when BOTH are
+# defined; with PV1_2 missing it sets the projection's own default
+# fiducial point and NO offset, while the given PV1_1 still enters
+# celset's native-to-celestial rotation. A reader that applies the offset
+# whenever PV1_0 = 1 is 10-20 px off here.
+NOTE pipeline: CAR with PV1_0 = 1 and only PV1_1 (offset not applied)
+GRID 1.13 498.71 15 1.29 498.53 15
+SKYGRID 0.71 359.13 13 -89.37 89.21 13
+HEADER
+NAXIS   = 2
+NAXIS1  = 500
+NAXIS2  = 500
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 37.3
+CRVAL2  = 0.0
+CRPIX1  = 250.37
+CRPIX2  = 250.61
+CDELT1  = -1.0
+CDELT2  = 1.0
+PV1_0   = 1.0
+PV1_1   = 10.0

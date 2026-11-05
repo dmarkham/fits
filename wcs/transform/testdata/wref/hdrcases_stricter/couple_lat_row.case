@@ -1,0 +1,26 @@
+# RA x DEC x FREQ cube whose PC matrix couples the spectral pixel axis 3
+# into the celestial latitude world axis (PC2_3 = 0.1; synthetic). wcslib
+# 8.10 ACCEPTS it: the sky position then depends on the spectral pixel
+# coordinate. Transform takes only the two celestial pixel coordinates,
+# so it refuses rather than silently drop that term (rule 7).
+# EXPECT-GO-ERROR: couples pixel axis 3 into celestial world axis 2
+NOTE stricter: couple_lat_row
+GRID 1 256 5 1 256 5
+HEADER
+NAXIS   = 3
+NAXIS1  = 256
+NAXIS2  = 256
+NAXIS3  = 8
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CTYPE3  = 'FREQ'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRVAL3  = 1.4E9
+CRPIX1  = 128.5
+CRPIX2  = 128.5
+CRPIX3  = 1.0
+CDELT1  = -0.001
+CDELT2  = 0.001
+CDELT3  = 1.0E6
+PC2_3   = 0.1

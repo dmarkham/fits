@@ -1,6 +1,8 @@
 package fits
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,7 +123,7 @@ func TestEmptyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Open(path)
-	if err != ErrEmptyFile {
+	if !errors.Is(err, ErrEmptyFile) {
 		t.Fatalf("want ErrEmptyFile, got %v", err)
 	}
 }
@@ -136,8 +138,19 @@ func TestNotFITS(t *testing.T) {
 	if err := os.WriteFile(path, buf, 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Open(path)
-	if err == nil {
-		t.Fatal("expected error")
+	if _, err := Open(path); !errors.Is(err, ErrNotFITS) {
+		t.Fatalf("Open of a non-FITS block: err %v, want ErrNotFITS", err)
+	}
+	// A FITS-looking first card that is not SIMPLE (an extension header
+	// without a primary) is not FITS either (FITS 4.0 §4.4.1.1).
+	copy(buf, []byte("XTENSION= 'IMAGE   '"))
+	if err := os.WriteFile(path, buf, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(path); !errors.Is(err, ErrNotFITS) {
+		t.Fatalf("Open of a file starting with XTENSION: err %v, want ErrNotFITS", err)
+	}
+	if _, err := OpenReadAll(bytes.NewReader(buf)); !errors.Is(err, ErrNotFITS) {
+		t.Fatalf("OpenReadAll: err %v, want ErrNotFITS", err)
 	}
 }

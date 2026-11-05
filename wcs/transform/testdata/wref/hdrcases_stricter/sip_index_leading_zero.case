@@ -1,0 +1,37 @@
+# Plain TAN CTYPEs with SIP keywords where one coefficient is written with a
+# zero-padded index, A_01_1 (synthetic, from the round-2 verifier probe
+# zz_sip_leading_zero).
+# wcslib 8.10 ACCEPTS this header: its keyword lexer (wcspih.l,
+# <SIP2>{Z1}_{Z1}"   ") takes single-digit indices only and DISCARDS the
+# A_01_1 card without a message, so the polynomial loses that term; astropy
+# 8.0.2 ignores it too. A_01_1 is not a SIP keyword, but it plainly means a
+# coefficient, so dropping it would be silent data loss and applying it as
+# A_1_1 would differ from wcslib. We refuse it (rule 7). AP/BP are given so
+# hdr2sky injects nothing.
+# EXPECT-GO-ERROR: A_01_1 is not a SIP coefficient keyword
+NOTE stricter: sip_index_leading_zero
+GRID 1 1024 5 1 1024 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_01_1  = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

@@ -1,0 +1,30 @@
+# A_ORDER written as a real number, 2.0 (synthetic, from the round-3
+# verifier probe p34_order_float). wcslib 8.10 never reads A_ORDER and
+# accepts the header. The SIP convention defines A_ORDER as an integer; we
+# refuse a non-integer value rather than truncate it.
+# AP/BP are given so hdr2sky injects nothing.
+# EXPECT-GO-ERROR: A_ORDER = 2 is not an integer
+NOTE stricter: sip_order_float
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2.0
+B_ORDER = 2
+A_2_0   = 2e-5
+B_0_2   = 2e-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

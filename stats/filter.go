@@ -1,15 +1,18 @@
 package stats
 
 // FilterNonZero returns a new slice containing only the non-zero,
-// non-NaN elements of data. This matches the astronomical convention
-// for "blank pixel" exclusion — Siril's reassign_to_non_null_data_float
-// uses the same logic before computing median and MAD.
+// non-NaN elements of data, in order. The predicate (v != 0 && !isnan(v),
+// so -0 is excluded too) is the one Siril's
+// reassign_to_non_null_data_float uses to exclude blank pixels before
+// computing the median and MAD; for []float32 the output is checked
+// element-for-element against that Siril function.
 //
 // For integer types, excludes exact zeros (NaN is not possible).
-// For float types, excludes both exact 0.0 and NaN.
 //
-// If all elements are zero/NaN, returns the original slice as a
-// fallback (avoids returning empty data to downstream statistics).
+// If no element survives (all zero/NaN, or empty input), FilterNonZero
+// returns data itself, not a copy — unlike Siril, which computes no
+// statistics in that case. A caller that must tell the two apart can
+// check whether the first element of the result is zero or NaN.
 func FilterNonZero[T Numeric](data []T) []T {
 	out := make([]T, 0, len(data))
 	for _, v := range data {

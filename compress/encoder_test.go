@@ -162,3 +162,27 @@ func makeInt32Bytes(p []int32) []byte {
 	}
 	return out
 }
+
+// TestGzipEncodersBufferBoundary: GZIP_1/GZIP_2 at the dst boundary.
+// Their DEFLATE bytes are not cfitsio's (only the inflated bytes are
+// compared elsewhere), so the stream length here is our own; the check
+// is the Encoder contract: exactly n bytes fit, n-1 is ErrBufferTooSmall.
+func TestGzipEncodersBufferBoundary(t *testing.T) {
+	px := make([]int16, 500)
+	for i := range px {
+		px[i] = int16(i*37%1001 - 500)
+	}
+	src := makeInt16Bytes(px)
+	for _, a := range []Algorithm{GZIP1, GZIP2} {
+		enc, err := SelectEncoder(a, Params{"BYTEPIX": 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		big := make([]byte, len(src)*2+1024)
+		n, err := enc.Encode(src, big, len(px), 2)
+		if err != nil {
+			t.Fatalf("%s: %v", a, err)
+		}
+		checkExactBuffer(t, a.String(), big[:n], func(d []byte) (int, error) { return enc.Encode(src, d, len(px), 2) })
+	}
+}

@@ -1,0 +1,20 @@
+# PS1_0 with a NUMERIC value (PSi_m are string parameters; synthetic).
+# wcslib 8.10 wcspih ACCEPTS the header: it discards the mistyped card and
+# computes coordinates. We refuse a WCS keyword of the wrong type instead
+# of silently dropping it (rule 7).
+# EXPECT-GO-ERROR: PS1_0 has a non-string value
+NOTE stricter: ps_numeric
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PS1_0   = 5

@@ -1,0 +1,16 @@
+# Celestial axes declaring different projections (TAN / SIN).
+# EXPECT-WCSLIB-ERROR: Inconsistent projection types
+NOTE reject: proj_mismatch
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--SIN'

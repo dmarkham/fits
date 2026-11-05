@@ -1,0 +1,42 @@
+# Alternate WCS 'A' carrying the celestial description (synthetic, from
+# audit probe h/alt_celestial.hdr, extended): primary is TAN, alternate A
+# is GLON/GLAT ARC with LONPOLEA = 170 overridden by PV1_3A = 160 (PVi_ma
+# on the longitude axis), LATPOLEA, PC1_1A..PC2_2A and WCSAXESA = 3
+# (primary has no WCSAXES). The primary keywords must not leak into 'A'.
+NOTE pipeline: alternate WCS A with LONPOLEa, PVi_ma, WCSAXESa
+ALT A
+GRID 1 512 9 1 512 9
+PIX 100 120
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+LONPOLE = 180.0
+WCSAXESA= 3
+CTYPE1A = 'GLON-ARC'
+CTYPE2A = 'GLAT-ARC'
+CTYPE3A = 'STOKES'
+CRVAL1A = 195.0
+CRVAL2A = 80.0
+CRVAL3A = 1.0
+CRPIX1A = 100.0
+CRPIX2A = 120.0
+CRPIX3A = 1.0
+CDELT1A = -0.002
+CDELT2A = 0.002
+CDELT3A = 1.0
+PC1_1A  = 0.98
+PC1_2A  = -0.2
+PC2_1A  = 0.2
+PC2_2A  = 0.98
+LONPOLEA= 170.0
+LATPOLEA= 80.0
+PV1_3A  = 160.0

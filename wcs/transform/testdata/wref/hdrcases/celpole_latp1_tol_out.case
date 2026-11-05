@@ -1,0 +1,23 @@
+# CAR with theta_0 = 45 (PV1_2), LONPOLE = 0 (= phi_0) and CRVAL2 =
+# 44.999999999: celset's two native-pole latitudes are latp1 = theta_0 +
+# 90 - lat0 = 90 + 1e-9 and latp2 = theta_0 - 90 + lat0 = -1e-9. LATPOLE
+# (default 90) is nearer latp1, but latp1 is outside 90 + 1e-10, so wcslib
+# takes latp2; a looser tolerance takes latp1 and then refuses the header.
+# Synthetic.
+NOTE pipeline: nearer native-pole solution 1e-9 past 90 is passed over
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 44.999999999
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = 45.0
+LONPOLE = 0.0

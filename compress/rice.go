@@ -11,20 +11,21 @@ const debugRice = false
 // Reference: Pence 2000 (cfitsio ricecomp.c) and White & Greenfield 1998.
 // Adapted to Go idiom. The algorithm:
 //
-//	1. Read the "last" pixel value from the stream as the initial value
-//	   (elemSize * 8 bits).
-//	2. For each block of BLOCKSIZE pixels (default 32):
-//	   a. Read the fs parameter (k) from the stream: a fixed number of
-//	      bits equal to fsbits. fsbits is 5 for BYTEPIX<=4, 6 for BYTEPIX=8.
-//	   b. If fs < 0 (all bits set to 1), the block is encoded literally:
-//	      read BLOCKSIZE * elemSize bits verbatim as raw pixel values.
-//	   c. Otherwise, decode each pixel via the fs-split code:
-//	      - Read a unary-coded prefix (count of 0 bits up to the first 1).
-//	      - Read fs low-order bits as a fixed-width field.
-//	      - Combine: value = (prefix << fs) | lowBits.
-//	      - Map back from zigzag to signed delta.
-//	      - Add to running last = last + delta.
-//	3. Write each pixel as big-endian bytes into dst.
+//  1. Read the "last" pixel value from the stream as the initial value
+//     (elemSize * 8 bits).
+//  2. For each block of BLOCKSIZE pixels (default 32):
+//     a. Read the fs parameter (k) from the stream: a fixed number of
+//     bits equal to fsbits: 3, 4 or 5 for BYTEPIX 1, 2 or 4 (BYTEPIX 8
+//     is refused: cfitsio has no 64-bit Rice coder).
+//     b. If fs < 0 (all bits set to 1), the block is encoded literally:
+//     read BLOCKSIZE * elemSize bits verbatim as raw pixel values.
+//     c. Otherwise, decode each pixel via the fs-split code:
+//     - Read a unary-coded prefix (count of 0 bits up to the first 1).
+//     - Read fs low-order bits as a fixed-width field.
+//     - Combine: value = (prefix << fs) | lowBits.
+//     - Map back from zigzag to signed delta.
+//     - Add to running last = last + delta.
+//  3. Write each pixel as big-endian bytes into dst.
 //
 // This is stateful per-stream but resets between tiles (each tile row
 // of the binary table is an independent RICE stream).
@@ -60,8 +61,10 @@ func (r rice1Decoder) Decode(src, dst []byte, nelem, elemSize int) error {
 		fsbits = 5
 		fsmax = 25
 	case 8:
-		fsbits = 6
-		fsmax = 57
+		// cfitsio has no 64-bit Rice coder (ricecomp.c: fits_rdecomp,
+		// _short, _byte only), so there is no reference stream to prove a
+		// decoder against; refuse, as the encoder does.
+		return fmt.Errorf("%w: RICE_1 BYTEPIX 8 (cfitsio has no 64-bit Rice coder)", ErrUnsupportedCompression)
 	default:
 		return fmt.Errorf("%w: RICE_1 unsupported BYTEPIX %d", ErrCorrupt, elemSize)
 	}
@@ -99,15 +102,6 @@ func (r rice1Decoder) Decode(src, dst []byte, nelem, elemSize int) error {
 			dst[off+1] = byte(v >> 16)
 			dst[off+2] = byte(v >> 8)
 			dst[off+3] = byte(v)
-		case 8:
-			dst[off] = byte(v >> 56)
-			dst[off+1] = byte(v >> 48)
-			dst[off+2] = byte(v >> 40)
-			dst[off+3] = byte(v >> 32)
-			dst[off+4] = byte(v >> 24)
-			dst[off+5] = byte(v >> 16)
-			dst[off+6] = byte(v >> 8)
-			dst[off+7] = byte(v)
 		}
 	}
 
@@ -209,7 +203,7 @@ func unzigzag(z uint64) int64 {
 // order. cfitsio's RICE encoder writes bits MSB-first within each byte,
 // which is the convention we follow here.
 type bitReader struct {
-	src  []byte
+	src     []byte
 	byteIdx int
 	bitIdx  uint // 0..7, bits consumed from the current byte (MSB-first)
 }

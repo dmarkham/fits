@@ -1,0 +1,19 @@
+# PROJP1 and PV2_1 with different values (synthetic). wcslib 8.10 wcspih
+# accepts both and silently keeps one. We refuse the header (rule 7).
+# EXPECT-GO-ERROR: disagree
+NOTE stricter: legacy_projp_conflict
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---AZP'
+CTYPE2  = 'DEC--AZP'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001
+PROJP1  = 2.0
+PV2_1   = 1.5

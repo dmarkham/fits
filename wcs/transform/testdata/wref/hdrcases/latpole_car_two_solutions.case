@@ -1,0 +1,23 @@
+# CAR with CRVAL2 = 10, LONPOLE = 0: the native pole latitude has two
+# valid solutions (+80 and -80 deg, wcslib cel.c "latpreq = 1"); LATPOLE =
+# -30 selects the southern one (the default LATPOLE = +90 would select the
+# northern). Synthetic.
+NOTE pipeline: LATPOLE choosing between two native-pole solutions
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+SKYGRID 330 359 4 -10 30 5
+SKYGRID 0 30 4 -10 30 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 0.0
+CRVAL2  = 10.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 0.0
+LATPOLE = -30.0

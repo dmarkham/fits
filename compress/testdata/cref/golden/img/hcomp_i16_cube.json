@@ -1,0 +1,1 @@
+{"name": "hcomp_i16_cube", "type": "i16", "naxes": [12, 9, 3], "algo": "HCOMPRESS_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 2, "gen_seed": 5070, "in_sha256": "4c23f82f6b70de18f1606b507193f470ac5d385551666bd82d26d3c30ad2ec7a"}

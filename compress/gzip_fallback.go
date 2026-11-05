@@ -3,28 +3,30 @@ package compress
 import (
 	"bytes"
 	"compress/gzip"
-	"fmt"
+	"compress/zlib"
+	"errors"
 	"io"
 )
 
-// gzipFallback decompresses a real RFC 1952 gzip stream (as opposed to
-// zlib-wrapped DEFLATE). cfitsio-written compressed FITS files use gzip
-// format; astropy uses zlib. We accept either by trying zlib first and
-// falling back here on zlib header mismatch.
-func gzipFallback(src, dst []byte, want int) error {
-	r, err := gzip.NewReader(bytes.NewReader(src))
-	if err != nil {
-		return fmt.Errorf("%w: gzip fallback: %v", ErrCorrupt, err)
+// inflate decompresses a tile written either as a gzip (RFC 1952) stream,
+// as cfitsio writes it, or as zlib-wrapped DEFLATE (RFC 1950), as astropy
+// writes it. At most limit bytes are returned: a caller that needs an
+// exact length n passes n+1 and so sees a too-long stream as n+1 bytes.
+// A truncated or corrupt stream is an error, never a short result.
+func inflate(src []byte, limit int) ([]byte, error) {
+	var r io.ReadCloser
+	if gz, err := gzip.NewReader(bytes.NewReader(src)); err == nil {
+		gz.Multistream(false)
+		r = gz
+	} else if zr, zerr := zlib.NewReader(bytes.NewReader(src)); zerr == nil {
+		r = zr
+	} else {
+		return nil, errors.New("tile is neither a gzip nor a zlib stream")
 	}
 	defer r.Close()
-	n, err := io.ReadFull(r, dst[:want])
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		return fmt.Errorf("%w: gzip fallback read: %v", ErrCorrupt, err)
+	out, err := io.ReadAll(io.LimitReader(r, int64(limit)))
+	if err != nil {
+		return nil, err
 	}
-	if n < want {
-		// Fewer bytes than expected — still succeed if EOF; caller will
-		// zero-fill any trailing pixels.
-		return nil
-	}
-	return nil
+	return out, nil
 }

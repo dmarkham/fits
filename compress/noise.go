@@ -81,7 +81,7 @@ func fnMeanSigmaFloat32(array []float32, npix int64, nullcheck bool, nullvalue f
 				ngood++
 				x := float64(array[i])
 				sum += x
-				sum2 += x * x
+				sum2 += float64(x * x)
 			}
 		}
 	} else {
@@ -89,12 +89,12 @@ func fnMeanSigmaFloat32(array []float32, npix int64, nullcheck bool, nullvalue f
 		for i := int64(0); i < npix; i++ {
 			x := float64(array[i])
 			sum += x
-			sum2 += x * x
+			sum2 += float64(x * x)
 		}
 	}
 	if ngood > 1 {
 		mean = sum / float64(ngood)
-		sigma = math.Sqrt(sum2/float64(ngood) - mean*mean)
+		sigma = math.Sqrt(sum2/float64(ngood) - float64(mean*mean))
 	} else if ngood == 1 {
 		mean = sum
 		sigma = 0
@@ -112,15 +112,15 @@ func fnMeanSigmaFloat32Slice(arr []float32) (mean, stdev float64) {
 	for _, v := range arr {
 		x := float64(v)
 		sum += x
-		sum2 += x * x
+		sum2 += float64(x * x)
 	}
 	n := float64(len(arr))
 	mean = sum / n
-	sigma2 := sum2/n - mean*mean
-	if sigma2 < 0 {
-		sigma2 = 0
-	}
-	return mean, math.Sqrt(sigma2)
+	// As FnMeanSigma_float: no clamp of a negative variance (NaN from
+	// sqrt, as in C). For differences of float32 pixels it cannot occur:
+	// the sums are exact and the rounding of mean*mean and sum2/n is
+	// below the smallest non-zero variance.
+	return mean, math.Sqrt(sum2/n - float64(mean*mean))
 }
 
 // fnNoise1Float32 ports FnNoise1_float.
@@ -172,7 +172,7 @@ func fnNoise1Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 			for iter := 0; iter < niter; iter++ {
 				kk := 0
 				for i := 0; i < nvals; i++ {
-					if math.Abs(float64(differences[i])-mean) < sigmaClip*stdev {
+					if math.Abs(float64(differences[i])-mean) < float64(sigmaClip*stdev) {
 						if kk < i {
 							differences[kk] = differences[i]
 						}
@@ -189,7 +189,7 @@ func fnNoise1Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 		diffs = append(diffs, stdev)
 	}
 	xnoise := medianDoubleLowerMiddle(diffs)
-	return 0.70710678 * xnoise // 1/sqrt(2): normalize first-difference variance to per-pixel sigma
+	return float64(0.70710678 * xnoise) // 1/sqrt(2): normalize first-difference variance to per-pixel sigma
 }
 
 // fnNoise5Float32 ports FnNoise5_float.
@@ -205,6 +205,14 @@ func fnNoise1Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 // row, and the outer median across rows is the average of the two
 // middles for even row counts (standard median).
 func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue float32) (ngood int64, minval, maxval float32, noise2, noise3, noise5 float64) {
+	return fnNoise5(array, nx, ny, nullcheck, nullvalue)
+}
+
+// fnNoise5 is FnNoise5_float (T float32) and FnNoise5_double (T float64):
+// the two C functions are the same code with the pixel type (and the
+// type of the difference arrays) changed, so the port is one generic
+// function. All arithmetic on pixels is done in T, as in C.
+func fnNoise5[T floatPix](array []T, nx, ny int64, nullcheck bool, nullvalue T) (ngood int64, minval, maxval T, noise2, noise3, noise5 float64) {
 	// rows must have at least 9 pixels — otherwise flatten to a
 	// single row and try again.
 	if nx < 9 {
@@ -214,7 +222,7 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 
 	// Fallback: even after flattening, too few pixels for any MAD.
 	if nx < 9 {
-		xminval, xmaxval := float32(math.MaxFloat32), float32(-math.MaxFloat32)
+		xminval, xmaxval := maxPix[T](), -maxPix[T]()
 		var ngoodpix int64
 		for ii := int64(0); ii < nx; ii++ {
 			if nullcheck && array[ii] == nullvalue {
@@ -231,12 +239,12 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 		return ngoodpix, xminval, xmaxval, 0, 0, 0
 	}
 
-	xminval := float32(math.MaxFloat32)
-	xmaxval := float32(-math.MaxFloat32)
+	xminval := maxPix[T]()
+	xmaxval := -maxPix[T]()
 
-	differences2 := make([]float32, nx)
-	differences3 := make([]float32, nx)
-	differences5 := make([]float32, nx)
+	differences2 := make([]T, nx)
+	differences3 := make([]T, nx)
+	differences5 := make([]T, nx)
 	diffs2 := make([]float64, 0, ny)
 	diffs3 := make([]float64, 0, ny)
 	diffs5 := make([]float64, 0, ny)
@@ -247,9 +255,9 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 
 		// Find the first 8 valid pixels. Any row that runs out of
 		// valid pixels before 8 is skipped entirely.
-		var v1, v2, v3, v4, v5, v6, v7, v8, v9 float32
+		var v1, v2, v3, v4, v5, v6, v7, v8, v9 T
 		ii := int64(0)
-		initial := [8]*float32{&v1, &v2, &v3, &v4, &v5, &v6, &v7, &v8}
+		initial := [8]*T{&v1, &v2, &v3, &v4, &v5, &v6, &v7, &v8}
 		skipRow := false
 		for slot := 0; slot < 8; slot++ {
 			if nullcheck {
@@ -299,14 +307,14 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 			// 2nd-order: skip identical-run regions because |v5-v7|=0
 			// there.
 			if !(v5 == v6 && v6 == v7) {
-				differences2[nvals2] = absFloat32(v5 - v7)
+				differences2[nvals2] = absPix(v5 - v7)
 				nvals2++
 			}
 
 			// 3rd/5th-order: skip regions where v3..v7 are all equal.
 			if !(v3 == v4 && v4 == v5 && v5 == v6 && v6 == v7) {
-				differences3[nvals] = absFloat32((2 * v5) - v3 - v7)
-				differences5[nvals] = absFloat32((6 * v5) - (4 * v3) - (4 * v7) + v1 + v9)
+				differences3[nvals] = absPix(T(2*v5) - v3 - v7)
+				differences5[nvals] = absPix(T(T(T(T(6*v5)-T(4*v3))-T(4*v7))+v1) + v9)
 				nvals++
 			} else {
 				// still counts as "good" for ngood bookkeeping
@@ -329,10 +337,15 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 			diffs5 = append(diffs5, float64(differences5[0]))
 		} else {
 			if nvals2 > 1 {
-				diffs2 = append(diffs2, float64(quickSelectFloat32(differences2[:nvals2])))
+				// cfitsio passes nvals, not nvals2: when a run of 3 equal
+				// pixels skipped a 2nd-order difference, the median is
+				// taken over nvals entries, including zeros or entries
+				// left (in quick_select's order) by the previous row.
+				// Kept for bit-exactness (goldens runs3_*).
+				diffs2 = append(diffs2, float64(quickSelect(differences2[:nvals])))
 			}
-			diffs3 = append(diffs3, float64(quickSelectFloat32(differences3[:nvals])))
-			diffs5 = append(diffs5, float64(quickSelectFloat32(differences5[:nvals])))
+			diffs3 = append(diffs3, float64(quickSelect(differences3[:nvals])))
+			diffs5 = append(diffs5, float64(quickSelect(differences5[:nvals])))
 		}
 	}
 
@@ -341,9 +354,9 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 	xnoise5 = medianDoublePair(diffs5)
 	xnoise2 = medianDoublePair(diffs2)
 
-	noise2 = 1.0483579 * xnoise2
-	noise3 = 0.6052697 * xnoise3
-	noise5 = 0.1772048 * xnoise5
+	noise2 = float64(1.0483579 * xnoise2)
+	noise3 = float64(0.6052697 * xnoise3)
+	noise5 = float64(0.1772048 * xnoise5)
 	return ngoodpix, xminval, xmaxval, noise2, noise3, noise5
 }
 
@@ -356,12 +369,18 @@ func fnNoise5Float32(array []float32, nx, ny int64, nullcheck bool, nullvalue fl
 //
 // Reference: reference/cfitsio/quantize.c:2703 (FnNoise3_float).
 func fnNoise3Float32MinMax(array []float32, nx, ny int64, nullcheck bool, nullvalue float32) (ngood int64, minval, maxval float32) {
+	return fnNoise3MinMax(array, nx, ny, nullcheck, nullvalue)
+}
+
+// fnNoise3MinMax is FnNoise3_float / FnNoise3_double (noise = NULL), generic
+// over the pixel type like fnNoise5.
+func fnNoise3MinMax[T floatPix](array []T, nx, ny int64, nullcheck bool, nullvalue T) (ngood int64, minval, maxval T) {
 	if nx < 5 {
 		nx = nx * ny
 		ny = 1
 	}
 	if nx < 5 {
-		xminval, xmaxval := float32(math.MaxFloat32), float32(-math.MaxFloat32)
+		xminval, xmaxval := maxPix[T](), -maxPix[T]()
 		var ngoodpix int64
 		for ii := int64(0); ii < nx; ii++ {
 			if nullcheck && array[ii] == nullvalue {
@@ -378,13 +397,13 @@ func fnNoise3Float32MinMax(array []float32, nx, ny int64, nullcheck bool, nullva
 		return ngoodpix, xminval, xmaxval
 	}
 
-	xminval := float32(math.MaxFloat32)
-	xmaxval := float32(-math.MaxFloat32)
+	xminval := maxPix[T]()
+	xmaxval := -maxPix[T]()
 	var ngoodpix int64
 
 	for jj := int64(0); jj < ny; jj++ {
 		rowpix := array[jj*nx : (jj+1)*nx]
-		var v5 float32
+		var v5 T
 		ii := int64(0)
 		// Need v1..v4 before the main loop over v5 can start. We
 		// just read and min/max-update them; when noise=nil nothing
@@ -437,30 +456,91 @@ func fnNoise3Float32MinMax(array []float32, nx, ny int64, nullcheck bool, nullva
 	return ngoodpix, xminval, xmaxval
 }
 
-// absFloat32 mirrors (float)fabs(x) — since x is already float32 the
-// result is the same with or without the double detour.
-func absFloat32(x float32) float32 {
+// floatPix is the pixel type of the float quantizer: float32
+// (fits_quantize_float) or float64 (fits_quantize_double).
+type floatPix interface{ ~float32 | ~float64 }
+
+// maxPix is FLT_MAX for float32 and DBL_MAX for float64.
+func maxPix[T floatPix]() T {
+	var z T
+	if any(z) == any(float32(0)) {
+		return T(math.MaxFloat32)
+	}
+	m := math.MaxFloat64
+	return T(m)
+}
+
+// absPix mirrors (float)fabs(x) / fabs(x): the absolute value of a T is
+// exact, so the double detour of the float32 version changes nothing.
+func absPix[T floatPix](x T) T {
 	if x < 0 {
 		return -x
 	}
 	return x
 }
 
-// quickSelectFloat32 returns the element that would occupy index
-// (len(arr)-1)/2 after a full ascending sort. This is the lower of the
-// two middles for even-length arrays, matching cfitsio's
-// quick_select_float convention (C quantize.c:3679).
-//
-// We use sort.Float32s + indexing instead of a Hoare quickselect
-// because the outputs are identical for sorted position (n-1)/2, and
-// Go's sort is already optimized. The mutation side effect on the
-// slice also matches.
-func quickSelectFloat32(arr []float32) float32 {
-	if len(arr) == 0 {
+// quickSelect is cfitsio's quick_select_float / quick_select_double (quantize.c), a
+// verbatim port: it returns the element at index (len(arr)-1)/2 of the
+// sorted order and leaves arr in the same partially-partitioned order as
+// the C code. The order matters: FnNoise5 reads entries a previous row's
+// selection left behind (see the nvals note above), so a different
+// permutation (e.g. a full sort) changes noise2.
+func quickSelect[T floatPix](arr []T) T {
+	n := len(arr)
+	if n == 0 {
 		return 0
 	}
-	sort.Slice(arr, func(i, j int) bool { return arr[i] < arr[j] })
-	return arr[(len(arr)-1)/2]
+	low, high := 0, n-1
+	median := (low + high) / 2
+	for {
+		if high <= low { // one element only
+			return arr[median]
+		}
+		if high == low+1 { // two elements only
+			if arr[low] > arr[high] {
+				arr[low], arr[high] = arr[high], arr[low]
+			}
+			return arr[median]
+		}
+		// Find median of low, middle and high items; swap into position low.
+		middle := (low + high) / 2
+		if arr[middle] > arr[high] {
+			arr[middle], arr[high] = arr[high], arr[middle]
+		}
+		if arr[low] > arr[high] {
+			arr[low], arr[high] = arr[high], arr[low]
+		}
+		if arr[middle] > arr[low] {
+			arr[middle], arr[low] = arr[low], arr[middle]
+		}
+		// Swap low item (now in position middle) into position low+1.
+		arr[middle], arr[low+1] = arr[low+1], arr[middle]
+		// Nibble from each end towards middle, swapping items when stuck.
+		ll, hh := low+1, high
+		for {
+			ll++
+			for arr[low] > arr[ll] {
+				ll++
+			}
+			hh--
+			for arr[hh] > arr[low] {
+				hh--
+			}
+			if hh < ll {
+				break
+			}
+			arr[ll], arr[hh] = arr[hh], arr[ll]
+		}
+		// Swap middle item (in position low) back into correct position.
+		arr[low], arr[hh] = arr[hh], arr[low]
+		// Re-set active partition.
+		if hh <= median {
+			low = ll
+		}
+		if hh >= median {
+			high = hh - 1
+		}
+	}
 }
 
 // medianDoublePair ports the "compute median of row medians" logic

@@ -1,0 +1,1 @@
+{"name": "rice_s8", "type": "s8", "naxes": [40, 25], "algo": "RICE_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 0, "gen_seed": 5006, "in_sha256": "d0bda22d2cbe165699aaf547d88c072ea741a5cb3cb4b4217fe7578e5598ec20"}

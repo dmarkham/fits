@@ -1,0 +1,20 @@
+# CAR, CRVAL2 = 20, LONPOLE = 999: wcslib (cel.c celset) reads
+# LONPOLE = 999 as "not given" and uses the default phip (0 here, since
+# CRVAL2 >= theta0). Taken literally, LONPOLE = 999 (= 279 deg) would
+# give |slz| = 2.19 > 1 and no valid native pole. Synthetic.
+NOTE pipeline: LONPOLE = 999 means the default
+GRID 1 512 5 1 512 5
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 20.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+LONPOLE = 999.0

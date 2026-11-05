@@ -9,16 +9,19 @@ import (
 // Newton's method with bracketed bisection fallback. fprime is the
 // derivative of f.
 //
-// Used by projections without closed-form inverses: MOL (Mollweide) needs
-// to solve 2*psi + sin(2*psi) = pi*sin(theta) for psi, PCO (polyconic)
-// needs a similar 1D root find, and distortion inversions (TPV/TNX) fall
-// back on iterative solve when the inverse polynomial is not supplied.
+// NOT used by any projection or distortion in this package: the
+// projections without closed-form directions (MOL forward; PCO, AIR and
+// ZPN degree >= 3 inverse) use wcslib's own bisection / weighted
+// regula-falsi loops, ported verbatim so their stopping rules match
+// wcslib's (see pseudo_cylindrical.go, polyconic.go, zenithal_extra.go),
+// and TPV/TNX/SIP invert with their own iterations (tpv.go, tnx.go,
+// sip.go). This general solver is kept, with its own tests
+// (solver_test.go), for future use.
 //
 // x0 is the initial guess; [lo, hi] brackets the root (both must evaluate
 // to values bracketing target — i.e. (f(lo)-target) and (f(hi)-target)
 // have opposite signs). If Newton produces a step outside [lo, hi] or
-// fails to converge, the function falls back to bisection on the bracket
-// to guarantee convergence.
+// fails to converge, the function falls back to bisection on the bracket.
 //
 // Returns an error if convergence fails within maxIter iterations (which
 // should never happen for well-behaved problems but is detected rather
@@ -28,7 +31,7 @@ func solveNewton(f, fprime func(float64) float64, target, x0, lo, hi, tol float6
 	// Ensure the bracket is valid.
 	fLo := f(lo) - target
 	fHi := f(hi) - target
-	if fLo*fHi > 0 {
+	if float64(fLo*fHi) > 0 {
 		return 0, fmt.Errorf("wcs/transform: solver bracket [%g, %g] does not straddle target %g (f values %g, %g)", lo, hi, target, fLo+target, fHi+target)
 	}
 	for i := 0; i < maxIter; i++ {
@@ -46,7 +49,7 @@ func solveNewton(f, fprime func(float64) float64, target, x0, lo, hi, tol float6
 			}
 		}
 		// Bisection fallback: tighten the bracket using the current x.
-		if fx*fLo < 0 {
+		if float64(fx*fLo) < 0 {
 			hi = x
 			fHi = fx
 		} else {
@@ -59,12 +62,15 @@ func solveNewton(f, fprime func(float64) float64, target, x0, lo, hi, tol float6
 }
 
 // solveBisection finds x such that f(x) = target on the bracket [lo, hi].
-// Always converges if the bracket is valid; slower than solveNewton but
-// does not need a derivative.
+// Slower than solveNewton but needs no derivative. Returns an error if the
+// bracket does not straddle target, or if maxIter halvings leave neither
+// |f(x) - target| nor the bracket width below tol (the caller asked for
+// more precision than maxIter can deliver; the midpoint is NOT returned
+// as if it were a root).
 func solveBisection(f func(float64) float64, target, lo, hi, tol float64, maxIter int) (float64, error) {
 	fLo := f(lo) - target
 	fHi := f(hi) - target
-	if fLo*fHi > 0 {
+	if float64(fLo*fHi) > 0 {
 		return 0, fmt.Errorf("wcs/transform: bisection bracket [%g, %g] does not straddle target %g", lo, hi, target)
 	}
 	for i := 0; i < maxIter; i++ {
@@ -73,7 +79,7 @@ func solveBisection(f func(float64) float64, target, lo, hi, tol float64, maxIte
 		if math.Abs(fMid) < tol || (hi-lo) < tol {
 			return mid, nil
 		}
-		if fMid*fLo < 0 {
+		if float64(fMid*fLo) < 0 {
 			hi = mid
 			fHi = fMid
 		} else {
@@ -81,5 +87,5 @@ func solveBisection(f func(float64) float64, target, lo, hi, tol float64, maxIte
 			fLo = fMid
 		}
 	}
-	return (lo + hi) / 2, nil
+	return 0, fmt.Errorf("wcs/transform: bisection did not reach tolerance %g in %d iterations (bracket [%g, %g])", tol, maxIter, lo, hi)
 }

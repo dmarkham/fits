@@ -1,0 +1,8 @@
+# oracle build artifacts (sources and goldens are committed)
+/sref
+/sref_clahe
+/sref_libm
+/.verify-golden/
+*.o
+/.verify/
+/libm_probe

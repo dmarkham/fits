@@ -1,0 +1,4 @@
+{"name": "tiny_2x8", "nx": 2, "ny": 8, "nullcheck": 0, "nullvalue": 0, "qlevel": 4, "dither_method": 0, "row": 0, "fill": "fill_gauss_100_5", "in_sha256": "3d2575500f5da36c54a6d2f3f4550ba1a965d0dc64b524b3b5d5c9c5071b7d69",
+ "stats": {"ngood": 16, "min": 92.09814453125, "max": 114.68641662597656, "mean": 100.38402652740479, "sigma": 5.8881229809500812, "noise1": 0, "noise2": 1.0405675207077028, "noise3": 5.8233103493209839, "noise5": 3.6454866400756836},
+ "quantize": {"return": 1, "bscale": 0.26014188017692569, "bzero": 92.090225582631689, "iminval": 0, "imaxval": 87},
+ "out": [41,15,87,34,55,0,1,3,43,44,40,43,27,39,2,38]}

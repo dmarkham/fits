@@ -1,0 +1,25 @@
+# TPV with CUNIT1 = 'deg' but CUNIT2 = 'arcsec' (CRVAL2/CD2_2 in arcsec;
+# synthetic). wcslib 8.10 ACCEPTS it and computes coordinates, but the TPV
+# polynomial coefficients are defined for intermediate coordinates in
+# degrees, so a non-degree unit on either axis rescales the polynomial's
+# input. We refuse rather than guess (rule 7).
+# EXPECT-GO-ERROR: TPV coefficients are defined in degrees
+NOTE stricter: tpv_cunit2_arcsec
+GRID 1 512 5 1 512 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TPV'
+CTYPE2  = 'DEC--TPV'
+CUNIT1  = 'deg'
+CUNIT2  = 'arcsec'
+CRVAL1  = 40.0
+CRVAL2  = 36000.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 3.6
+PV1_1   = 1.0
+PV2_1   = 1.0
+PV2_4   = 1e-3

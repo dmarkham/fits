@@ -96,8 +96,8 @@ func FitsRandoms() []float32 {
 		out := make([]float32, NRandom)
 		seed := 1.0
 		for i := 0; i < NRandom; i++ {
-			temp := a * seed
-			seed = temp - m*float64(int64(temp/m))
+			temp := float64(a * seed)
+			seed = temp - float64(m*float64(int64(temp/m)))
 			out[i] = float32(seed / m)
 		}
 		if int(seed) != 1043618065 {
@@ -123,7 +123,7 @@ func FitsRandoms() []float32 {
 func Dequantize(input []int32, out []float64, scale, zero float64, method DitherMethod, tileRow, zdither0 int) {
 	if method == NoDither {
 		for i, v := range input {
-			out[i] = float64(v)*scale + zero
+			out[i] = float64(float64(v)*scale) + zero
 		}
 		return
 	}
@@ -138,7 +138,7 @@ func Dequantize(input []int32, out []float64, scale, zero float64, method Dither
 		if method == SubtractiveDither2 && v == ZeroValue {
 			out[i] = 0.0
 		} else {
-			out[i] = (float64(v) - float64(randoms[nextrand]) + 0.5) * scale + zero
+			out[i] = float64((float64(v)-float64(randoms[nextrand])+0.5)*scale) + zero
 		}
 		nextrand++
 		if nextrand == NRandom {
@@ -154,7 +154,7 @@ func Dequantize(input []int32, out []float64, scale, zero float64, method Dither
 func DequantizeFloat32(input []int32, out []float32, scale, zero float64, method DitherMethod, tileRow, zdither0 int) {
 	if method == NoDither {
 		for i, v := range input {
-			out[i] = float32(float64(v)*scale + zero)
+			out[i] = float32(float64(float64(v)*scale) + zero)
 		}
 		return
 	}
@@ -169,7 +169,7 @@ func DequantizeFloat32(input []int32, out []float32, scale, zero float64, method
 		if method == SubtractiveDither2 && v == ZeroValue {
 			out[i] = 0.0
 		} else {
-			out[i] = float32((float64(v) - float64(randoms[nextrand]) + 0.5) * scale + zero)
+			out[i] = float32(float64((float64(v)-float64(randoms[nextrand])+0.5)*scale) + zero)
 		}
 		nextrand++
 		if nextrand == NRandom {

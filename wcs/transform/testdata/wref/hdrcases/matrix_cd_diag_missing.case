@@ -1,0 +1,21 @@
+# CD matrix with a missing DIAGONAL element: CD1_1, CD1_2, CD2_1 set,
+# CD2_2 absent. wcslib (wcs.h, altlin: "If one or more CDi_ja keywords are
+# present then all unspecified CDi_ja default to zero") takes CD2_2 = 0;
+# an identity default (as for PCi_j) would give CD2_2 = 1.
+# Synthetic.
+NOTE pipeline: CD matrix with a missing diagonal element defaults to 0
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CD1_1   = -0.001
+CD1_2   = 0.0003
+CD2_1   = 0.001

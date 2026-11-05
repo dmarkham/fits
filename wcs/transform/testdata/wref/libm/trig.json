@@ -1,0 +1,12 @@
+{
+ "generator": "gen_libm.py",
+ "mpmath": "1.4.1",
+ "precision_bits": 200,
+ "layout": "sincos rows [x, sin x, cos x], then asinacos rows [x, asin x, acos x]",
+ "sincos": 2054,
+ "asinacos": 908,
+ "payload": "trig.bin",
+ "values": 8886,
+ "sha256": "1ca27061b33ad7c458778a0912098748470fdb9cefc8d5ccad47dd5ff1bd7872",
+ "zlib_version": "1.3.2"
+}

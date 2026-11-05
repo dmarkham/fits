@@ -1,0 +1,19 @@
+# PV1_2 = theta_0 = 90.5: beyond wcslib's celset tolerance (90 + 1e-10),
+# refused, not clamped to 90. Twin of hdrcases/pvlon_car_theta0_tol.
+# Synthetic.
+# EXPECT-WCSLIB-ERROR: theta0 > 90
+NOTE reject: pvlon_car_theta0_90p5
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = 90.5

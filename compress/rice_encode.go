@@ -5,26 +5,30 @@ import (
 )
 
 // RICE_1 encoder — Rice coding with per-block k parameter. Symmetric
-// counterpart of the RICE_1 decoder in rice.go; follows cfitsio/
-// ricecomp.c's fits_rcomp / fits_rcomp_short / fits_rcomp_byte.
+// counterpart of the RICE_1 decoder in rice.go; a port of cfitsio's
+// ricecomp.c fits_rcomp (BYTEPIX 4), fits_rcomp_short (BYTEPIX 2) and
+// fits_rcomp_byte (BYTEPIX 1). Its output is byte-identical to those
+// functions in libcfitsio 4.7.0 (TestRiceEncodeMatchesCfitsio, golden
+// streams from compress/testdata/cref).
 //
 // The encoder:
 //
-//  1. Writes the first pixel as initBits raw bits.
-//  2. For each block of BLOCKSIZE pixels: computes diffs relative to a
-//     running "last" value, zigzag-encodes to non-negative, selects an
-//     optimal fs parameter based on the block's average magnitude, then
-//     writes the block with one of three encodings:
+//  1. Writes the first pixel as BYTEPIX*8 raw bits.
+//  2. For each block of BLOCKSIZE pixels: computes the difference to the
+//     previous pixel IN THE PIXEL WIDTH (cfitsio's pdiff is a signed char
+//     / short / int, so a jump of more than half the range wraps exactly
+//     like the decoder's unsigned addition undoes it), zigzag-maps it to
+//     a non-negative value, selects fs from the block's mean magnitude,
+//     then writes the block with one of three encodings:
 //       - fs = 0 + all-zero block: a single 0 in the fs field, no data
 //       - fs >= fsmax: literal escape (stored value = fsmax+1), every
 //         pixel written as bbits bits
 //       - normal: stored value = fs+1, each pixel as top zeros + 1 + fs
 //         low bits
 //
-// This port is straightforward except for the optimization cfitsio uses
-// where the bit buffer lives in two local variables (`lbitbuffer`,
-// `lbits_to_go`) inside the hot inner loop. We keep the same structure
-// to simplify review against the C reference.
+// BYTEPIX 8 is refused: cfitsio has no 64-bit Rice coder, so there is no
+// reference for such a stream (and cfitsio cannot write compressed
+// BITPIX 64 images at all).
 
 type rice1Encoder struct {
 	blockSize int
@@ -54,11 +58,8 @@ func (r rice1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) 
 	case 4:
 		fsbits = 5
 		fsmax = 25
-	case 8:
-		fsbits = 6
-		fsmax = 57
 	default:
-		return 0, fmt.Errorf("%w: RICE_1 unsupported BYTEPIX %d", ErrCorrupt, elemSize)
+		return 0, fmt.Errorf("%w: RICE_1 encoder supports BYTEPIX 1, 2, 4 (as cfitsio does), not %d", ErrUnsupportedCompression, elemSize)
 	}
 	bbits := 1 << uint(fsbits)
 
@@ -71,17 +72,23 @@ func (r rice1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) 
 		case 2:
 			v := int16(uint16(src[off])<<8 | uint16(src[off+1]))
 			return int64(v)
-		case 4:
+		default:
 			v := int32(uint32(src[off])<<24 | uint32(src[off+1])<<16 |
 				uint32(src[off+2])<<8 | uint32(src[off+3]))
 			return int64(v)
-		case 8:
-			return int64(uint64(src[off])<<56 | uint64(src[off+1])<<48 |
-				uint64(src[off+2])<<40 | uint64(src[off+3])<<32 |
-				uint64(src[off+4])<<24 | uint64(src[off+5])<<16 |
-				uint64(src[off+6])<<8 | uint64(src[off+7]))
 		}
-		return 0
+	}
+	// wrap narrows a difference to the signed pixel width, as the C
+	// assignment to cfitsio's `signed char` / `short` / `int` pdiff does.
+	wrap := func(d int64) int64 {
+		switch elemSize {
+		case 1:
+			return int64(int8(d))
+		case 2:
+			return int64(int16(d))
+		default:
+			return int64(int32(d))
+		}
 	}
 
 	bw := &bitWriter{dst: dst}
@@ -94,13 +101,11 @@ func (r rice1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) 
 	last := readPixel(0)
 
 	diff := make([]uint64, r.blockSize)
-	pos := 1 // we've output pixel 0's value; subsequent diffs start at pixel 1
 	// cfitsio's loop iterates nelem total diffs including pixel 0's
-	// "always zero" self-diff. We mirror that: the first block decodes
-	// pos=0 as a zero diff, and we start the block loop from 0 as well.
-	// The initial value has already been written — so the first block
-	// will encode diff[0] = a[0] - last_init = 0 and then the rest.
-	pos = 0
+	// "always zero" self-diff. We mirror that: the initial value has
+	// already been written, so the first block encodes
+	// diff[0] = a[0] - a[0] = 0 and then the rest.
+	pos := 0
 
 	for pos < nelem {
 		blockLen := r.blockSize
@@ -110,7 +115,7 @@ func (r rice1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) 
 		var pixelsum float64
 		for j := 0; j < blockLen; j++ {
 			next := readPixel(pos + j)
-			pd := next - last
+			pd := wrap(next - last)
 			// Zigzag: (pd<<1) for pd>=0, (~(pd<<1)) for pd<0.
 			var d uint64
 			if pd >= 0 {
@@ -178,18 +183,18 @@ func (r rice1Encoder) Encode(src, dst []byte, nelem, elemSize int) (int, error) 
 		}
 		pos += blockLen
 	}
-	return bw.finish(), nil
+	return bw.finish()
 }
 
 // bitWriter is the MSB-first-within-byte bit writer used by the RICE
 // encoder. Bits accumulate in a small buffer and flush to dst a byte
 // at a time.
 type bitWriter struct {
-	dst       []byte
-	byteIdx   int
-	bitBuf    uint64 // pending bits, left-justified at bit position bitLen-1
-	bitLen    int    // number of pending bits
-	overflow  bool
+	dst      []byte
+	byteIdx  int
+	bitBuf   uint64 // pending bits, left-justified at bit position bitLen-1
+	bitLen   int    // number of pending bits
+	overflow bool
 }
 
 func (w *bitWriter) writeBits(v uint64, n int) error {
@@ -209,15 +214,18 @@ func (w *bitWriter) writeBits(v uint64, n int) error {
 }
 
 // finish flushes any remaining bits (padded with zeros on the right) and
-// returns the total number of bytes written.
-func (w *bitWriter) finish() int {
+// returns the total number of bytes written, or ErrBufferTooSmall when
+// the final partial byte does not fit (never a truncated stream).
+func (w *bitWriter) finish() (int, error) {
 	if w.bitLen > 0 {
 		b := byte((w.bitBuf << uint(8-w.bitLen)) & 0xff)
-		if w.byteIdx < len(w.dst) {
-			w.dst[w.byteIdx] = b
-			w.byteIdx++
+		if w.byteIdx >= len(w.dst) {
+			w.overflow = true
+			return 0, ErrBufferTooSmall
 		}
+		w.dst[w.byteIdx] = b
+		w.byteIdx++
 		w.bitLen = 0
 	}
-	return w.byteIdx
+	return w.byteIdx, nil
 }

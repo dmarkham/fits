@@ -1,0 +1,1 @@
+{"astropy":"8.0.2","columns":[{"col":1,"hdu":1,"kind":"int","name":"var","rows":[[45,56],[11,12,13]],"tnull":null},{"col":2,"hdu":1,"kind":"int","name":"xyz","rows":[[11,3],[12,4]],"tnull":null}],"hdus":["PrimaryHDU","BinTableHDU"],"numpy":"2.4.6"}

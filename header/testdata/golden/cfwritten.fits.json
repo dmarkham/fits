@@ -1,0 +1,57 @@
+{
+ "file": "cfwritten.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 1,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 5760,
+   "data_end": 5760,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 36,
+   "cards": [
+    {"n": 1, "raw": "SIMPLE  =                    T / file does conform to FITS standard", "key": "SIMPLE", "class": 10, "value": "T", "comment": "file does conform to FITS standard", "type": "L", "logical": true},
+    {"n": 2, "raw": "BITPIX  =                    8 / number of bits per data pixel", "key": "BITPIX", "class": 10, "value": "8", "comment": "number of bits per data pixel", "type": "I", "int": 8, "float": 8},
+    {"n": 3, "raw": "NAXIS   =                    0 / number of data axes", "key": "NAXIS", "class": 10, "value": "0", "comment": "number of data axes", "type": "I", "int": 0, "float": 0},
+    {"n": 4, "raw": "EXTEND  =                    T / FITS dataset may contain extensions", "key": "EXTEND", "class": 10, "value": "T", "comment": "FITS dataset may contain extensions", "type": "L", "logical": true},
+    {"n": 5, "raw": "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy", "key": "COMMENT", "class": 10, "value": "", "comment": "  FITS (Flexible Image Transport System) format is defined in 'Astronomy"},
+    {"n": 6, "raw": "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H", "key": "COMMENT", "class": 10, "value": "", "comment": "  and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H"},
+    {"n": 7, "raw": "LONGSTR = '0123456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij0&'", "key": "LONGSTR", "class": 150, "value": "'0123456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij0&'", "comment": "", "type": "C", "str": "0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789abcdef'ghij0123456789a"},
+    {"n": 8, "raw": "CONTINUE  '123456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij01&'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '123456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij01&'"},
+    {"n": 9, "raw": "CONTINUE  '23456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij012&'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '23456789abcdef''ghij0123456789abcdef''ghij0123456789abcdef''ghij012&'"},
+    {"n": 10, "raw": "CONTINUE  '3456789a&'          / comment text comment text comment text comment", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '3456789a&'          / comment text comment text comment text comment"},
+    {"n": 11, "raw": "CONTINUE  '&'                  / text comment text comment text comment text com", "key": "CONTINUE", "class": 140, "value": "", "comment": "  '&'                  / text comment text comment text comment text com"},
+    {"n": 12, "raw": "CONTINUE  ''                   / ment text comment text com", "key": "CONTINUE", "class": 140, "value": "", "comment": "  ''                   / ment text comment text com"},
+    {"n": 13, "raw": "STR68   = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&'", "key": "STR68", "class": 150, "value": "'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&'", "comment": "", "type": "C", "str": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"},
+    {"n": 14, "raw": "CONTINUE  'x'                  / 68 chars", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'x'                  / 68 chars"},
+    {"n": 15, "raw": "STR69   = 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy&'", "key": "STR69", "class": 150, "value": "'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy&'", "comment": "", "type": "C", "str": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"},
+    {"n": 16, "raw": "CONTINUE  'yy'                 / 69 chars", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'yy'                 / 69 chars"},
+    {"n": 17, "raw": "LEADSP  = '   leading blanks'  / kept", "key": "LEADSP", "class": 150, "value": "'   leading blanks'", "comment": "kept", "type": "C", "str": "   leading blanks"},
+    {"n": 18, "raw": "HIERARCH ESO OBS LONGNAME= 'hierarch-value hierarch-value hierarch-value hiera&'", "key": "ESO OBS LONGNAME", "class": 150, "value": "'hierarch-value hierarch-value hierarch-value hiera&'", "comment": "", "type": "C", "str": "hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value hierarch-value "},
+    {"n": 19, "raw": "CONTINUE  'rch-value hierarch-value hierarch-value hierarch-value hierarch-val&'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'rch-value hierarch-value hierarch-value hierarch-value hierarch-val&'"},
+    {"n": 20, "raw": "CONTINUE  'ue hierarch-value hierarch-value &'", "key": "CONTINUE", "class": 140, "value": "", "comment": "  'ue hierarch-value hierarch-value &'"},
+    {"n": 21, "raw": "CONTINUE  ''                   / hierarch comment", "key": "CONTINUE", "class": 140, "value": "", "comment": "  ''                   / hierarch comment"},
+    {"n": 22, "raw": "HIERARCH ESO DET NAME = 'short   ' / hierarch short", "key": "ESO DET NAME", "class": 150, "value": "'short   '", "comment": "hierarch short", "type": "C", "str": "short"},
+    {"n": 23, "raw": "HISTORY history words history words history words history words history words hi", "key": "HISTORY", "class": 130, "value": "", "comment": "history words history words history words history words history words hi"},
+    {"n": 24, "raw": "HISTORY story words history words history words history words history words hist", "key": "HISTORY", "class": 130, "value": "", "comment": "story words history words history words history words history words hist"},
+    {"n": 25, "raw": "HISTORY ory words history words history words history words hist", "key": "HISTORY", "class": 130, "value": "", "comment": "ory words history words history words history words hist"},
+    {"n": 26, "raw": "COMMENT comment words comment words comment words comment words comment words co", "key": "COMMENT", "class": 130, "value": "", "comment": "comment words comment words comment words comment words comment words co"},
+    {"n": 27, "raw": "COMMENT mment words comment words comment words comment words comment words comm", "key": "COMMENT", "class": 130, "value": "", "comment": "mment words comment words comment words comment words comment words comm"},
+    {"n": 28, "raw": "COMMENT ent wo", "key": "COMMENT", "class": 130, "value": "", "comment": "ent wo"},
+    {"n": 29, "raw": "FLT120  =                 120. / integral double", "key": "FLT120", "class": 150, "value": "120.", "comment": "integral double", "type": "F", "float": 120},
+    {"n": 30, "raw": "FSMALL  =              1.0E-07 / small", "key": "FSMALL", "class": 150, "value": "1.0E-07", "comment": "small", "type": "F", "float": 9.9999999999999995e-08},
+    {"n": 31, "raw": "FBIG    =             1.5E+300 / big", "key": "FBIG", "class": 150, "value": "1.5E+300", "comment": "big", "type": "F", "float": 1.5000000000000001e+300},
+    {"n": 32, "raw": "FTENTH  =                  0.1 / 0.1", "key": "FTENTH", "class": 150, "value": "0.1", "comment": "0.1", "type": "F", "float": 0.10000000000000001},
+    {"n": 33, "raw": "U64MAX  = 18446744073709551615 / 2**64-1", "key": "U64MAX", "class": 150, "value": "18446744073709551615", "comment": "2**64-1", "type": "I", "read_error": "status 412: datatype conversion overflow", "float": 1.8446744073709552e+19},
+    {"n": 34, "raw": "I64MIN  = -9223372036854775808 / int64 min", "key": "I64MIN", "class": 150, "value": "-9223372036854775808", "comment": "int64 min", "type": "I", "int": -9223372036854775808, "float": -9.2233720368547758e+18},
+    {"n": 35, "raw": "LOGT    =                    T / true", "key": "LOGT", "class": 150, "value": "T", "comment": "true", "type": "L", "logical": true},
+    {"n": 36, "raw": "CPX     =         (1.5, -2.25) / complex", "key": "CPX", "class": 150, "value": "(1.5, -2.25)", "comment": "complex", "type": "X"}
+   ],
+   "image": {"bitpix": 8, "equivtype": 8, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  }
+ ]
+}

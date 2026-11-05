@@ -115,27 +115,35 @@ func TestEndToEndFITSWCS(t *testing.T) {
 		t.Fatalf("round trip from file: (%v,%v) → (%v,%v) → (%v,%v)", px, py, skyA, skyD, p1, p2)
 	}
 
-	// The four image corners must all produce valid sky coordinates within
-	// ±0.1° of the reference (512 pixels × 1 arcsec/pixel = ~0.07° field
-	// radius, so this is a loose but meaningful bound).
+	// The four image corners: for TAN the angular distance from the
+	// tangent point is exactly atan(r), r = hypot(dx, dy) * CDELT in
+	// radians (Paper II eq. 54), independent of position angle. 1e-9
+	// arcsec is far below the 0.1 deg the old check allowed. Full
+	// coordinates against wcslib through a written FITS file are checked
+	// by TestEndToEndFileAgainstWcslib.
 	corners := []struct{ x, y float64 }{{0, 0}, {511, 0}, {0, 511}, {511, 511}}
 	for _, c := range corners {
 		a, d, err := tr.PixelToSky(c.x, c.y)
 		if err != nil {
 			t.Fatalf("corner (%v,%v): %v", c.x, c.y, err)
 		}
-		// Distance from reference in the small-angle approximation.
-		dra := (a - crval1)
-		if dra > 180 {
-			dra -= 360
-		} else if dra < -180 {
-			dra += 360
-		}
-		ddec := d - crval2
-		if math.Hypot(dra, ddec) > 0.2 {
-			t.Errorf("corner (%v,%v) is %g° from center — too far", c.x, c.y, math.Hypot(dra, ddec))
+		r := math.Hypot(c.x-(crpix1-1), c.y-(crpix2-1)) * scale * math.Pi / 180
+		want := math.Atan(r) * 180 / math.Pi * 3600
+		got := sepArcsec(a, d, crval1, crval2)
+		if math.Abs(got-want) > 1e-9 {
+			t.Errorf("corner (%v,%v) is %.12f arcsec from the tangent point, TAN gives %.12f", c.x, c.y, got, want)
 		}
 	}
+}
+
+// sepArcsec is the great-circle separation in arcsec (Vincenty form).
+func sepArcsec(a1, d1, a2, d2 float64) float64 {
+	r := math.Pi / 180
+	a1, d1, a2, d2 = a1*r, d1*r, a2*r, d2*r
+	sd1, cd1 := math.Sincos(d1)
+	sd2, cd2 := math.Sincos(d2)
+	sda, cda := math.Sincos(a2 - a1)
+	return math.Atan2(math.Hypot(cd2*sda, cd1*sd2-sd1*cd2*cda), sd1*sd2+cd1*cd2*cda) / r * 3600
 }
 
 // TestEndToEndCDMatrixFromFITS exercises the CD-matrix path end-to-end

@@ -1,0 +1,22 @@
+# WCSAXES = 3 on a 2-D image (degenerate third axis, as written for
+# single-plane slices of cubes). Synthetic.
+NOTE pipeline: WCSAXES > NAXIS
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+WCSAXES = 3
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CTYPE3  = 'STOKES'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRVAL3  = 1.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CRPIX3  = 1.0
+CDELT1  = -0.001
+CDELT2  = 0.001
+CDELT3  = 1.0

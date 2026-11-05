@@ -1,0 +1,21 @@
+# PV1_2 = theta_0 = 95 on the longitude axis of AIT (synthetic, from
+# pvlon_ait_phi0_offset). A native latitude outside [-90, 90] is not a
+# fiducial point; wcslib refuses it in celset.
+# EXPECT-WCSLIB-ERROR: theta0 > 90
+NOTE reject: pvlon_ait_theta0_95
+GRID 1 360 5 1 180 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 360
+NAXIS2  = 180
+CTYPE1  = 'RA---AIT'
+CTYPE2  = 'DEC--AIT'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 180.5
+CRPIX2  = 90.5
+CDELT1  = -0.5
+CDELT2  = 0.5
+PV1_0   = 1.0
+PV1_1   = 20.0
+PV1_2   = 95.0

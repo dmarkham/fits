@@ -1,0 +1,48 @@
+# A modern STScI DSS cutout header in miniature (synthetic, from the round-2
+# verifier probe zz_dss_probe): an approximate TAN WCS (CRPIX, CRVAL, CD)
+# PLUS the DSS plate keywords. wcslib 8.10 wcspih replaces the approximate
+# WCS with the plate solution ("Erase the approximate WCS provided in modern
+# DSS headers") and applies the plate polynomial (AMDX/AMDY 1..4, 7); using
+# the approximate WCS instead is 74 arcsec off at pixel (1, 1). astropy
+# 8.0.2 agrees with wcslib.
+NOTE DSS plate solution over an approximate TAN CD WCS
+GRID 1 1000 9 1 1000 9
+GRID -3000 4000 8 -3000 4000 8
+HEADER
+NAXIS   = 2
+NAXIS1  = 1000
+NAXIS2  = 1000
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRPIX1  = 500.5
+CRPIX2  = 500.5
+CRVAL1  = 159.35
+CRVAL2  = 13.1
+CD1_1   = -0.000472
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.000472
+CNPIX1  = 6500
+CNPIX2  = 6500
+XPIXELSZ= 25.2845
+YPIXELSZ= 25.2845
+PPO3    = 177500.0
+PPO6    = 177500.0
+PLTRAH  = 10
+PLTRAM  = 37
+PLTRAS  = 25.6
+PLTDECSN= '+'
+PLTDECD = 13
+PLTDECM = 6
+PLTDECS = 16.0
+PLTSCALE= 67.2
+AMDX1   = 67.2
+AMDX2   = 0.001
+AMDX3   = 10.0
+AMDX4   = 1e-5
+AMDX7   = 3e-4
+AMDY1   = 67.2
+AMDY2   = -0.001
+AMDY3   = -12.0
+AMDY4   = 1e-5
+AMDY7   = 3e-4

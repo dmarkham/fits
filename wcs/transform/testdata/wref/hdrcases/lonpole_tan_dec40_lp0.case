@@ -1,0 +1,23 @@
+# TAN at CRVAL2 = 40 with an explicit LONPOLE = 0 (synthetic, hand-written).
+# For a zenithal projection wcslib's default is LONPOLE = 180, so 0 is NOT
+# the default here: a reader that ignores an explicit LONPOLE = 0 (treats
+# it as "unset") rotates the sky 180 deg about the reference point and
+# fails this case. Same geometry as lonpole_tan_lp150.
+NOTE pipeline: zenithal TAN with explicit non-default LONPOLE = 0
+GRID -100 612 9 -100 612 9
+PIX 256.5 256.5
+SKY 250 15
+SKYGRID 245 255 5 35 45 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 250.0
+CRVAL2  = 40.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.01
+CDELT2  = 0.01
+LONPOLE = 0.0

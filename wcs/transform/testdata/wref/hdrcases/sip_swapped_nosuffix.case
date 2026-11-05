@@ -1,0 +1,31 @@
+# SIP with swapped celestial axes: DEC--TAN on pixel axis 1, RA---TAN on
+# axis 2, asymmetric A/B and a rotated, skewed CD (synthetic, from the
+# round-2 verifier probe zz_sip_swapped_nosuffix). SIP is defined on PIXEL axes
+# 1,2 (A on the column offset u, B on the row offset v) whatever world axis
+# they carry, so swapping A and B for a latitude-first header is wrong;
+# a mutant doing that is off by 2.48 arcsec here.
+# CTYPEs have no -SIP suffix (wcslib applies SIP anyway).
+NOTE SIP on swapped celestial axes (nosuffix)
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CTYPE1  = 'DEC--TAN'
+CTYPE2  = 'RA---TAN'
+CRVAL1  = 30.0
+CRVAL2  = 150.0
+CRPIX1  = 512.5
+CRPIX2  = 400.5
+CD1_1   = 0.0002
+CD1_2   = 0.00005
+CD2_1   = -0.00003
+CD2_2   = -0.00025
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+A_0_2   = -4e-6
+B_0_2   = 3e-5
+B_1_1   = -1e-5
+B_2_0   = 5e-6

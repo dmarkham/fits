@@ -6,178 +6,147 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/dmarkham/fits/header"
 	"github.com/dmarkham/fits/internal/bigendian"
 	"github.com/dmarkham/fits/internal/bitpix"
 )
 
-// Numeric is the constraint for generic pixel and column access. The library
-// does NOT auto-convert across BITPIX widths — if the target type cannot
-// losslessly hold the file's on-disk values, ReadPixels returns
-// ErrTypeMismatch. See plan decision 5.1.
+// Numeric is the constraint for generic pixel and column access. For
+// plain images (*ImageHDU: ReadPixels, ReadPixelsMasked, ReadSubset,
+// CanConvert), which T a read accepts is decided per HDU from BITPIX,
+// BSCALE and BZERO: float targets accept every image (rounded like
+// cfitsio), integer targets only images whose every physical value they
+// hold exactly; anything else is ErrTypeMismatch, never a silently wrapped
+// value. Tile-compressed images (ReadPixelsCompressed,
+// ReadPixelsCompressedMasked) follow the same rule with ZBITPIX in place
+// of BITPIX.
 type Numeric interface {
 	~uint8 | ~int8 | ~int16 | ~uint16 | ~int32 | ~uint32 |
 		~int64 | ~uint64 | ~float32 | ~float64
 }
 
-// ReadFloat32 reads the image pixels as float32 normalized to [0, 1].
-// Accepts both *ImageHDU and *CompressedImageHDU — callers do not need
-// to type-switch.
-//
-// For integer BITPIX (8, 16, 32, 64), the normalization maps the full
-// physical range (after BSCALE/BZERO) into [0, 1]:
-//
-//	normalized = (physical - physMin) / (physMax - physMin)
-//
-// The raw range per BITPIX:
-//
-//	BITPIX=8:  [0, 255]        → phys via BSCALE/BZERO
-//	BITPIX=16: [-32768, 32767] → commonly [0, 65535] with BZERO=32768
-//	BITPIX=32: [-2^31, 2^31-1] → phys via BSCALE/BZERO
-//	BITPIX=64: [-2^63, 2^63-1] → phys via BSCALE/BZERO
-//
-// For float BITPIX (-32, -64), values are returned as-is after
-// BSCALE/BZERO application — assumed already in [0, 1] per the Siril
-// convention used by astrophotography processing pipelines.
-//
-// This is the standard entry point for processing pipelines (stacking,
-// debayering, calibration, background extraction, etc.) that operate
-// on normalized float32 data.
-func ReadFloat32(h HDU) ([]float32, error) {
-	var pixels []float32
-	var bp int
-	var bscale, bzero float64
-	var err error
-
-	switch img := h.(type) {
-	case *ImageHDU:
-		pixels, err = ReadPixels[float32](img)
-		bp = img.BITPIX()
-		bscale = img.BSCALE()
-		bzero = img.BZERO()
-	case *CompressedImageHDU:
-		pixels, err = ReadPixelsCompressed[float32](img)
-		bp = img.BITPIX()
-		bscale = img.BSCALE()
-		bzero = img.BZERO()
-	default:
-		return nil, fmt.Errorf("fits.ReadFloat32: unsupported HDU type %T (need *ImageHDU or *CompressedImageHDU)", h)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// Float BITPIX: pass through — assumed already [0, 1].
-	if bp < 0 {
-		return pixels, nil
-	}
-
-	// Integer BITPIX: normalize (physical - physMin) / (physMax - physMin).
-	var rawMin, rawMax float64
-	switch bp {
-	case 8:
-		rawMin, rawMax = 0, 255
-	case 16:
-		rawMin, rawMax = -32768, 32767
-	case 32:
-		rawMin, rawMax = -2147483648, 2147483647
-	case 64:
-		rawMin, rawMax = -9223372036854775808, 9223372036854775807
-	}
-	physMin := rawMin*bscale + bzero
-	physMax := rawMax*bscale + bzero
-	span := float32(physMax - physMin)
-	if span == 0 {
-		return pixels, nil
-	}
-	offset := float32(physMin)
-	inv := 1.0 / span
-	for i, v := range pixels {
-		pixels[i] = (v - offset) * inv
-	}
-	return pixels, nil
-}
-
 // ReadPixels reads every pixel of h into a single flat slice of type T,
-// applying BSCALE/BZERO. Returns an error (wrapping ErrTypeMismatch) if the
-// requested type cannot losslessly hold the file's data. Row-major order
-// matches the FITS on-disk layout: the first axis varies fastest.
+// applying BSCALE/BZERO (physical = BZERO + BSCALE * stored). The order is
+// the FITS on-disk order: the first axis (NAXIS1) varies fastest.
+//
+// Which T are accepted (the same rule as CanConvert):
+//
+//   - float32 and float64 accept every BITPIX. Values equal cfitsio's
+//     TFLOAT / TDOUBLE reads bit for bit (one rounding to the target, so
+//     BITPIX 64 into float32/float64, and huge BSCALE results, are rounded
+//     approximations exactly as in cfitsio). One documented difference:
+//     a value beyond the float32 range reads as ±Inf into float32, where
+//     cfitsio returns ±FLT_MAX with NUM_OVERFLOW.
+//   - An integer T is accepted only for integer BITPIX with integral BSCALE
+//     and BZERO, and only when T's range holds the physical value of every
+//     possible stored value (raw range x BSCALE + BZERO). Accepted reads
+//     are exact (computed in 128-bit integer arithmetic, never through
+//     float64), so int64 data and the uint64 BZERO = 2^63 convention read
+//     exactly. Otherwise ReadPixels returns a *TypeMismatchError (wrapping
+//     ErrTypeMismatch) instead of a wrapped or truncated value: for example
+//     ReadPixels[int16] on unsigned 16-bit data (BZERO = 32768) is refused;
+//     read it as uint16, int32, int64 or a float type.
+//
+// BSCALE, BZERO and BLANK are taken from the header by the scaling-card
+// rule every image read and write of this package applies (scalingCards in
+// scaling.go; ImageHDU.BSCALE): the last card of each wins, as cfitsio and
+// astropy apply it, and a card the two references read differently (a
+// value that is not a FITS number, a lowercase or misplaced '=' card, a
+// HIERARCH BSCALE/BZERO/BLANK, a BLANK outside the BITPIX range, ...)
+// makes the read fail with a wrapped ErrInvalidScaling, the same before or
+// after the header is parsed (TestScalingKeywordsRule).
+//
+// BLANK is not applied (BLANK pixels come back as their scaled stored
+// value, as cfitsio's reads without null checking return them); use
+// ReadPixelsMasked to tell them apart.
 func ReadPixels[T Numeric](h *ImageHDU) ([]T, error) {
 	return ReadPixelsContext[T](context.Background(), h)
 }
 
 // ReadPixelsContext is ReadPixels with an explicit context. The context is
-// consulted before the read and can be used to abort long reads.
+// checked once, before the read starts (a cancelled context returns its
+// error and reads nothing); a read already in progress is not
+// interrupted. TestContextFunctions.
 func ReadPixelsContext[T Numeric](ctx context.Context, h *ImageHDU) ([]T, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	conv, err := pixelConverter[T](h)
+	if err != nil {
 		return nil, err
 	}
 	n := h.pixelCount()
 	if n == 0 {
 		return []T{}, nil
 	}
-	bp := h.bitpixType()
-	if !canConvertInto[T](bp) {
-		var zero T
-		return nil, &TypeMismatchError{
-			Requested: fmt.Sprintf("%T", zero),
-			BITPIX:    int(bp),
-			Lossy:     true,
-		}
-	}
 	raw, err := readRawBytes(h, n)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]T, n)
-	bscale := h.BSCALE()
-	bzero := h.BZERO()
-	applyBScale := !(bscale == 1.0 && bzero == 0.0)
-	if err := decodePixels(raw, out, bp, applyBScale, bscale, bzero); err != nil {
-		return nil, err
-	}
+	conv.all(raw, out)
 	return out, nil
 }
 
+// pixelConverter checks that T can hold h's physical values and returns
+// the converter for them.
+func pixelConverter[T Numeric](h *ImageHDU) (*pixConv[T], error) {
+	bp := h.bitpixType()
+	s, _, _, err := h.rec.imageKeywords()
+	if err != nil {
+		return nil, fmt.Errorf("fits: HDU %d: %w", h.rec.index, err)
+	}
+	if !canHold[T](bp, s) {
+		var zero T
+		return nil, &TypeMismatchError{Requested: fmt.Sprintf("%T", zero), BITPIX: int(bp), Lossy: true,
+			BSCALE: s.bscale, BZERO: s.bzero}
+	}
+	return newPixConv[T](bp, s), nil
+}
+
 // ReadPixelsMasked is like ReadPixels but also returns a per-pixel validity
-// mask. A pixel is invalid (mask[i] == false) if the underlying raw value
-// equals BLANK (integer BITPIX only) or is IEEE NaN (float BITPIX).
-// BSCALE/BZERO are applied to valid pixels only; invalid pixels are left
-// at the zero value of T.
+// mask. A pixel is invalid (mask[i] == false) if its stored value equals
+// BLANK (integer BITPIX; BLANK is compared with the stored, unscaled value,
+// as cfitsio compares it: for BITPIX 32 as a 32-bit value, and a BLANK of
+// 1234554321, cfitsio's NULL_UNDEFINED, marks nothing) or is an IEEE NaN
+// (float BITPIX). Invalid pixels are left at the zero
+// value of T; valid pixels are converted exactly as by ReadPixels. The mask
+// equals cfitsio's null flags, except that cfitsio also flags +-Inf as
+// null; here an infinity is a valid value.
 func ReadPixelsMasked[T Numeric](h *ImageHDU) ([]T, []bool, error) {
+	conv, err := pixelConverter[T](h)
+	if err != nil {
+		return nil, nil, err
+	}
 	n := h.pixelCount()
 	if n == 0 {
 		return []T{}, []bool{}, nil
 	}
-	bp := h.bitpixType()
-	if !canConvertInto[T](bp) {
-		var zero T
-		return nil, nil, &TypeMismatchError{
-			Requested: fmt.Sprintf("%T", zero),
-			BITPIX:    int(bp),
-			Lossy:     true,
-		}
-	}
 	raw, err := readRawBytes(h, n)
 	if err != nil {
 		return nil, nil, err
 	}
+	_, blank, hasBlank, err := h.rec.imageKeywords()
+	if err != nil {
+		return nil, nil, err // not reached: pixelConverter read the same cards
+	}
 	out := make([]T, n)
 	mask := make([]bool, n)
-	blankVal, haveBlank := readBLANK(h)
-	bscale := h.BSCALE()
-	bzero := h.BZERO()
-	applyBScale := !(bscale == 1.0 && bzero == 0.0)
-	if err := decodePixelsMasked(raw, out, mask, bp, applyBScale, bscale, bzero, blankVal, haveBlank); err != nil {
-		return nil, nil, err
+	for i := range out {
+		b := raw[i*conv.size:]
+		if conv.valid(b, blank, hasBlank) {
+			mask[i] = true
+			out[i] = conv.one(b)
+		}
 	}
 	return out, mask, nil
 }
 
 // CanConvert reports whether ReadPixels[T] on h would succeed without
-// returning ErrTypeMismatch. It does not touch the file content.
+// returning ErrTypeMismatch (see ReadPixels for the rule). It reads only
+// the header, not the pixels.
 func CanConvert[T Numeric](h *ImageHDU) bool {
-	return canConvertInto[T](h.bitpixType())
+	s, _, _, err := h.rec.imageKeywords()
+	return err == nil && canHold[T](h.bitpixType(), s)
 }
 
 // readRawBytes reads npix*|BITPIX|/8 bytes from the HDU data area into a
@@ -190,59 +159,6 @@ func readRawBytes(h *ImageHDU, npix int64) ([]byte, error) {
 		return nil, fmt.Errorf("fits: read image data at HDU %d: %w", h.rec.index, err)
 	}
 	return buf, nil
-}
-
-// readBLANK returns the BLANK keyword value if present on an integer-BITPIX
-// HDU. BLANK is undefined for float BITPIX (§4.4.2.4).
-func readBLANK(h *ImageHDU) (int64, bool) {
-	if h.bitpixType().IsFloat() {
-		return 0, false
-	}
-	hdr := h.Header()
-	if v, err := hdr.Int(header.KeyBlankV); err == nil {
-		return v, true
-	}
-	return 0, false
-}
-
-// canConvertInto reports whether T can losslessly hold values of the file's
-// BITPIX. The rules are:
-//
-//   - float64 accepts any BITPIX except int64/uint64 with values exceeding
-//     2^53. We conservatively allow float64 for all BITPIX (callers get
-//     approximation for huge int64s, which is the Go float64 norm — if exact
-//     precision is required for int64 data, read into int64 directly).
-//   - float32 accepts BITPIX 8/16/-32 exactly and approximates int32/int64/float64.
-//   - Integer T accepts only BITPIX values with the same width and signedness
-//     (after TZERO unsigned conversion is considered).
-//
-// We use a generous policy: floats accept any numeric BITPIX (with
-// documented approximation for wide ints); integers require width match.
-func canConvertInto[T Numeric](bp bitpix.BITPIX) bool {
-	var zero T
-	switch any(zero).(type) {
-	case float64:
-		return true
-	case float32:
-		return true
-	case int8:
-		return bp == bitpix.Int8
-	case uint8:
-		return bp == bitpix.Int8
-	case int16:
-		return bp == bitpix.Int16 || bp == bitpix.Int8
-	case uint16:
-		return bp == bitpix.Int16 || bp == bitpix.Int8
-	case int32:
-		return bp == bitpix.Int32 || bp == bitpix.Int16 || bp == bitpix.Int8
-	case uint32:
-		return bp == bitpix.Int32 || bp == bitpix.Int16 || bp == bitpix.Int8
-	case int64:
-		return bp.IsInt()
-	case uint64:
-		return bp.IsInt()
-	}
-	return false
 }
 
 // decodePixels fills out from the big-endian raw byte slice. It applies
@@ -258,7 +174,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 		for i := range out {
 			v := float64(raw[i]) // BITPIX=8 is unsigned byte on disk
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -267,7 +183,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 			u := bigendian.Int16(raw[i*2:])
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -276,7 +192,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 			u := bigendian.Int32(raw[i*4:])
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -285,7 +201,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 			u := bigendian.Int64(raw[i*8:])
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -294,7 +210,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 			f := bigendian.Float32(raw[i*4:])
 			v := float64(f)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -302,7 +218,7 @@ func decodePixels[T Numeric](raw []byte, out []T, bp bitpix.BITPIX, applyBScale 
 		for i := range out {
 			f := bigendian.Float64(raw[i*8:])
 			if applyBScale {
-				f = f*bscale + bzero
+				f = float64(f*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](f)
 		}
@@ -325,7 +241,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			mask[i] = true
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -338,7 +254,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			mask[i] = true
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -351,7 +267,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			mask[i] = true
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -364,7 +280,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			mask[i] = true
 			v := float64(u)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -377,7 +293,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			mask[i] = true
 			v := float64(f)
 			if applyBScale {
-				v = v*bscale + bzero
+				v = float64(v*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](v)
 		}
@@ -389,7 +305,7 @@ func decodePixelsMasked[T Numeric](raw []byte, out []T, mask []bool, bp bitpix.B
 			}
 			mask[i] = true
 			if applyBScale {
-				f = f*bscale + bzero
+				f = float64(f*bscale) + bzero
 			}
 			out[i] = numericFromFloat[T](f)
 		}

@@ -1,28 +1,4 @@
-{
-  "name": "tiny_6x1",
-  "nx": 6,
-  "ny": 1,
-  "nullcheck": 0,
-  "nullvalue": 0,
-  "qlevel": 4,
-  "dither_method": 0,
-  "row": 0,
-  "stats": {
-    "ngood": 6,
-    "min": 1,
-    "max": 2.75,
-    "mean": 1.8333333333333333,
-    "sigma": 0.64009547898905106,
-    "noise1": 0.73824115177287797,
-    "noise2": 0,
-    "noise3": 0,
-    "noise5": 0
-  },
-  "quantize": {
-    "return": 0,
-    "bscale": 0,
-    "bzero": 0,
-    "iminval": 0,
-    "imaxval": 0
-  }
-}
+{"name": "tiny_6x1", "nx": 6, "ny": 1, "nullcheck": 0, "nullvalue": 0, "qlevel": 4, "dither_method": 0, "row": 0, "fill": "fill_tiny", "in_sha256": "3ca5a6268486a16cc7524649d586b699bc763b5c61233e6b24053f65c01c59fa",
+ "stats": {"ngood": 6, "min": 1, "max": 2.75, "mean": 1.8333333333333333, "sigma": 0.64009547898905106, "noise1": 0.73824115177287797, "noise2": 0, "noise3": 0, "noise5": 0},
+ "quantize": {"return": 0, "bscale": 0, "bzero": 0, "iminval": 0, "imaxval": 0},
+ "out": null}

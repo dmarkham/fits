@@ -5,16 +5,20 @@ import (
 	"io"
 )
 
-// CopyTo walks every HDU in f and writes its raw header + data + pad bytes
-// to w in file order. When f was opened from a valid FITS file, the output
-// is byte-for-byte identical to the input — this is the heart of the
-// regression tool cmd/fitscopy.
+// CopyTo walks every HDU in f and writes its header, data and padding bytes
+// to w in file order. The output is the input up to the end of the last
+// HDU, so for a file with no bytes after its last HDU (TrailingBytes() ==
+// 0) and a fully padded last data unit it is byte-for-byte identical to the
+// input (TestCopyToByteIdentical, every committed sample; cmd/fitscopy is a
+// command-line wrapper around this check). Otherwise it differs in exactly
+// two ways (TestCopyToDropsTrailingBytesAndPads): bytes after the last HDU
+// are not copied, and a last data unit that lacks its final padding is
+// written with it, as zeros (FITS 4.0, section 3.3.2).
 //
-// CopyTo does not re-encode or modify anything: headers pass through from
-// rec.rawHeader (which still holds the on-disk bytes unless the caller has
-// mutated the parsed header and called Flush), data passes through via
-// ReadRange on the block reader. Callers that want a structural rebuild
-// must use EditFile instead.
+// CopyTo does not decode, re-encode or modify anything: each header is the
+// bytes on disk (header changes made through Header() are included only
+// after Flush), and data passes through unread. Callers that want a
+// structural rebuild must use EditFile instead.
 func (f *File) CopyTo(w io.Writer) error {
 	for _, rec := range f.hdus {
 		if _, err := w.Write(rec.rawHeader); err != nil {

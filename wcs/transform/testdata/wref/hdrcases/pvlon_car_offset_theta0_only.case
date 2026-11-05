@@ -1,0 +1,20 @@
+# PV1_0 = 1 with PV1_2 = theta_0 = 20 but NO PV1_1: no projection offset
+# (wcslib prjoff needs both), theta_0 kept for the native pole (celset).
+# Synthetic.
+NOTE pipeline: PV1_0 = 1 with PV1_2 only: no offset, theta_0 kept for the pole
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_0   = 1.0
+PV1_2   = 20.0

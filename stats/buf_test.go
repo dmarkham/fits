@@ -21,7 +21,7 @@ func TestPercentileBuf_MatchesPercentile(t *testing.T) {
 			for _, p := range []float64{0.0, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0} {
 				want := Percentile(data, p)
 				got := PercentileBuf(data, p, histo)
-				if got != want {
+				if !same64(got, want) {
 					t.Errorf("p=%g: PercentileBuf=%g != Percentile=%g", p, got, want)
 				}
 			}
@@ -156,7 +156,7 @@ func TestMedianBuf_MatchesMedian(t *testing.T) {
 			data := toF32Slice(c.Input)
 			want := Median(data)
 			got := MedianBuf(data, histo)
-			if got != want {
+			if !same64(got, want) {
 				t.Errorf("MedianBuf=%g != Median=%g", got, want)
 			}
 		})
@@ -195,7 +195,7 @@ func TestMADWithMedianBuf_MatchesMADWithMedian(t *testing.T) {
 			data := toF32Slice(c.Input)
 			wantMed, wantMad := MADWithMedian(data)
 			gotMed, gotMad := MADWithMedianBuf(data, histo, absDev)
-			if gotMed != wantMed || gotMad != wantMad {
+			if !same64(gotMed, wantMed) || !same64(gotMad, wantMad) {
 				t.Errorf("got (%g, %g) want (%g, %g)",
 					gotMed, gotMad, wantMed, wantMad)
 			}

@@ -1,0 +1,37 @@
+# Primary 'RA---TAN' with SIP keywords and no '-SIP' suffix, plus an
+# alternate description A with the same linear WCS (synthetic). SIP has no
+# alternate-description form: wcslib attaches the SIP prior distortion to
+# the primary only (wcspih.l, "Neither SIP nor DSS have alternates"), so
+# description A is UNDISTORTED. Its twin sip_nosuffix_primary_of_alt checks
+# that the primary of the same header is distorted.
+NOTE pipeline: SIP keywords do not reach an alternate description without -SIP
+ALT A
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+CTYPE1A = 'RA---TAN'
+CTYPE2A = 'DEC--TAN'
+CRVAL1A = 150.0
+CRVAL2A = 2.0
+CRPIX1A = 512.5
+CRPIX2A = 512.5
+CD1_1A  = -0.0002777
+CD2_2A  = 0.0002777

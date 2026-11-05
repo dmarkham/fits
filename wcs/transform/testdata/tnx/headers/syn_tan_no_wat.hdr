@@ -1,0 +1,18 @@
+SIMPLE  =                    T
+BITPIX  =                   16
+NAXIS   =                    2
+NAXIS1  =                  800
+NAXIS2  =                  800
+WCSDIM  =                    2
+CTYPE1  = 'RA---TNX'
+CTYPE2  = 'DEC--TNX'
+CRVAL1  =                210.5
+CRVAL2  =                54.25
+CRPIX1  =                400.5
+CRPIX2  =                400.5
+CD1_1   =              -0.0002
+CD1_2   =                  0.0
+CD2_1   =                  0.0
+CD2_2   =               0.0002
+WAT0_001= 'system=image'
+END

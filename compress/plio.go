@@ -105,7 +105,7 @@ func decodePLIO1(tokens []int16, dst []byte, nelem, elemSize int) error {
 
 	// Decode state — cfitsio pl_l2pi initializes pv=1, x1=1, op=1 (all 1-based).
 	pv := int32(1)
-	x := 1  // 1-based x position
+	x := 1 // 1-based x position
 	xe := nelem
 	out := make([]int32, nelem)
 
@@ -174,7 +174,9 @@ func decodePLIO1(tokens []int16, dst []byte, nelem, elemSize int) error {
 		}
 	}
 
-	// Pack out[] into dst[] at the caller's element size.
+	// Pack out[] into dst[] at the caller's element size. Sizes 1 and 2
+	// truncate; the fits layer decodes with elemSize 4 (cfitsio's C ints)
+	// and refuses values the image type cannot hold (hcompPlioTile).
 	switch elemSize {
 	case 1:
 		for k := 0; k < nelem; k++ {

@@ -1,7 +1,10 @@
 package fits
 
 import (
+	"bytes"
+	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -291,6 +294,72 @@ func TestFrame_WriteMono_ValidationErrors(t *testing.T) {
 	}
 }
 
+// TestFrame_WriteMono_ZeroDims: a zero width or height is refused by
+// WriteMono's own documented check ("both must be > 0") even when the
+// pixel slice is consistent with it (empty), and nothing is written.
+func TestFrame_WriteMono_ZeroDims(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct{ w, h int }{{0, 3}, {3, 0}, {0, 0}} {
+		path := filepath.Join(dir, fmt.Sprintf("z%dx%d.fits", c.w, c.h))
+		err := WriteMono(path, []float32{}, c.w, c.h)
+		if err == nil || !strings.Contains(err.Error(), "both must be > 0") {
+			t.Errorf("WriteMono(%dx%d, empty) = %v; want the width/height > 0 error", c.w, c.h, err)
+		}
+		if _, serr := os.Stat(path); serr == nil {
+			t.Errorf("WriteMono(%dx%d) created %s", c.w, c.h, path)
+		}
+	}
+}
+
+// TestFrame_WriteRGB_ZeroDims: as TestFrame_WriteMono_ZeroDims for
+// WriteRGB. With a zero width or height empty planes have the consistent
+// length 0, so only WriteRGB's own "both must be > 0" check stops the
+// write of an empty [w, h, 3] image.
+func TestFrame_WriteRGB_ZeroDims(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct{ w, h int }{{0, 3}, {3, 0}, {0, 0}} {
+		path := filepath.Join(dir, fmt.Sprintf("z%dx%d.fits", c.w, c.h))
+		e := []float32{}
+		err := WriteRGB(path, e, e, e, c.w, c.h)
+		if err == nil || !strings.Contains(err.Error(), "both must be > 0") {
+			t.Errorf("WriteRGB(%dx%d, empty) = %v; want the width/height > 0 error", c.w, c.h, err)
+		}
+		if _, serr := os.Stat(path); serr == nil {
+			t.Errorf("WriteRGB(%dx%d) created %s", c.w, c.h, path)
+		}
+	}
+}
+
+// TestFrame_ReadFrame_ErrorsOnZeroPlaneCube: NAXIS=3 with NAXIS3=0 (a
+// valid FITS header with no data) is not a degenerate single-plane frame;
+// ReadFrame must refuse it rather than return an empty pixel slice with a
+// non-zero width and height. The file is header-only (fitsverify accepts
+// the layout: NAXIS3=0 means no data blocks).
+func TestFrame_ReadFrame_ErrorsOnZeroPlaneCube(t *testing.T) {
+	var hdr strings.Builder
+	for _, c := range []string{
+		"SIMPLE  =                    T",
+		"BITPIX  =                  -32",
+		"NAXIS   =                    3",
+		"NAXIS1  =                    4",
+		"NAXIS2  =                    3",
+		"NAXIS3  =                    0",
+		"END",
+	} {
+		hdr.WriteString(fmt.Sprintf("%-80s", c))
+	}
+	b := []byte(hdr.String())
+	b = append(b, bytes.Repeat([]byte(" "), 2880-len(b))...)
+	path := filepath.Join(t.TempDir(), "zero_planes.fits")
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pix, w, h, err := ReadFrame(path)
+	if err == nil || !strings.Contains(err.Error(), "0 planes") {
+		t.Fatalf("ReadFrame = %d pixels, %dx%d, %v; want the NAXIS=3 with 0 planes error", len(pix), w, h, err)
+	}
+}
+
 // TestFrame_WriteRGB_ValidationErrors covers dim and plane-length validation.
 func TestFrame_WriteRGB_ValidationErrors(t *testing.T) {
 	dir := t.TempDir()
@@ -320,7 +389,7 @@ func TestFrame_ReadFrame_TileCompressed_PrimaryPlaceholder(t *testing.T) {
 
 	got, w, h, err := ReadFrame(compPath)
 	if err != nil {
-		t.Skipf("compressed fixture not usable: %v", err)
+		t.Fatalf("committed compressed fixture not readable (failure, not a skip): %v", err)
 	}
 	if w <= 0 || h <= 0 {
 		t.Fatalf("bogus dims %dx%d", w, h)
@@ -337,7 +406,7 @@ func TestFrame_ReadFrame_TileCompressed_PrimaryPlaceholder(t *testing.T) {
 
 	rawPix, rw, rh, err := ReadFrame(rawPath)
 	if err != nil {
-		t.Skipf("raw fixture not usable: %v", err)
+		t.Fatalf("committed raw fixture not readable (failure, not a skip): %v", err)
 	}
 	if rw != w || rh != h {
 		t.Fatalf("dims mismatch raw vs compressed: %dx%d vs %dx%d", rw, rh, w, h)

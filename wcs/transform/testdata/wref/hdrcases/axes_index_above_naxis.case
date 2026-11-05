@@ -1,0 +1,20 @@
+# No WCSAXES, NAXIS = 2, but WCS keywords for axis 3 (CTYPE3, CRVAL3): the
+# WCS dimension is the larger of NAXIS and the highest axis index in any
+# WCS keyword (Paper I sect. 2.2). Synthetic.
+NOTE pipeline: WCS axis count from the highest keyword index
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CTYPE3  = 'FREQ'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRVAL3  = 1.0E9
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.001
+CDELT2  = 0.001

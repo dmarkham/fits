@@ -1,0 +1,22 @@
+# Celestial axes swapped (CTYPE1 = DEC, CTYPE2 = RA) in PC + CDELT form
+# with unequal CDELT and an off-diagonal PC (synthetic). Unlike
+# axes_swapped (CD form), this pins that CDELTi is indexed by WORLD axis
+# i, not by the pixel axis that feeds it.
+# NOTE on pixel order: as in axes_swapped.
+NOTE pipeline: swapped celestial axes, PC + unequal CDELT
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'DEC--TAN'
+CTYPE2  = 'RA---TAN'
+CRVAL1  = 30.0
+CRVAL2  = 180.0
+CRPIX1  = 256.5
+CRPIX2  = 200.5
+CDELT1  = 0.0009
+CDELT2  = -0.0012
+PC1_2   = 0.2
+PC2_1   = -0.1

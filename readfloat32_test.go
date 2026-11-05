@@ -129,7 +129,7 @@ func TestReadFloat32_CompressedImage(t *testing.T) {
 	// The actual image is in HDU 1 for both fixtures.
 	rawF, err := Open(rawPath)
 	if err != nil {
-		t.Skipf("raw fixture not found: %v", err)
+		t.Fatalf("committed raw fixture missing (failure, not a skip): %v", err)
 	}
 	defer rawF.Close()
 	rawHDU, err := rawF.HDU(1)
@@ -146,7 +146,7 @@ func TestReadFloat32_CompressedImage(t *testing.T) {
 
 	compF, err := Open(compPath)
 	if err != nil {
-		t.Skipf("compressed fixture not found: %v", err)
+		t.Fatalf("committed compressed fixture missing (failure, not a skip): %v", err)
 	}
 	defer compF.Close()
 	compHDU, err := compF.HDU(1)

@@ -1,0 +1,4 @@
+{"name": "car_default", "code": "CAR", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [],
+"prjset": {"phi0": 0, "theta0": 0, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, null, null, null]},
+"forward": 555, "inverse": 1508, "roundtrip": 555, "payload": "car_default.bin", "payload_bytes": 64438}

@@ -1,0 +1,1 @@
+{"file":"memtest.fits","cfitsio":"4.7.0","hdus":[{"index":0,"datasum":0,"hdusum":4294967295,"verify_datasum":0,"verify_hdusum":1},{"index":1,"datasum":3248504211,"hdusum":164248097,"verify_datasum":-1,"verify_hdusum":-1}]}

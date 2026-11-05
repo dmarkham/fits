@@ -1,0 +1,18 @@
+# GLON-AIT with the reference point off the equator (CRVAL2 = 20), default
+# LONPOLE (wcslib: 0) and LATPOLE (synthetic, audit probe
+# h/ait_gal_offset.hdr).
+NOTE pipeline: AIT with CRVAL2 = 20, default LONPOLE/LATPOLE
+GRID 100 412 9 100 412 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'GLON-AIT'
+CTYPE2  = 'GLAT-AIT'
+CRVAL1  = 30.0
+CRVAL2  = 20.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.3
+CDELT2  = 0.3

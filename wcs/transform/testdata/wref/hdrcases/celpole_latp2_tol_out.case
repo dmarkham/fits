@@ -1,0 +1,23 @@
+# Mirror of celpole_latp1_tol_out on the other solution: theta_0 = -30
+# (PV1_2), LONPOLE = 0, LATPOLE = -90 and CRVAL2 = 29.999999999 give
+# latp2 = theta_0 - 90 + lat0 = -90 - 1e-9 (nearest LATPOLE, but outside
+# -90 - 1e-10) and latp1 = theta_0 + 90 - lat0 = 30 + 1e-9, which wcslib
+# takes. Synthetic.
+NOTE pipeline: nearer (second) native-pole solution 1e-9 past -90 is passed over
+GRID 1 512 9 1 512 9
+SKYGRID 0 350 8 -80 80 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---CAR'
+CTYPE2  = 'DEC--CAR'
+CRVAL1  = 10.0
+CRVAL2  = 29.999999999
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = -0.1
+CDELT2  = 0.1
+PV1_2   = -30.0
+LONPOLE = 0.0
+LATPOLE = -90.0

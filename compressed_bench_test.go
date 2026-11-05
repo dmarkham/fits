@@ -36,7 +36,7 @@ func BenchmarkDecompressGZIP2_f32(b *testing.B) {
 func benchDecompressI16(b *testing.B, name string) {
 	path := filepath.Join("testdata", name)
 	b.ResetTimer()
-	b.SetBytes(100 * 100 * 2)
+	b.SetBytes(40 * 37 * 2)
 	for b.Loop() {
 		f, err := Open(path)
 		if err != nil {
@@ -54,7 +54,7 @@ func benchDecompressI16(b *testing.B, name string) {
 func benchDecompressF32(b *testing.B, name string) {
 	path := filepath.Join("testdata", name)
 	b.ResetTimer()
-	b.SetBytes(100 * 100 * 4)
+	b.SetBytes(40 * 37 * 4)
 	for b.Loop() {
 		f, err := Open(path)
 		if err != nil {

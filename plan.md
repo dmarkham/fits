@@ -10,7 +10,7 @@ This library is not trying to replace cfitsio, wcslib, healpy, Siril, or any oth
 
 Our goal is to bring **Go onto level footing** with the existing ecosystem — giving Go programs the same FITS read/write, WCS, compression, HEALPix, and image-processing capabilities without requiring cgo, while staying as compatible as possible with the files and conventions the reference implementations define.
 
-Every algorithm is ported from a specific reference source (cfitsio for I/O and compression, wcslib for projections, astrometry.net for HEALPix, Siril/RawTherapee for image stretching) and cross-validated against it with golden fixtures. Where our output differs from the reference, we treat that as a bug in our code, not a difference of opinion.
+Every algorithm is ported from a specific reference source (cfitsio for I/O and compression, wcslib 8.10 for WCS, healpix_cxx — healpy's backend — for HEALPix, Siril 1.4.0 for statistics and stretching, OpenCV 5.0.0 for Siril's CLAHE) and checked against it with committed goldens. Where our output differs from the reference, we treat that as a bug in our code, unless it is a deliberate, documented difference. **Status:** the claim → test → truth-source ledger, the deliberate differences and the known gaps are in `docs/VALIDATION.md`; `TestValidationLedger` keeps it from naming tests or samples that do not exist.
 
 ## Guiding principle — no auto-anything
 
@@ -29,11 +29,12 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
 - **Repository visibility**: public (MIT license)
 - **License**: MIT
 - **Default branch**: `master` (per CLAUDE.md convention)
-- **Minimum Go version**: 1.23 (generics + `iter.Seq2`)
-- **Platform support**: **Linux only for v1.** macOS / Windows / WASM are not tested or supported in v1. The `EditFile` atomic-rename and fsync-on-directory paths assume POSIX semantics; we do not ship platform-specific code paths in v1. Non-Linux builds may work accidentally for read-only paths but are not a commitment.
+- **Minimum Go version**: 1.24 (go.mod)
+- **Platform support**: Linux (tested on Linux amd64 at GOAMD64=v1 and v3, and on arm64 under qemu-aarch64) and macOS (arm64 and amd64; editing included, with platform-specific lock, fsync and xattr code in `lock_darwin.go`, `sync_darwin.go`, `xattr_darwin.go`; proven by the suite on a real Mac, pending). Windows / WASM are not tested or supported; editing refuses there with `ErrEditUnsupported`.
 - **Concurrency model**: `*File` is **not safe for concurrent use by multiple goroutines.** Callers that want parallelism must coordinate externally (one `*File` per goroutine, or an external mutex). The library does not take internal locks in v1. Adding goroutine safety later is a non-breaking enhancement, so we keep the option open but do not commit to it. Document this prominently in the package godoc.
-- **Interop cross-check — MANDATORY in CI, not optional.** Every file the library writes must round-trip through cfitsio's `fitsverify` with zero errors. Every test fixture must parse-equivalent through `astropy.io.fits`. We do not ship v1 without both passing.
-  - Both toolchains should be available: Python + `astropy` + system `cfitsio`. The test suite uses a local Python venv with astropy for cross-validation (set `FITS_ASTROPY_PYTHON` to the interpreter path, or the tests skip gracefully).
+- **Interop cross-check — MANDATORY in CI, not optional.** Every file the library writes must round-trip through cfitsio's `fitsverify` with zero errors. Every test fixture must parse-equivalent through `astropy.io.fits`. We do not ship v1 without both passing. *(As built, superseding the fixture half: every committed fixture has a cfitsio golden (`testdata/cfref/golden`, `TestGoldensCoverEveryTestdataSample`) that the reader is compared against; astropy is a second reader for written files and for the sample sets listed in `docs/VALIDATION.md`, not for every top-level cfitsio fixture (`testprog.std`, `iter_*.fit`, `testf77.std`, `vari.fits`).)*
+  - Both toolchains should be available: Python + `astropy` + system `cfitsio`. The test suite uses a local Python venv with astropy for cross-validation (set `FITS_ASTROPY_PYTHON` to the interpreter path). Plain `go test ./...` needs only Go: tool readings of the written files are recorded (`testdata/recorded`) and replayed; `go test -tags interop ./...` runs the tools live and fails when one is missing (`docs/VALIDATION.md`, "Test tiers").
+  - **Status:** satisfied for every writer (images, tables, compressed images, the edit paths: Flush in place and resize, EditFile copy/convert/CopyHDUWithHeader/WriteImage, appends in edit mode, Create, CreateWriter), each checked with cfitsio + fitsverify, and astropy where it can read the file. See `docs/VALIDATION.md`.
 - **Prior art (surveyed April 2026)**:
   - [`github.com/astrogo/fitsio`](https://github.com/astrogo/fitsio) — was the dominant Go FITS library. **Archived on GitHub March 2025**, moved to codeberg. Last stable release v0.1.0 November 2019. BSD-3. Pure Go, read/write images + tables + VLAs. No generics (predates Go 1.18), no compression, no WCS, no `image.Image`, no edit surface. API pitfall to avoid: `Rows.Scan(args ...interface{})` — type-unsafe, defeats compile-time checking; our generics replace this directly.
   - [`github.com/ATTron/fits`](https://pkg.go.dev/github.com/ATTron/fits) — active exploratory project framed as "assess suitability of golang for scientific applications." Reads images + tables, not aiming at production.
@@ -55,27 +56,29 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
   - `HIERARCH` non-standard (widely deployed, supported by cfitsio)
   - Mandatory keyword ordering and validation (Tables 7, 10, 14, 17)
 - Big-endian byte handling (§5.2)
-- BSCALE/BZERO/BLANK read-side application and inverse on write (including the TZERO unsigned-int trick in columns, §7.3.2 / Table 19)
-- ASCII tables (§7.2) read and write: `A`, `I`, `F`, `E`, `D` TFORM codes, TBCOL offsets, TNULL
+- BSCALE/BZERO/BLANK read-side application and inverse on write for images (including caller BSCALE/BZERO, also in `OverwritePixels`), by one scaling-card rule on every image path: of duplicated cards the last applies on a plain image and the first on a tile-compressed header (as cfitsio and astropy both read them); an invalid value, a `HIERARCH BSCALE`/`BZERO`/`BLANK` card, a BLANK outside the BITPIX range or BLANK = 1234554321 is `ErrInvalidScaling`. For table columns only the int8/uint16/uint32/uint64 TZERO convention applies the inverse on write; with an explicit TScal/TZero the caller writes stored values (§7.3.2 / Table 19)
+- ASCII tables (§7.2) read and write: `A`, `I`, `F`, `E`, `D` TFORM codes, TBCOL offsets, TNULL. The ASCII writer writes no TSCAL/TZERO/TDISP.
 - Binary tables (§7.3) read and write:
   - All scalar TFORM types (`L`, `X`, `B`, `I`, `J`, `K`, `A`, `E`, `D`, `C`, `M`)
   - Repeat counts (vector columns)
   - TDIMn multi-dim cell shape
   - Unsigned integer convention via TZERO
   - **Variable-length arrays** (`P`/`Q` descriptors + heap, §7.3.5)
+  - `rAw` substring arrays and TDIM string arrays read per element (`ReadStringArrayColumn`); writing string arrays and TSCAL/TZERO on complex `C`/`M` columns return errors
 - CHECKSUM and DATASUM (Appendix J) compute and verify
 - `image.Image` adapter + `image.RegisterFormat` for the cases it can handle losslessly
 - Round-trip fidelity: read → write must be byte-identical for unmodified files (modulo recomputed checksums)
 
 ### Deferred (not v1, explicitly)
 
-- Tiled image/table compression (§10) — the `imcompress.c` / `quantize.c` / `ricecomp.c` / `fits_hcompress.c` bundle is ~15 k LOC. v1 detects compressed HDUs and returns a clear "not supported" error. Ships later as `fits/compress`.
-- Random groups (§6) — deprecated, radio-interferometry only.
-- **WCS — World Coordinate System (§8).** Not in v1. **Committed as the next major development target after v1 ships.** Two-package split for architectural cleanliness, shipping together as one "full WCS" deliverable:
-  - `fits/wcs` — metadata parsing. Parses `CTYPEn`, `CRVALn`, `CRPIXn`, `CDELTn`, `CUNITn`, `PCi_j` / `CDi_j`, `PVi_m` / `PSi_m`, `LONPOLE`, `LATPOLE`, `RADESYS`, `EQUINOX`, etc. into a typed `*WCSHeader` struct. ~200 LOC, no math. Consumes `*header.Header` as input. Validates keyword combinations (e.g. mutually exclusive CDELT+PC vs CD matrix forms).
-  - `fits/wcs/transform` — full projection math. **The bulk of the post-v1 work.** Implements all 27 spherical projections (TAN, SIN, ARC, ZEA, STG, SZP, ZPN, AZP, CYP, CEA, CAR, MER, SFL, PAR, MOL, AIT, COP, COE, COD, COO, BON, PCO, TSC, CSC, QSC, HPX, XPH) — forward and inverse — plus SIP/TPV/TNX distortion conventions and sky frame transforms (equatorial ↔ galactic ↔ ecliptic ↔ supergalactic with epoch/equinox handling). ~2000–3000 LOC of dense spherical trigonometry. Consumes `*WCSHeader`. Tests cross-validated against `wcslib` (the C reference implementation) on a fixture set of real observatory data (HST, JWST, Chandra, Gaia).
-  - Rationale for split (not for deferral): parsing is a small separable layer with a stable keyword vocabulary; math is a large body of projection code with its own correctness story and test matrix. Keeping them in separate packages matches cfitsio→wcslib, astropy.io.fits→astropy.wcs, FITSIO.jl→WCS.jl and lets the math package evolve on its own release cadence without forcing core library bumps.
-  - **Explicit non-goal of the post-v1 WCS work**: half-implemented projection coverage. The full 27-projection set ships or nothing does. Shipping a subset (e.g. "TAN and SIN only") is a correctness trap — users get silently wrong coordinates for images using unsupported projections and don't find out until their pipeline is wrong.
+- ~~Tiled image compression (§10)~~ — **implemented** (`fits/compress` codecs + `CompressedImageHDU`, `ReadPixelsCompressed[T]`, `AppendCompressedImage`, `AppendCompressedFloat32Image`, `AppendCompressedFloat64Image`). Read: bit-exact against libcfitsio 4.7.0 over the fpack/libcfitsio corpus listed in `docs/VALIDATION.md`, ZBITPIX 64 included for every read algorithm; HCOMPRESS_1 values outside int32 and HCOMPRESS_1/PLIO_1 values the ZBITPIX type cannot hold are refused (16-bit lossy HCOMPRESS is clipped as funpack and cfitsio's TSHORT read do; cfitsio's TUSHORT read of a uint16 image refuses it with status 412). Write: RICE_1/GZIP_1/GZIP_2/HCOMPRESS_1/PLIO_1 for 8/16/32-bit integers and quantized float32/float64, the same compressed image as cfitsio's `fits_img_compress` on 91 goldens (96 img cases: 91 identical, 5 cfitsio refusals refused too; 2 deliberate refusals) and 19 of 20 float64 goldens; compress/cref also holds 36 quantizer, 20 hcomp, 24 rice, 9 plio, 5 img2 and 5 imgw goldens. Tiled *table* compression is not implemented. Details and gaps: `docs/VALIDATION.md`.
+- Random groups (§6) — deprecated, radio-interferometry only. Files are framed correctly (FITS eq. 4) and the HDU returns `ErrRandomGroups`.
+- **WCS — World Coordinate System (§8).** **Implemented** as two packages:
+  - `fits/wcs` — metadata parsing (`wcs.Parse` / `ParseAlt`) of `CTYPEn`, `CRVALn`, `CRPIXn`, `CDELTn`, `CUNITn`, `PCi_j` / `CDi_j`, `CROTAi`, `PVi_m` / `PSi_m`, `LONPOLE`, `LATPOLE`, `WCSAXESa`, `RADESYS`, `EQUINOX`, SIP (with or without the -SIP suffix, primary only; ignored on a RA---TPV header without -SIP, as astropy does), DSS plate-solution keywords, for the primary and alternate descriptions. Wrong-typed keywords, invalid SIP orders, partial SIP declarations and SIP keywords on a TNX/ZPX header are errors. PC and CD together are accepted (PC wins, as in wcslib).
+  - `fits/wcs/transform` — all 28 projection codes wcslib 8.10 implements (26 from Paper II including AIR, plus HPX and XPH), ported from wcslib 8.10 `prj.c` with Go's math functions under wcslib's wcstrig structure (exact multiples of 90°, cancellation-free asin/acos): values within the stated budget against wcslib (ill-conditioned rows within their libm sensitivity), accept/reject decisions identical to wcslib's except at boundary-ambiguous points, where a few-ULP nudge flips the answer; SIP, TPV (both together only when CTYPE says RA---TPV-SIP: a RA---TPV header's SIP keywords are a redundant copy, ignored as astropy ignores them, where wcslib would apply the correction twice, 13-14 px on the real ATLAS header of PR #4) and DSS plate solutions via `transform.New`; IRAF TNX (Chebyshev, Legendre, polynomial surfaces) via `transform.NewTNX(*header.Header)`, proven against WCSTools 3.9.7: Chebyshev and polynomial on real CTIO 4 m Mosaic II and KPNO 4 m Mosaic-1 headers, Legendre (type 2) on synthetic headers only (no public real Legendre header found); headers that WCSTools and wcslib read differently are refused with an error (SIP keywords on a TNX header, stricter than wcslib on purpose since wcslib would apply SIP + TAN and WCSTools TNX; CD with PC; a partial CDELT/PC set when there is no CD; CD00i00j without CDi_j; PVi_m that would move the fiducial point (longitude-axis PVi_m, latitude PVi_m with no correction surface); CUNIT other than deg; lowercase CTYPE; LONPOLE > 360; WAT gaps, duplicates, CONTINUE or strings over 1999 characters); sky frames ICRS and FK5 J2000 ↔ galactic and supergalactic, ICRS ↔ IAU 2006 mean ecliptic of date, FK5 precession (IAU 1976), FK4 B1950 (with E-terms, equinox B1950 only) ↔ FK5 J2000.
+  - **Validation**: the hdr golden harness (`wcs/transform/testdata/wref/hdr2sky.c`, wcslib 8.10) runs each header case through `wcspih` → `wcsset` → `wcsp2s`/`wcss2p` and records per-point status; `TestHdrGoldens` compares both directions and the rejection status. Real headers (HST ACS/WFC3, JWST NIRCam, Spitzer IRAC, astrometry.net, ZTF, PTF, ROSAT, MSX, Calabretta's Paper II maps) live in `hdrcases/real_*` / `sample_*`. `hdrcases_reject/` holds headers wcslib refuses (we must refuse too); `hdrcases_stricter/` holds headers wcslib accepts but we refuse on purpose; `hdrcases_lenient/` holds headers wcslib refuses that we accept on purpose, each reproducing a named wcslib golden. Bare projections are checked by `wref.c` goldens with every accept/reject boundary pinned to 1e-7 deg. An astropy 8.0.2 crosscheck runs through `wcs.Parse` (`testdata/wcs_crosscheck.json`). Frames are checked against astropy/ERFA goldens to 1e-8 arcsec. The original plan to validate on Chandra and Gaia headers was not carried out.
+  - Rationale for split: parsing is a small separable layer with a stable keyword vocabulary; math is a large body of projection code with its own correctness story and test matrix. Keeping them in separate packages matches cfitsio→wcslib, astropy.io.fits→astropy.wcs, FITSIO.jl→WCS.jl.
+  - **Explicit non-goal**: half-implemented projection coverage. Every projection code ships, and headers we cannot transform exactly are refused with an error rather than silently mis-transformed (SIP keywords without the `-SIP` suffix, once the exception, are now applied as wcslib applies them, except on a `RA---TPV` header, where they are a redundant copy of the TPV correction and are ignored, as astropy ignores them).
 - **Time coordinates (§9).** Not in v1. Planned as two separate future packages:
   - `fits/time` — metadata parsing only. Parses `TIMESYS`, `DATE-OBS`, `MJD-OBS`, `JDREF`, `MJDREF`, `DATEREF`, `TREFPOS`, `TREFDIR`, `TIMEUNIT`, `TSTART`, `TSTOP`, `TELAPSE`, `TIMEDEL`, `TIMEPIXR`, `TIMEOFFS` into a typed `*TimeHeader` struct. ~100 LOC, no time math. Convenience `ObsTime() (time.Time, error)` method documented with its limitations (ignores leap seconds, assumes UTC when TIMESYS is empty).
   - `fits/time/convert` — rigorous timescale conversion. UTC↔TAI (leap-second table, requires periodic updates against IERS bulletins), TAI↔TT (fixed offset), TT↔TDB (1658-term relativistic series), TCG/TCB. May instead delegate to an existing Go time library (`github.com/soniakeys/meeus`, `github.com/hablullah/go-juliandays`) rather than re-implement. Decision deferred until the package is scoped.
@@ -99,15 +102,15 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
 
 ### Approved
 
-**5.1 Generics-only API.** One `ReadPixels[T Numeric]`, one `ReadColumn[T]`, one `ReadVarColumn[T]`. Deletes cfitsio's 12-file combinatorial explosion from `getcol*.c` / `putcol*.c`. Compiler monomorphizes per `T`, zero runtime cost. Honest about the fact that the type parameter is the *output* type, not an assertion about file BITPIX. Runtime mismatch surfaces as `ErrTypeMismatch{Requested, BITPIX, Lossy}` with an optional `CanConvert[T](hdu)` pre-flight helper.
+**5.1 Generics-only API.** *(For plain images the type rule is now: integer `T` is accepted only when it holds every possible physical value of the HDU exactly, else `ErrTypeMismatch`; float `T` always. Tile-compressed reads (`ReadPixelsCompressed`) follow the same rule with ZBITPIX for BITPIX, proven by `TestReadPixelsCompressedIntegerTargets`. See the `ReadPixels` doc.)* One `ReadPixels[T Numeric]`, one `ReadColumn[T]`, one `ReadVarColumn[T]`. Deletes cfitsio's 12-file combinatorial explosion from `getcol*.c` / `putcol*.c`. Compiler monomorphizes per `T`, zero runtime cost. Honest about the fact that the type parameter is the *output* type, not an assertion about file BITPIX. Runtime mismatch surfaces as `ErrTypeMismatch{Requested, BITPIX, Lossy}` with an optional `CanConvert[T](hdu)` pre-flight helper.
 
-**5.4 Strict `image.Image` mapping.** `AsImage()` returns a native `image.Image` **only** for 2D integer BITPIX (including the TZERO unsigned trick → `image.Gray16`). Float BITPIX returns a `FloatGray` that implements `image.Image` but holds raw `float32` — faithful to the values, not rescaled. Multi-dim returns `ErrNotImageCompatible`; users call `hdu.Slice(...)` explicitly to pin higher axes. `image.Decode` registered via `image.RegisterFormat("fits", "SIMPLE  =", ...)` but returns a clean error on anything it can't losslessly represent. **No `AsImageScaled`, no auto-zscale, no auto-percentile.** Any display helpers live in a sibling package.
+**5.4 Strict `image.Image` mapping.** `AsImage()` returns a native `image.Image` **only** for 2D BITPIX 8 without scaling (→ `image.Gray`) and BITPIX 16 with BZERO 32768 (→ `image.Gray16`); signed, scaled, BLANK-carrying or BSCALE = 0 integer data returns `ErrNotImageCompatible`. Float BITPIX returns a `FloatGray` that implements `image.Image` but holds raw `float32` — faithful to the values, not rescaled — and only when every value is exactly representable in float32. Multi-dim returns `ErrNotImageCompatible`; *(as built there is no `Slice` method: read a plane with `ReadSubset`)*. `image.Decode` registered via `image.RegisterFormat("fits", "SIMPLE  =", ...)` but returns a clean error on anything it can't losslessly represent. **No `AsImageScaled`, no auto-zscale, no auto-percentile.** Any display helpers live in a sibling package.
 
 **5.5 `VarColumn[T]` struct with flat storage + zero-copy sub-slice views.** Variable-length columns read into one contiguous `[]T` slab plus a `[]int64` offsets array (len = nrows+1). `At(row) []T` returns a zero-copy sub-slice. `Rows()` returns an `iter.Seq2[int, []T]` for range iteration. `Raw()` exposes `(values, offsets)` for GPU / SIMD / bulk consumers. Two allocations for 10 M rows instead of 10 M+1. Mirrors the on-disk FITS heap layout faithfully.
 
 **5.2 Minimal eager, lazy full parse.** On `Open`, walk the file and for each HDU parse *only* the handful of structural keywords needed to compute data size and answer hot questions: `XTENSION`/`SIMPLE`, `BITPIX`, `NAXIS`, `NAXISn`, `PCOUNT`, `GCOUNT`, `EXTNAME`, `EXTVER`. Retain the raw header bytes `[]byte` per HDU. Parse the full `[]Card` lazily on first `Header()` touch, cache the result behind `sync.Once`. TFORM parsing for binary tables also happens on first `Columns()` / `ReadColumn` access.
 - Rationale: open time drops ~15× for large MEF files (JWST/HST with 100+ HDUs), memory per open file drops ~3× vs full-eager parsed `[]Card`, and `NumHDU`/`HDUByName`/`Type`/`Shape`/`BITPIX` stay O(1) because the hot metadata was extracted during the Open scan. Full-lazy (option C) was rejected because `HDUByName` forces a per-HDU keyword parse anyway, collapsing it into this approach with worse ergonomics.
-- Implementation: `hduRecord` struct holds `{offsets, bitpix, naxis, shape, pcount, gcount, extname, extver, rawHeader []byte, parsed *header.Header, once sync.Once}`. Public API is unchanged.
+- Implementation: `hduRecord` struct holds `{offsets, bitpix, naxis, shape, pcount, gcount, rawHeader []byte, parsed *header.Header, once sync.Once}`. EXTNAME/EXTVER are not scanned eagerly: `HDUByName` reads the first EXTNAME card of each header when it is called. Public API is unchanged.
 
 **5.3 `io.ReadSeeker` baseline, `OpenReadAll` slurp helper for streams, no streaming mode in v1.** Every internal read path assumes seeking is free. Users with an `io.Reader` call `OpenReadAll(r)` which buffers the stream into memory and hands back a regular `*File`. No auto-buffering, no temp-file spill, no dual seek/stream code paths — the library has one I/O model.
 - Rationale: doubling the internal implementation to support a streaming mode buys nothing at v1 — real large FITS files live on POSIX/Lustre filesystems (ALMA, JWST, radio interferometer data) and come with file paths. Stream-sourced FITS is always either small enough to slurp or network-sourced from archives with HTTP range-request support (wrap as seeker externally). The "50 GB from stdin" case has no real-world example.
@@ -123,23 +126,23 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
 
 **In-place edit surface (`OpenForEdit`)** — fast, for operations where in-place is meaningfully cheaper than a rebuild:
 - Keyword update / delete / add when the header still fits in its current 2880-byte block allocation: rewrite the affected block(s) in place, fsync. O(KB).
-- Keyword add that pushes the header past its current block allocation: shift the tail of the file forward by N × 2880 bytes using a journal file in the same directory (back-to-front tail copy, journal records the shift, recovery on next open replays or rolls back). O(file size) in I/O, but single-pass and in-place — no doubled disk footprint. Crash-safe by journal.
-- Same-shape pixel overwrite (`(*ImageHDU).OverwritePixels[T]`): seek to `dataStart`, write bytes, apply inverse BSCALE/BZERO. Errors if `T` / BITPIX / NAXIS mismatch. O(data size).
-- HDU append at EOF (`(*File).AppendImage` / `AppendBinaryTable` / `AppendASCIITable` in edit mode): fast, no shift needed.
+- Keyword add that pushes the header past its current block allocation: **as built**, the file is rewritten to `<name>.fits-tmp`, fsynced, renamed over the original and the directory fsynced (O(file size), doubled disk footprint while it runs). Same-size header rewrites use an undo journal `<name>.journal` (pre-image + CRC; removing it is the commit point). There is no in-place tail shift.
+- Same-shape pixel overwrite (`OverwritePixels[T]`): seek to `dataStart`, write bytes, apply inverse BSCALE/BZERO (also BSCALE/BZERO edited in memory but not yet flushed). Errors if `T` / BITPIX / NAXIS mismatch. O(data size). Not crash-safe.
+- HDU append at EOF (`AppendImage` / `AppendBinaryTable` / `AppendASCIITable` in edit mode): fast, no shift needed. Not crash-safe.
 
 **Structural edit surface (`EditFile`)** — for operations that cfitsio also does in O(file size) anyway:
 - Image resize (change BITPIX or NAXISn), row insert/delete, column insert/delete, HDU insert in middle, HDU delete, VLA heap reorganization.
-- `fits.EditFile(path, fn)` opens source read-only, creates a temp file in the same directory, passes the user a `*File` + `*Writer` to stream HDUs through (with `CopyHDU` / `CopyHDUWithHeader` / `SkipHDU` / `AppendImage` / ...), fsync + atomic `os.Rename` over source on success.
+- `fits.EditFile(path, fn)` opens source read-only, creates `<name>.fits-tmp` in the same directory, passes the user a `*File` + `*Writer` to stream HDUs through (with `CopyHDU` / `CopyHDUWithHeader` / `SkipHDU` / `WriteImage(out, ...)`; a `Writer` cannot create tables), fsync + atomic `os.Rename` over source on success. HDUs that change position are converted exactly like cfitsio `fits_copy_hdu`. Empty output is refused; the file mode is kept and symlinks are followed.
 - Crash-safe by construction (temp file + rename). Callback can mix copy and append calls freely.
 
-**HDU data model stays immutable.** Headers returned from read-mode `Open()` can be mutated locally (they're Go in-memory objects) but `Flush()` errors because the file is read-only. Headers returned from `OpenForEdit()` mutate locally and persist on `Flush()` / `Close()`.
+**HDU data model stays immutable.** Headers returned from read-mode `Open()` can be mutated locally (they're Go in-memory objects) but `Flush()` errors because the file is read-only. Headers returned from `OpenForEdit()` mutate locally and persist on `Flush()` / `CloseAndFlush()`. **`Close()` does not flush** (it discards unflushed header edits; `OverwritePixels` has already used them). `Flush` refuses structural keyword changes and any card the encoder cannot represent exactly.
 
 - Rationale: option (B) from the design discussion. Covers the ~90% case (keyword edits, checksum recompute, pixel overwrite, HDU append) at cfitsio speeds without the ~5800 LOC / bug-prone `edithdu.c` + `editcol.c` buffer-shuffling nightmare. The operations punted to `EditFile` rebuild are the ones where cfitsio's in-place implementation is only marginally faster than a rebuild anyway (all involve O(file size) shifts).
 - Implementation cost: ~800 LOC for in-place paths (header-in-block rewrite, boundary-shift with journal, same-shape pixel overwrite, append) + ~400 LOC for `EditFile` / `Writer`. ~1200 LOC total for the edit surface.
 - What we do NOT replicate from cfitsio: `ffirow`/`ffdrow`/`fficol`/`ffdcol`/`ffrsim`/`ffiimg`-style in-place structural mutation. Those live behind `EditFile` rebuild in v1. If a concrete v2 use case demands faster structural edits, we add them incrementally — the `EditFile` API doesn't break.
-- Crash-safety story: cfitsio has none — a crash mid-edit may corrupt your file. v1 ships with journaled tail shifts + fsync barriers + atomic rename for `EditFile`. If the process dies during an in-place edit, the next `Open` detects the journal and replays or rolls back.
+- Crash-safety story: cfitsio has none — a crash mid-edit may corrupt your file. As built: after a process crash at any step of `Flush` or `EditFile`, the next `OpenForEdit` or `EditFile` recovers the file to exactly the original or exactly the result (crash-at-every-step tests); until then a read-only `Open` fails with `ErrPendingJournal` (`ErrLegacyJournal` for a journal from an earlier release). Power loss relies on the fsync order (`TestFsyncOrder`); no power cut is simulated.
 
-**5.7 Hybrid error strategy.** Sentinels for common checks (`ErrKeyNotFound`, `ErrNotImageHDU`, `ErrNotImageCompatible`, `ErrTypeMismatch`, `ErrReadOnly`, `ErrShapeMismatch`) via `errors.Is`. Typed errors with context (`*KeyNotFoundError{Key, HDU}`, `*TypeMismatchError{Requested, BITPIX, Lossy}`) via `errors.As` when callers need specifics. Standard Go practice.
+**5.7 Hybrid error strategy.** *(As built, `ErrKeyNotFound` and `ErrNotImageHDU` exist but no function returns them; see errors.go.)* Sentinels for common checks (`ErrKeyNotFound`, `ErrNotImageHDU`, `ErrNotImageCompatible`, `ErrTypeMismatch`, `ErrReadOnly`, `ErrShapeMismatch`) via `errors.Is`. Typed errors with context (`*KeyNotFoundError{Key, HDU}`, `*TypeMismatchError{Requested, BITPIX, Lossy}`) via `errors.As` when callers need specifics. Standard Go practice.
 
 **5.9 Context on blocking I/O only.** `OpenContext(ctx, path)`, `OpenForEditContext(ctx, path)`, `ReadPixelsContext[T](ctx, h)`, `EditFileContext(ctx, path, fn)` as canonical forms; `Open` / `OpenForEdit` / `ReadPixels` / `EditFile` are thin wrappers passing `context.Background()`. Precedent: `database/sql`. Pure in-memory ops (`Header.Get`, `Column()` metadata, `VarColumn.At`) don't take context.
 
@@ -151,11 +154,13 @@ This library is 100% scientific fidelity. It returns the bytes, values, and type
 - `*ErrUnterminatedHeader{HDU int, BytesScanned int64}` — no `END` card found within a generous block limit.
 - `*ErrTruncatedData{HDU int, Expected int64, Got int64}` — data section ends before the declared `|BITPIX| × GCOUNT × (PCOUNT + Π NAXISi) / 8` size.
 - `*ErrMissingRequiredKeyword{HDU int, Keyword string}` — any of `SIMPLE`/`BITPIX`/`NAXIS`/`NAXISn`/`XTENSION`/`PCOUNT`/`GCOUNT`/`TFIELDS` missing when required.
-- Trailing garbage after the last padded data block is **silently ignored** (common from aborted writes; not worth failing over).
-- Error messages include the HDU index and byte offset where the problem was detected. No stack traces, no hints about recovery.
+- Trailing bytes after the last HDU (zero blocks, junk bytes, a partial block) and a missing final pad are tolerated as cfitsio tolerates them; `File.TrailingBytes()` reports how many bytes were ignored. A trailing block that starts with `XTENSION=` but has no `END` is an error (stricter than cfitsio, like astropy). One malformed non-structural card does not make the file unopenable; `HeaderOf` returns the parse error.
+- Error messages include the HDU index where the problem was detected *(as built: `ErrTruncatedData` carries the declared and present byte counts, `ErrMissingRequiredKeyword` the keyword; neither carries a byte offset)*. No stack traces, no hints about recovery.
 - Forensic / recovery tooling is a **deferred v2 concern**. If users need to salvage data from corrupted files, we consider it when a concrete use case shows up. The promotion path from decision 5.6 (`(*File).Blocks()` iterator) covers this cleanly if it becomes needed.
 
 ## Done criteria for v1
+
+*Status (see `docs/VALIDATION.md`):* items 2, 3 (for the writers listed there), 4 (where astropy can read the file), 5 and 7's fuzz targets exist and pass; the fuzz iteration counts actually run are recorded in the area reports, not 10 M each. Item 6 is covered by a crop of a real ASI533MC Pro frame (`testdata/imaging`), not a full frame round trip. Item 8 (benchmark vs cfitsio) has not been measured.
 
 Before tagging `v1.0.0` we must pass **every** item:
 
@@ -205,7 +210,7 @@ fits/
 - `header` is its own package because card parsing is self-contained and heavily tested in isolation. May alias `type Header = header.Header` into root for ergonomics.
 - Everything else is `internal/` so users can't freeze implementation details into the public API before we know their final shape.
 - `cmd/fitscopy` is the byte-for-byte regression tool: `fitscopy in.fits out.fits && cmp in.fits out.fits`.
-- No `fits/compress` subpackage in v1.
+- `fits/compress` holds the tile-compression codecs (see Deferred → implemented).
 
 ## Core API sketch (reflects approved decisions)
 
@@ -238,16 +243,17 @@ func (f *File) HDUByName(name string) (HDU, error)          // EXTNAME lookup
 func (f *File) Primary() (*ImageHDU, error)
 
 // Flush persists any pending in-memory header mutations. ModeEdit / ModeCreate
-// only. Returns ErrReadOnly for ModeRead files. If a header grew past its
-// current block allocation and a tail shift is required, Flush uses the
-// journal protocol for crash-safety.
+// only. Returns ErrReadOnly for ModeRead files. A same-size rewrite is
+// protected by an undo journal; a header that grew past its block
+// allocation is written via temp file + rename. Both recover on the next
+// OpenForEdit / EditFile after a crash.
 func (f *File) Flush() error
 
 // Append writes a new HDU at EOF. ModeEdit / ModeCreate only. Generic
 // convenience wrappers for each HDU kind:
 func AppendImage[T Numeric](f *File, hdr *header.Header, shape []int64, data []T) (*ImageHDU, error)
-func AppendBinaryTable(f *File, hdr *header.Header, cols []Column, rows RowSource) (*BinaryTableHDU, error)
-func AppendASCIITable(f *File, hdr *header.Header, cols []Column, rows RowSource) (*ASCIITableHDU, error)
+func AppendBinaryTable(f *File, hdr *header.Header, cols []ColumnData) (*BinaryTableHDU, error)
+func AppendASCIITable(f *File, hdr *header.Header, cols []ASCIIColumnData) (*ASCIITableHDU, error)
 
 // EditFile is the streaming-rebuild helper for structural edits (image
 // resize, row/column insert/delete, HDU insert-in-middle, HDU delete, VLA
@@ -265,8 +271,9 @@ func EditFileContext(ctx context.Context, path string, fn func(in *File, out *Wr
 type Writer struct { /* unexported */ }
 func (w *Writer) CopyHDU(h HDU) error                               // bit-for-bit passthrough
 func (w *Writer) CopyHDUWithHeader(h HDU, hdr *header.Header) error // new header, same data
-func (w *Writer) SkipHDU(h HDU) error                               // omit (cannot skip primary)
-// Append*/WriteImage-family functions also accept a *Writer for emitting new HDUs.
+func (w *Writer) SkipHDU(h HDU) error                               // omit (as built: any HDU, including the primary, may be skipped)
+// WriteImage(out, ...) also accepts a *Writer for emitting new image HDUs
+// (an IMAGE extension after position 0). A Writer cannot create tables.
 
 // --- HDU interface ---
 
@@ -306,8 +313,8 @@ func (h *Header) Comments() []string
 //   - Headers from ModeRead files: Set/Add/Delete succeed in memory, but
 //     (*File).Flush() returns ErrReadOnly. Mutations do not reach disk.
 //   - Headers from ModeEdit files: Set/Add/Delete are tracked; (*File).Flush()
-//     writes them back in place, using the journaled tail-shift protocol if
-//     the header grew past its current block allocation.
+//     writes them back (same size: in place under an undo journal; resized:
+//     temp file + rename). Close() does NOT flush; use CloseAndFlush().
 //   - Headers created with header.New() and passed to Append*/Writer methods:
 //     serialized as part of the new HDU.
 
@@ -317,6 +324,11 @@ type Card struct {
     Comment string
     Raw     [80]byte   // original bytes, for round-tripping
 }
+// As built: Value may also be *big.Int (TypeBigInt) or RawValue
+// (TypeUnparsed); Card.RawCards() returns the original card plus its
+// CONTINUE cards; Header.AddCard adds a card under the write rules.
+// Card also holds those CONTINUE cards (unexported), so it is not
+// comparable with ==.
 
 // --- image HDU ---
 
@@ -332,8 +344,9 @@ func (h *ImageHDU) Header() *header.Header
 func (h *ImageHDU) BITPIX() int                              // 8, 16, 32, 64, -32, -64
 func (h *ImageHDU) NAXIS()  int
 func (h *ImageHDU) Shape()  []int64                          // [NAXIS1, NAXIS2, ...]
-func (h *ImageHDU) BSCALE() float64
-func (h *ImageHDU) BZERO()  float64
+func (h *ImageHDU) BSCALE() (float64, error)               // scaling-card rule; ErrInvalidScaling
+func (h *ImageHDU) BZERO()  (float64, error)
+func (h *ImageHDU) BLANK()  (int64, bool, error)
 
 // Read all pixels, generic. Applies BSCALE/BZERO. Returns ErrTypeMismatch
 // if T cannot losslessly hold the file's data type.
@@ -359,13 +372,16 @@ type WriteTarget interface { /* unexported methods */ }
 // OverwritePixels writes new pixel values over the existing data allocation
 // of an ImageHDU. Requires ModeEdit. Returns ErrShapeMismatch if len(data)
 // does not match the HDU's pixel count, or ErrTypeMismatch if T cannot be
-// losslessly encoded into the HDU's BITPIX. Applies inverse BSCALE/BZERO.
+// losslessly encoded into the HDU's BITPIX. Applies inverse BSCALE/BZERO
+// (proven against cfitsio-written data units, also after in-memory header
+// edits: TestOverwritePixelsMatchesCfitsio,
+// TestOverwritePixelsAfterInMemoryHeaderEdit).
 // Does NOT support resize — for resize, use EditFile.
 func OverwritePixels[T Numeric](h *ImageHDU, data []T) error
 
 // Pin one or more axes of a higher-dim cube to produce a lower-dim view.
 // Used to extract a 2D slice before calling AsImage().
-func (h *ImageHDU) Slice(axis int, index int64) (*ImageHDU, error)
+// Slice(axis, index) was planned and not built; use ReadSubset.
 
 // --- image.Image adapter ---
 
@@ -446,7 +462,7 @@ func ReadVarColumn[T Numeric](t *BinaryTableHDU, col int) (*VarColumn[T], error)
 
 // VarColumn stores all rows' variable-length data in one contiguous slab.
 // At(row) returns a zero-copy sub-slice into the backing Values buffer.
-type VarColumn[T Numeric] struct {
+type VarColumn[T any] struct {
     // unexported: values []T, offsets []int64
 }
 func (v *VarColumn[T]) Len() int                                 // number of rows
@@ -503,7 +519,7 @@ fe, _ := fits.OpenForEdit("obs.fits")
 p, _ := fe.Primary()
 p.Header().Add("HISTORY", "Calibrated 2026-04-05", "")
 p.Header().Set("DATE-OBS", "2026-04-05T12:34:56", "")
-fe.Flush()   // writes modified header blocks in place (journaled if tail shift required)
+fe.Flush()   // same size: in place under an undo journal; resized: temp file + rename
 fe.Close()
 
 // Overwrite pixel data in place (same shape)
@@ -545,11 +561,11 @@ Sequential. No phases.
 4. **`header/card.go`: Card type + encode/decode.** One struct, `any` value. Decoder handles strings (escaped `''`), logicals, ints, floats with `D`-exponent, complex. Reference: `fitscore.c` `ffpsvc` / `ffdtyp`. Spec: §4.2.
 5. **`header/parser.go`: card stream parser.** Input: header byte slice (multiple of 2880). Output: `[]Card`. Handles fixed / free format, `CONTINUE`, `HIERARCH`, `COMMENT` / `HISTORY` / blank, locates `END`. Reference: `getkey.c` `ffgthd` / `ffgknm`. Spec: §4.1, Appendix A.
 6. **`header/encoder.go`: card serializer.** Symmetric to parser. Fixed-format for mandatory keys. CONTINUE splitting for long strings. Reference: `putkey.c` `ffmkky` / `ffpkys`.
-7. **`header/keywords.go` + `header/header.go`: Header container.** Ordered cards + name→index map (last-wins for duplicates, preserve insertion order on serialization). Typed getters / setters. Constants for every mandatory / reserved keyword. Spec: §4.4, Appendix C.
+7. **`header/keywords.go` + `header/header.go`: Header container.** Ordered cards + name→index map (case-insensitive; the FIRST card wins for duplicates, as cfitsio's fits_read_keyword; insertion order preserved on serialization). Typed getters / setters. Constants for every mandatory / reserved keyword. Spec: §4.4, Appendix C.
 8. **`internal/bitpix`: BITPIX enum + Go type mapping.** `type BITPIX int8`, `Size()`, `Signed()`, mapping helpers. Spec: §4.4.1.1, Table 8.
 9. **`internal/checksum`: Appendix J checksum.** Port `checksum.c` `ffcsum` (16-bit-folded 32-bit 1's complement over big-endian uint16), `ffesum` (base-64-ish ASCII encoding with the `[\]^_{|}~` exclusions), `ffdsum`. Spec: Appendix J.
 10. **`fits.File` + `Open` / `OpenReader` / `OpenReadAll` / `Create`.** Holds the seeker, mode, and a slice of `hduOffset` records `{headerStart, dataStart, dataEnd, kind}`.
-11. **HDU-scan pass (minimal eager, per decision 5.2).** Walk file: read header blocks until `END`, run a *restricted* keyword parse that extracts only `XTENSION`/`SIMPLE`, `BITPIX`, `NAXIS`, `NAXISn`, `PCOUNT`, `GCOUNT`, `EXTNAME`, `EXTVER`. Retain the raw header bytes as `[]byte` in the `hduRecord`. Compute data size (Eq. 2: `|BITPIX| × GCOUNT × (PCOUNT + NAXIS1 × ... × NAXISm) / 8`), round up to block boundary, seek past data, record offsets, repeat to EOF. Reference: `cfileio.c` `ffrhdu` / `ffphdu`. Spec: §3.1, §3.3.2, §4.4.1.
+11. **HDU-scan pass (minimal eager, per decision 5.2).** Walk file: read header blocks until `END`, run a *restricted* keyword parse that extracts only `XTENSION`/`SIMPLE`, `BITPIX`, `NAXIS`, `NAXISn`, `PCOUNT`, `GCOUNT` *(as built: EXTNAME is read from the header when `HDUByName` asks for it)*. Retain the raw header bytes as `[]byte` in the `hduRecord`. Compute data size (Eq. 2: `|BITPIX| × GCOUNT × (PCOUNT + NAXIS1 × ... × NAXISm) / 8`), round up to block boundary, seek past data, record offsets, repeat to EOF. Reference: `cfileio.c` `ffrhdu` / `ffphdu`. Spec: §3.1, §3.3.2, §4.4.1.
 12. **`HDU` interface + factory + lazy full-header parse.** Inspect the extracted `XTENSION` / `SIMPLE` to pick `*ImageHDU` / `*BinaryTableHDU` / `*ASCIITableHDU`. Handle SIF (primary only) and MEF (primary + extensions). `(*HDU).Header()` uses `sync.Once` to parse the retained `rawHeader` bytes into a full `header.Header` on first access and cache the result. TFORM parsing for binary tables hangs off `BinaryTableHDU.Columns()` / `ReadColumn` via the same pattern.
 13. **`ImageHDU.ReadPixels[T]` — read path.** Seek to `dataStart`, read bytes, big-endian bulk-swap, apply BSCALE / BZERO / BLANK / NaN, return `[]T`. Single generic implementation replaces cfitsio's `getcolb.c`..`getcold.c`. Spec: §5, §7.1, Table 11.
 14. **`ImageHDU.ReadSubset[T]`.** Hyperslab reader. Computes byte ranges per-axis, issues seeks when gaps exceed a threshold (~64 KB). Reference: `ffgsv` family. Spec: §3.3.2.
@@ -561,28 +577,28 @@ Sequential. No phases.
 20. **Variable-length arrays (P / Q).** Parse row descriptors (nelem, heap offset), seek to `dataStart + THEAP + offset`, read the whole heap region in one pass, construct `VarColumn[T]` with the flat slab + offsets table. Reference: `ffgdes` / `ffgdesll`. Spec: §7.3.5.
 21. **`ASCIITableHDU`.** Row = NAXIS1 chars, split by TBCOLn windows, parse per TFORMn with `strconv`. Spec: §7.2.
 22. **Table write paths.** Binary: write header, allocate heap for P / Q writes, write rows, write heap, pad. ASCII: Fortran-rule formatting, right-justified. Reference: `putcol*.c`, `ffphbn` / `ffphtb`.
-23. **Checksum integration.** On `Close` in write / edit mode, recompute `DATASUM` per HDU that changed, then `CHECKSUM` over header + data using the placeholder-then-rewrite trick from §J.1. `HDU.VerifyChecksum()` on read.
+23. **Checksum integration.** *As built (supersedes the text below): `Close` only closes the file; CHECKSUM/DATASUM are written only by an explicit `WriteChecksum(h)` (ModeEdit) and checked by `VerifyChecksum` / `ChecksumStatus`.* Original plan: On `Close` in write / edit mode, recompute `DATASUM` per HDU that changed, then `CHECKSUM` over header + data using the placeholder-then-rewrite trick from §J.1. `HDU.VerifyChecksum()` on read.
 24. **`image.Image` adapter.** `AsImage()` returning `*image.Gray` for BITPIX=8, `*image.Gray16` for BITPIX=16 (with TZERO=32768 unsigned handling), `*FloatGray` for -32 / -64. Errors on multi-dim, complex, NAXIS < 2. Implement `Decode` / `DecodeConfig`. Register in `init()` with magic bytes `"SIMPLE  ="`.
 25. **`OpenForEdit` + dirty-header tracking (decision 5.8).** Open file read-write, load HDU index + minimal eager metadata as for `Open`. Each `hduRecord` gains a `dirty bool` flag flipped when the user mutates the associated `Header`. `Flush` walks dirty records, re-serializes each header, compares byte length against current block allocation.
 26. **`File.Flush` — in-place header rewrite within block allocation.** For each dirty HDU whose re-serialized header still fits in its current allocation: seek to `headerStart`, write the new header bytes (padded with spaces to the block boundary), fsync. Fast path. Reference: `putkey.c` `ffpkys` / `ffpky` / `ffmkey` — but we only do the rewrite, not the cfitsio edit semantics.
-27. **`File.Flush` — journaled tail-shift for header growth across block boundary.** If any dirty HDU's new header is larger than its current allocation: write a journal file `<path>.fits.journal` describing `{hdu_index, old_block_count, new_block_count, shift_offset}`, fsync journal, shift the file tail forward in back-to-front chunks, write the new header, fsync data, fsync directory, delete journal. On next `Open` / `OpenForEdit`, detect a stale journal and replay or roll back. New implementation — cfitsio has no crash-safety story here.
+27. **`File.Flush` — header growth across a block boundary.** *As built (supersedes the text below): a resized header is written by rewriting the file to `<name>.fits-tmp`, fsync, rename, fsync the directory; same-size rewrites use an undo journal `<name>.journal` (pre-image + CRC). There is no tail shift.* Original plan: If any dirty HDU's new header is larger than its current allocation: write a journal file `<path>.fits.journal` describing `{hdu_index, old_block_count, new_block_count, shift_offset}`, fsync journal, shift the file tail forward in back-to-front chunks, write the new header, fsync data, fsync directory, delete journal. On next `Open` / `OpenForEdit`, detect a stale journal and replay or roll back. New implementation — cfitsio has no crash-safety story here.
 28. **`OverwritePixels[T]`.** Edit-mode only. Validate shape and BITPIX compatibility, seek to `dataStart`, apply inverse BSCALE/BZERO, write bytes in big-endian, fsync. Returns `ErrShapeMismatch` / `ErrTypeMismatch` on invalid calls. Rejects resize requests (those go through `EditFile`).
 29. **`(*File).AppendImage` / `AppendBinaryTable` / `AppendASCIITable` in edit mode.** Seek to EOF (past the last HDU's padded data), emit new HDU using the same serialization path as `Create` mode, update HDU index. Fast — no shift needed because append is at EOF.
-30. **`EditFile` + `Writer` streaming rebuild.** Open source read-only, compute temp path `<path>.fits.tmp-<pid>` in the same directory (same filesystem → atomic rename). Create temp file in `ModeCreate`. Wrap temp file in `*Writer`. Invoke callback with `(in, writer)`. On clean return: fsync temp, `os.Rename(temp, path)`, fsync directory. On error or panic: remove temp, leave source untouched. `Writer.CopyHDU` passes header bytes and data bytes through verbatim (no parse round-trip). `Writer.CopyHDUWithHeader` re-emits the header but passes data through as raw bytes. `Writer.SkipHDU` marks the HDU as omitted; rejects skipping the primary.
+30. **`EditFile` + `Writer` streaming rebuild.** Open source read-only, compute temp path `<path>.fits-tmp` (as built, `journal.go`; no pid) in the same directory (same filesystem → atomic rename). Create temp file in `ModeCreate` *(as built: `Create` refuses a file with a pending journal, one being edited (`ErrLocked`) or open for reading through this package (`ErrOpenForReading`), and holds the edit lock until `Close`)*. Wrap temp file in `*Writer`. Invoke callback with `(in, writer)`. On clean return: fsync temp, `os.Rename(temp, path)`, fsync directory. On error or panic: remove temp, leave source untouched. `Writer.CopyHDU` passes header bytes and data bytes through verbatim (no parse round-trip). `Writer.CopyHDUWithHeader` re-emits the header but passes data through as raw bytes. `Writer.SkipHDU` marks the HDU as omitted *(as built: any HDU may be skipped, including the primary)*.
 31. **`cmd/fitsdump`.** Dumps headers and per-HDU summary. Dogfooding + debug output for tests.
 32. **`cmd/fitscopy`.** Primary regression tool: open → iterate → write new → byte-compare.
-33. **Test fixtures.** Copy `iter_image.fit`, `iter_a.fit`, `iter_b.fit`, `iter_c.fit`, `vari.fits`, `testprog.std`, `testf77.std` from `reference/cfitsio/` into `testdata/`. Add a Python script using `astropy.io.fits` to generate a small synthetic set with known values (one-time, committed).
-34. **Unit tests per package.** `header/parser_test.go` covering every card edge case. `internal/tform_test.go` covering every TFORM. `internal/checksum_test.go` against §J.3 worked examples. Edit-surface tests: in-place header rewrite within block, journaled tail-shift, `OverwritePixels` validation, `EditFile` round-trip, `Writer.SkipHDU` + `CopyHDU` mixing.
-35. **Integration round-trip tests.** `fitscopy` on every fixture, `bytes.Equal`. `vari.fits` is the critical variable-length-array case. `testprog.std` covers nearly every cfitsio feature. Edit round-trip: open for edit, mutate a header, flush, reopen, verify persistence + `VerifyChecksum()`.
-36. **Crash-safety tests for the edit surface.** Simulate process death at each fsync point during a journaled tail-shift; verify recovery on next open produces either the pre-edit or post-edit state, never a corrupted intermediate. Simulate rename failure during `EditFile`; verify source is untouched.
-37. **Fuzz + benchmarks.** `FuzzParseHeader`, `FuzzTForm`, `FuzzBlockFraming` — all seeded with real fixtures. Benchmarks: `BenchmarkReadPixelsFloat32_1k²`, `BenchmarkReadColumnInt32_1Mrow`, `BenchmarkWriteImage`, `BenchmarkEditHeaderInPlace`, `BenchmarkEditFileRebuild`. Target: within 2× of cfitsio throughput for reads; in-place header edit should complete in milliseconds regardless of file size.
+33. **Test fixtures.** Copy `iter_image.fit`, `iter_a.fit`, `iter_b.fit`, `iter_c.fit`, `vari.fits`, `testprog.std`, `testf77.std` from `reference/cfitsio/` into `testdata/` (as built, `testdata/README.md` lists every sample and its generator; `vari.fits` turned out to be a plain binary table without VLAs). Add a Python script using `astropy.io.fits` to generate a small synthetic set with known values (one-time, committed).
+34. **Unit tests per package.** `header/parser_test.go` covering every card edge case. `internal/tform/tform_test.go` covering every TFORM. `internal/checksum/checksum_test.go` against §J.3 worked examples. Edit-surface tests: in-place header rewrite within block, resize via temp file + rename, `OverwritePixels` validation, `EditFile` round-trip, `Writer.SkipHDU` + `CopyHDU` mixing.
+35. **Integration round-trip tests.** `fitscopy` on every fixture, `bytes.Equal`. (As built: VLA tables are proven on `testdata/tables/` samples; `vari.fits` has no VLAs.) `testprog.std` covers nearly every cfitsio feature. Edit round-trip: open for edit, mutate a header, flush, reopen, verify persistence + `VerifyChecksum()`.
+36. **Crash-safety tests for the edit surface.** (Done: `TestFlushHeaderResizeCrashAtEveryStep`, `TestEditFileCrashAtEveryStep`, `TestFsyncOrder`.) Simulate process death at each fsync point; verify recovery on next open produces either the pre-edit or post-edit state, never a corrupted intermediate. Simulate rename failure during `EditFile`; verify source is untouched.
+37. **Fuzz + benchmarks.** `FuzzParseHeader`, `FuzzTForm`, `FuzzBlockFraming`, `FuzzCardDecode` (implemented; the header fuzzers compare decoded values, not card counts), plus `FuzzEncodeString` and `FuzzEncodeRawValue` — all seeded with real fixtures. Benchmarks *(as built)*: `BenchmarkReadPixelsFloat32_1k`, `BenchmarkWriteImageFloat32_1k`, `BenchmarkReadColumnInt32_1Mrow`, `BenchmarkEditHeaderInPlace` (no `BenchmarkEditFileRebuild`). Target: within 2× of cfitsio throughput for reads; in-place header edit should complete in milliseconds regardless of file size.
 
 ## Testing strategy
 
 1. **Unit tests per internal package.** Hand-crafted card / TFORM / checksum inputs for every spec edge case.
-2. **Golden cfitsio fixtures in `testdata/`.** `iter_image.fit`, `iter_a.fit`, `iter_b.fit`, `iter_c.fit`, `vari.fits`, `testprog.std`, `testf77.std`. `testprog.std` is cfitsio's own correctness oracle — 69 KB exercising nearly every feature.
-3. **Byte-for-byte round-trip tests.** Open → iterate all HDUs → rewrite via `fits.Create` → `bytes.Equal`. `vari.fits` is the must-pass for variable-length arrays + heap.
-4. **Semantic cross-check with `astropy.io.fits`.** One-time Python dump of each fixture as JSON / NumPy, committed as `.golden`. Tests assert Go's parsed view matches.
+2. **Golden cfitsio fixtures in `testdata/`.** `iter_image.fit`, `iter_a.fit`, `iter_b.fit`, `iter_c.fit`, `vari.fits`, `testprog.std`, `testf77.std`. `testprog.std` is cfitsio's own correctness oracle — 69 KB exercising nearly every feature. As built, every sample also has a cfitsio truth golden (`testdata/cfref`).
+3. **Byte-for-byte round-trip tests.** `CopyTo` reproduces every sample byte for byte when the file has no bytes after its last HDU and a fully padded last data unit (`TestCopyToByteIdentical`, framing only); otherwise it drops the trailing bytes and writes the missing final padding as zeros (`TestCopyToDropsTrailingBytesAndPads`). Values are proven separately against the cfitsio goldens.
+4. **Semantic cross-check with `astropy.io.fits`.** *As built (supersedes the text below): there are no `.golden` astropy dumps; every fixture has a cfitsio golden instead (`testdata/cfref/golden`), and astropy reads back written files and the sample sets named in `docs/VALIDATION.md`.* Original plan: One-time Python dump of each fixture as JSON / NumPy, committed as `.golden`. Tests assert Go's parsed view matches.
 5. **Checksum verification.** Every fixture that sets `CHECKSUM` / `DATASUM` must verify.
 6. **Optional CI: live cfitsio cross-check.** Build cfitsio in CI, run `fitsverify` on our output files. Catches "valid enough but cfitsio would reject" cases.
 7. **Fuzz tests.** `FuzzParseHeader` (seeded from real headers, must not panic, must round-trip any successful parse). `FuzzTForm`. `FuzzBlockFraming`.

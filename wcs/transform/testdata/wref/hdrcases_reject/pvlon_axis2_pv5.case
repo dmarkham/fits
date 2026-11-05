@@ -1,0 +1,19 @@
+# Latitude-first header (CTYPE1 = DEC, CTYPE2 = RA) with PV2_5 on the
+# longitude axis, which is axis 2 here: only PVi_0..4 are defined on the
+# longitude axis (Paper II sect. 2.5). Synthetic.
+# EXPECT-WCSLIB-ERROR: Unrecognized coordinate transformation parameter
+NOTE reject: pvlon_axis2_pv5
+GRID 1 512 3 1 512 3
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'DEC--CAR'
+CTYPE2  = 'RA---CAR'
+CRVAL1  = 25.0
+CRVAL2  = 40.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = 0.1
+CDELT2  = -0.1
+PV2_5   = 1.0

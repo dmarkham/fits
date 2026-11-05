@@ -15,10 +15,10 @@ func TestTPVRoundTrip(t *testing.T) {
 	tpv := &TPV{Lon: 1, Lat: 2}
 	// Identity baseline.
 	tpv.Axis1[1] = 1.0 // coefficient of xi in the x output
-	tpv.Axis2[2] = 1.0 // coefficient of eta in the y output (note: PV2_2 is eta)
+	tpv.Axis2[1] = 1.0 // coefficient of eta in the y output (PV2_1 is eta)
 	// Small quadratic distortion.
 	tpv.Axis1[4] = 1e-4 // xi² term
-	tpv.Axis2[6] = 2e-4 // eta² term
+	tpv.Axis2[4] = 2e-4 // eta² term (PV2_4 is eta²)
 
 	xi, eta := 0.1, 0.15 // degrees
 	xiP, etaP := tpv.Forward(xi, eta)
@@ -38,10 +38,10 @@ func TestTPVRoundTrip(t *testing.T) {
 func TestTPVRadialTerms(t *testing.T) {
 	tpv := &TPV{Lon: 1, Lat: 2}
 	// Identity linear baseline + small r and r³ radial distortion.
-	tpv.Axis1[1] = 1.0  // xi
-	tpv.Axis2[2] = 1.0  // eta
-	tpv.Axis1[3] = 1e-3 // r in the x output
-	tpv.Axis2[3] = 1e-3 // r in the y output
+	tpv.Axis1[1] = 1.0   // xi
+	tpv.Axis2[1] = 1.0   // eta (PV2_1)
+	tpv.Axis1[3] = 1e-3  // r in the x output
+	tpv.Axis2[3] = 1e-3  // r in the y output
 	tpv.Axis1[11] = 1e-5 // r³ in the x output
 	tpv.Axis2[11] = 1e-5 // r³ in the y output
 
@@ -66,6 +66,72 @@ func TestTPVRadialTerms(t *testing.T) {
 	if math.Abs(xi2-xi) > 1e-11 || math.Abs(eta2-eta) > 1e-11 {
 		t.Fatalf("TPV radial round-trip: (%v,%v) → (%v,%v) → (%v,%v)",
 			xi, eta, xiP, etaP, xi2, eta2)
+	}
+}
+
+// TestTPVAxis2TermOrder pins the axis-2 term layout: the same table as
+// axis 1 with xi and eta exchanged (wcslib tpv.c, SCAMP), so PV2_1 is
+// eta, PV2_2 is xi, PV2_4 is eta², PV2_6 is xi², PV2_8 is eta²·xi.
+func TestTPVAxis2TermOrder(t *testing.T) {
+	tpv := &TPV{Lon: 1, Lat: 2}
+	tpv.Axis1[1] = 1.0
+	tpv.Axis1[2] = 0.5   // eta
+	tpv.Axis1[4] = 0.25  // xi²
+	tpv.Axis1[8] = 0.125 // xi²·eta
+	tpv.Axis2[1] = 1.0
+	tpv.Axis2[2] = 0.5   // xi
+	tpv.Axis2[4] = 0.25  // eta²
+	tpv.Axis2[8] = 0.125 // eta²·xi
+
+	xi, eta := 0.3, -0.2
+	xiP, etaP := tpv.Forward(xi, eta)
+	wantXi := xi + 0.5*eta + 0.25*xi*xi + 0.125*xi*xi*eta
+	wantEta := eta + 0.5*xi + 0.25*eta*eta + 0.125*eta*eta*xi
+	if math.Abs(xiP-wantXi) > 1e-15 {
+		t.Errorf("axis 1: got %.15g, want %.15g", xiP, wantXi)
+	}
+	if math.Abs(etaP-wantEta) > 1e-15 {
+		t.Errorf("axis 2: got %.15g, want %.15g (xi and eta not exchanged?)", etaP, wantEta)
+	}
+}
+
+// TestTPVAxis2CrossTermRoundTrip: an axis-2 polynomial dominated by
+// cross terms only converges if Inverse uses axis 2's partials in the
+// exchanged order.
+func TestTPVAxis2CrossTermRoundTrip(t *testing.T) {
+	tpv := &TPV{Lon: 1, Lat: 2}
+	tpv.Axis1[1] = 1.0
+	tpv.Axis2[1] = 1.0
+	tpv.Axis2[2] = 0.4  // xi
+	tpv.Axis2[6] = 0.3  // xi²
+	tpv.Axis2[10] = 0.2 // xi³
+
+	xi, eta := 0.25, 0.1
+	xiP, etaP := tpv.Forward(xi, eta)
+	xi2, eta2, ok := tpv.Inverse(xiP, etaP)
+	if !ok {
+		t.Fatal("Inverse !ok")
+	}
+	if math.Abs(xi2-xi) > 1e-12 || math.Abs(eta2-eta) > 1e-12 {
+		t.Fatalf("round-trip: (%v,%v) → (%v,%v) → (%v,%v)", xi, eta, xiP, etaP, xi2, eta2)
+	}
+}
+
+// TestParseTPVDefaultIsIdentity: ParseTPV defaults PV1_1 and PV2_1 to 1,
+// which must leave eta unchanged when only axis-1 terms are given.
+func TestParseTPVDefaultIsIdentity(t *testing.T) {
+	tpv := ParseTPV(&wcs.Header{
+		LonAxis: 1,
+		LatAxis: 2,
+		PV:      map[wcs.PVKey]float64{{Axis: 1, Index: 4}: 1e-4},
+	})
+	if tpv == nil {
+		t.Fatal("expected TPV, got nil")
+	}
+	xi, eta := 0.1, 0.2
+	xiP, etaP := tpv.Forward(xi, eta)
+	if math.Abs(xiP-(xi+1e-4*xi*xi)) > 1e-15 || etaP != eta {
+		t.Fatalf("Forward(%v,%v) = (%v,%v), want (%v,%v)", xi, eta, xiP, etaP, xi+1e-4*xi*xi, eta)
 	}
 }
 
@@ -102,15 +168,12 @@ func TestParseTPVAbsent(t *testing.T) {
 	}
 }
 
-// TestTNXParse constructs a synthetic TNX WAT header and parses it. Uses
-// a simple polynomial (surface type 3) with identity-like coefficients
-// and verifies the parser round-trips the key fields.
+// TestTNXParse parses an in-memory WAT card (no raw bytes: the Value is
+// used verbatim) and checks the surface fields. Full cross terms, 3x3, so
+// exactly 9 coefficients.
 func TestTNXParse(t *testing.T) {
 	h := header.New()
-	// wtype=tnx axtype=ra lngcor = "3. 3. 3. 0. -1 1 -1 1  0 0 0 0 0 0 0 0 0"
-	// That is: simple polynomial (3), xorder=3, yorder=3, cross=0 (none),
-	// domain [-1,1] × [-1,1], then 9 zero coefficients.
-	watValue := `wtype=tnx axtype=ra projection=tan lngcor = "3. 3. 3. 0. -1 1 -1 1  0 0 0 0 0 0 0 0 0"`
+	watValue := `wtype=tnx axtype=ra projection=tan lngcor = "3. 3. 3. 1. -1 1 -1 1  0 0 0 0 0 0 0 0 0"`
 	h.Set("WAT1_001", watValue, "")
 
 	tnx, err := ParseTNX(h)
@@ -120,14 +183,17 @@ func TestTNXParse(t *testing.T) {
 	if tnx == nil {
 		t.Fatal("expected TNX, got nil")
 	}
-	if tnx.Lon.Type != 3 {
-		t.Fatalf("surface type: %d", tnx.Lon.Type)
+	if tnx.Lon.Type != 3 || tnx.Lon.Cross != 1 || len(tnx.Lon.Coeffs) != 9 {
+		t.Fatalf("surface: %+v", tnx.Lon)
 	}
 	if tnx.Lon.XOrder != 3 || tnx.Lon.YOrder != 3 {
 		t.Fatalf("order: %d %d", tnx.Lon.XOrder, tnx.Lon.YOrder)
 	}
 	if tnx.Lon.XMin != -1 || tnx.Lon.XMax != 1 {
 		t.Fatalf("x domain: [%v, %v]", tnx.Lon.XMin, tnx.Lon.XMax)
+	}
+	if tnx.Lat.present {
+		t.Fatal("latcor parsed from a header that has none")
 	}
 }
 
@@ -180,5 +246,35 @@ func TestTNXAbsent(t *testing.T) {
 	}
 	if tnx != nil {
 		t.Fatal("expected nil for header without WAT")
+	}
+}
+
+// TestTPVRadialJacobian: the analytic partial derivatives of the TPV radial
+// terms, checked against the closed form d(c r^p)/dxi = c p r^(p-2) xi
+// (and the same for eta), with the slot -> power map taken from the TPV
+// registry (PVi_3 = r, PVi_11 = r^3, PVi_23 = r^5, PVi_39 = r^7). Newton
+// iteration with a wrong Jacobian can still converge to the right root,
+// so the header goldens alone do not pin these derivatives.
+func TestTPVRadialJacobian(t *testing.T) {
+	for _, tc := range []struct{ slot, p int }{{3, 1}, {11, 3}, {23, 5}, {39, 7}} {
+		for _, pt := range [][2]float64{{0.3, -0.2}, {-1.1, 0.7}, {0.05, 0.02}} {
+			var coefs [40]float64
+			const c = 0.37
+			coefs[tc.slot] = c
+			xi, eta := pt[0], pt[1]
+			r := math.Sqrt(xi*xi + eta*eta)
+			wantV := c * math.Pow(r, float64(tc.p))
+			wantX := c * float64(tc.p) * math.Pow(r, float64(tc.p-2)) * xi
+			wantE := c * float64(tc.p) * math.Pow(r, float64(tc.p-2)) * eta
+			v, dx, de := evalTPVWithJacobian(&coefs, xi, eta)
+			for _, q := range []struct {
+				name      string
+				got, want float64
+			}{{"value", v, wantV}, {"d/dxi", dx, wantX}, {"d/deta", de, wantE}} {
+				if math.Abs(q.got-q.want) > 1e-14*math.Abs(q.want) {
+					t.Errorf("PV_%d (r^%d) at (%g, %g): %s = %.17g, closed form %.17g", tc.slot, tc.p, xi, eta, q.name, q.got, q.want)
+				}
+			}
+		}
 	}
 }

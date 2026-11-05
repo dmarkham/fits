@@ -1,0 +1,32 @@
+# 'RA---TPV-SIP': the same header as hdrcases_differ/tpv_sip_nosuffix with the
+# suffix written out. With the suffix wcslib and we apply SIP (prior) and
+# TPV (sequent); without it we ignore the SIP set (astropy) and wcslib
+# does not (synthetic).
+NOTE pipeline: RA---TPV-SIP applies SIP then TPV
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TPV-SIP'
+CTYPE2  = 'DEC--TPV-SIP'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+PV1_1   = 1.0
+PV1_4   = 1e-3
+PV1_5   = -5e-4
+PV2_1   = 1.0
+PV2_6   = 2e-3
+PV2_4   = 4e-4

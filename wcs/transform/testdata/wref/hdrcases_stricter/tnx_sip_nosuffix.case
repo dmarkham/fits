@@ -1,0 +1,45 @@
+# IRAF TNX header (RA---TNX, WAT1/WAT2 lngcor/latcor) that also carries
+# SIP keywords, no -SIP suffix (synthetic, from the round-3 verifier probe
+# probetnx/tnx_sip_nosuffix). wcslib 8.10 ACCEPTS it: the SIP cards come
+# after the WAT cards, so its lexer ends with distran = SIP, it applies
+# the SIP polynomial with TAN and ignores the WAT/TNX correction. With
+# the SIP cards before the WAT cards (distran = WAT) wcspih fails with
+# status 4, as it does on this header without SIP. Two distortion
+# solutions that wcslib resolves by card order: we refuse the header on
+# purpose (rule 7). AP/BP are given so hdr2sky injects nothing.
+# EXPECT-GO-ERROR: TNX header carries SIP keywords
+NOTE stricter: tnx_sip_nosuffix
+GRID 1 2048 5 1 2048 5
+HEADER
+SIMPLE  =                    T
+BITPIX  =                   16
+NAXIS   =                    2
+NAXIS1  =                 2048
+NAXIS2  =                 2048
+WCSDIM  =                    2
+CTYPE1  = 'RA---TNX'
+CTYPE2  = 'DEC--TNX'
+CRVAL1  =         150.11916667
+CRVAL2  =           2.20583333
+CRPIX1  =               1024.5
+CRPIX2  =              1030.25
+CD1_1   =             -7.2E-05
+CD1_2   =              4.1E-06
+CD2_1   =              3.9E-06
+CD2_2   =             7.25E-05
+WAT0_001= 'system=image'
+WAT1_001= 'wtype=tnx axtype=ra lngcor = "2. 3. 3. 1. -0.085 0.087 -0.084 0.086 '
+WAT1_002= '0.00012 -0.00034 0.00022 0.00056 -7.1e-05 3.3e-05 -0.00029 0.00011 -'
+WAT1_003= '6.6e-05 "'
+WAT2_001= 'wtype=tnx axtype=dec latcor = "2. 3. 3. 1. -0.085 0.087 -0.084 0.086'
+WAT2_002= ' -0.00021 0.00014 -3.2e-05 -0.00044 8.8e-05 -1.2e-05 0.00031 -9.9e-0'
+WAT2_003= '5 4.5e-05 "'
+A_ORDER = 2
+B_ORDER = 2
+A_2_0   = 2e-3
+A_1_1   = 1e-3
+B_0_2   = 2e-3
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

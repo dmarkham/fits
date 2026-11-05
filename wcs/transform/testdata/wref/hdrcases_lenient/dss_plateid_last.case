@@ -1,0 +1,141 @@
+# The real DSS header of hdrcases/real_dss_plate_solution with its PLATEID
+# card moved after the plate keywords (round-3 verifier probe
+# probedss/dss_plateid_last). wcslib 8.10's lexer sets distran = 0 when it
+# meets PLATEID ("insufficient to trigger DSS"), so with PLATEID last no
+# distortion type is set and wcsset REFUSES the header although every
+# plate keyword is present (with PLATEID before them, as the archive
+# writes it, the later AMDXm cards set distran = DSS again). A card's
+# position must not change a header's meaning (FITS Standard 4.0 sect.
+# 4.4.1: keyword order is free apart from the mandatory keywords), so we
+# apply the plate solution, and the answer must equal the golden of
+# real_dss_plate_solution.
+# EXPECT-WCSLIB-ERROR: No distortion type, yet DQia keyvalues are present
+# SAME-AS: real_dss_plate_solution
+NOTE lenient: dss_plateid_last
+GRID 1 100 9 1 100 9
+HEADER
+SIMPLE  =                    T /FITS header
+BITPIX  =                   16 /No.Bits per pixel
+NAXIS   =                    2 /No.dimensions
+NAXIS1  =                  100 /Length X axis
+NAXIS2  =                  100 /Length Y axis
+EXTEND  =                    T /
+DATE    = '10/01/21          ' /Date of FITS file creation
+ORIGIN  = 'CASB -- STScI     ' /Origin of FITS image
+PLTLABEL= 'J 2098            ' /Observatory plate label
+REGION  = 'S134              ' /GSSS Region Name
+DATE-OBS= '11/03/76          ' /UT date of Observation
+UT      = '17:38:00.00       ' /UT time of observation
+EPOCH   =  1.9761932373047E+03 /Epoch of plate
+PLTRAH  =                   14 /Plate center RA
+PLTRAM  =                   37 /
+PLTRAS  =  4.6882530000000E+01 /
+PLTDECSN= '-                 ' /Plate center Dec
+PLTDECD =                   60 /
+PLTDECM =                   12 /
+PLTDECS =  5.9287610000000E+01 /
+EQUINOX =  2.0000000000000E+03 /Julian Reference frame equinox
+EXPOSURE=  7.0000000000000E+01 /Exposure time minutes
+BANDPASS=                    0 /GSSS Bandpass code
+PLTGRADE=                    1 /Plate grade
+PLTSCALE=  6.7200000000000E+01 /Plate Scale arcsec per mm
+SITELAT = '-31:16:24.00      ' /Latitude of Observatory
+SITELONG= '+149:03:42.00     ' /Longitude of Observatory
+TELESCOP= 'UK 48-inch Schmidt' /Telescope where plate taken
+CNPIX1  =                 8860 /X corner  (pixels)
+CNPIX2  =                 1708 /Y corner
+DATATYPE= 'INTEGER*2         ' /Type of Data
+SCANIMG = 'S134_0025_00_00.PIM' /Name of original scan
+SCANNUM =                    0 /Identifies scan of the plate
+DCHOPPED=                    F /Image repaired for chopping effects
+DSHEARED=                    F /Image repaired for shearing effects
+DSCNDNUM=                    0 /Identifies descendant of plate scan image
+XPIXELSZ=  2.5284450000000E+01 /X pixel size microns
+YPIXELSZ=  2.5284450000000E+01 /Y pixel size microns
+PPO1    =  0.0000000000000E+00 /Orientation Coefficients
+PPO2    =  0.0000000000000E+00 /
+PPO3    =  1.7661698338150E+05 /
+PPO4    =  0.0000000000000E+00 /
+PPO5    =  0.0000000000000E+00 /
+PPO6    =  1.7719356115606E+05 /
+AMDX1   =  6.7226158492105E+01 /Plate solution x coefficients
+AMDX2   = -2.3024540155842E-01 /
+AMDX3   =  1.0901493794544E+00 /
+AMDX4   =  1.1835555135256E-06 /
+AMDX5   =  5.5613287069447E-06 /
+AMDX6   = -3.8419945268889E-05 /
+AMDX7   =  0.0000000000000E+00 /
+AMDX8   =  2.2770722559048E-06 /
+AMDX9   =  1.0335160125448E-07 /
+AMDX10  =  2.3321693523829E-06 /
+AMDX11  =  1.8565977703272E-07 /
+AMDX12  =  0.0000000000000E+00 /
+AMDX13  =  0.0000000000000E+00 /
+AMDX14  =  0.0000000000000E+00 /
+AMDX15  =  0.0000000000000E+00 /
+AMDX16  =  0.0000000000000E+00 /
+AMDX17  =  0.0000000000000E+00 /
+AMDX18  =  0.0000000000000E+00 /
+AMDX19  =  0.0000000000000E+00 /
+AMDX20  =  0.0000000000000E+00 /
+AMDY1   =  6.7233319780690E+01 /Plate solution y coefficients
+AMDY2   =  2.2606735154764E-01 /
+AMDY3   = -5.2719954923422E-01 /
+AMDY4   = -7.3037555803828E-06 /
+AMDY5   =  1.9544740562734E-05 /
+AMDY6   = -5.6277730545338E-06 /
+AMDY7   =  0.0000000000000E+00 /
+AMDY8   =  2.2086510085905E-06 /
+AMDY9   =  1.0292330494988E-08 /
+AMDY10  =  2.1738798605975E-06 /
+AMDY11  = -1.5811855244111E-08 /
+AMDY12  =  0.0000000000000E+00 /
+AMDY13  =  0.0000000000000E+00 /
+AMDY14  =  0.0000000000000E+00 /
+AMDY15  =  0.0000000000000E+00 /
+AMDY16  =  0.0000000000000E+00 /
+AMDY17  =  0.0000000000000E+00 /
+AMDY18  =  0.0000000000000E+00 /
+AMDY19  =  0.0000000000000E+00 /
+AMDY20  =  0.0000000000000E+00 /
+        Based on photographic data obtained using The UK Schmidt Telescope.
+        The UK Schmidt Telescope was operated by the Royal Observatory
+        Edinburgh, with funding from the UK Science and Engineering Research
+        Council, until 1988 June, and thereafter by the Anglo-Australian
+        Observatory.  Original plate material is copyright (c) the Royal
+        Observatory Edinburgh and the Anglo-Australian Observatory.  The
+        plates were processed into the present compressed digital form with
+        their permission.  The Digitized Sky Survey was produced at the Space
+        Telescope Science Institute under US Government grant NAG W-2166.
+        Investigators using these scans are requested to include the above
+        acknowledgements in any publications.
+        Copyright (c) 1993, 1994, Association of Universities for Research in
+        Astronomy, Inc.  All rights reserved.
+DATAMAX =                20136 /Maximum data value
+DATAMIN =                 2989 /Minimum data value
+OBJECT  = 'dss126604         ' /Object ID
+OBJCTRA = '14 29 56.000      ' /Object Right Ascension (J2000)
+OBJCTDEC= '-62 41 05.00      ' /Object Declination (J2000)
+OBJCTX  =              8910.35 /Object X on plate (pixels)
+OBJCTY  =              1758.93 /Object Y on plate (pixels)
+CTYPE1  = 'RA---TAN'           /R.A. in tangent plane projection
+CTYPE2  = 'DEC--TAN'           /DEC. in tangent plane projection
+CRPIX1  =                 50.0 /Refpix of first axis
+CRPIX2  =                 50.0 /Refpix of second axis
+CRVAL1  =  2.1748416404790E+02 /RA at Ref pix in decimal degrees
+CRVAL2  = -6.2685405575038E+01 /DEC at Ref pix in decimal degrees
+CROTA1  = -1.5391240278234E+00 /Rotation angle of first axis (deg)
+CROTA2  = -1.5391240278234E+00 /Rotation angle of second axis (deg)
+        Warning: CROTA2 is inaccurate due to considerable skew
+SKEW    = -1.3869888376036E+00, -1.6912592180432E+00 /Measure of skew
+CDELT1  = -4.7335840137283E-04 /RA pixel step (deg)
+CDELT2  =  4.7348158337497E-04 /DEC pixel step (deg)
+CD1_1   = -4.7315219425681E-04 /CD matrix
+CD1_2   =  1.1460696388562E-05 /CD matrix
+CD2_1   =  1.3970584103940E-05 /CD matrix
+CD2_2   =  4.7334285907105E-04 /CD matrix
+PC001001=  9.9956437423436E-01 /PC matrix
+PC001002= -2.4211456594673E-02 /PC matrix
+PC002001=  2.9506077098834E-02 /PC matrix
+PC002002=  9.9970701224971E-01 /PC matrix
+PLATEID = '0025              ' /GSSS Plate ID

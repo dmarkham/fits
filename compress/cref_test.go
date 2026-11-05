@@ -1,25 +1,33 @@
 package compress
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/dmarkham/fits/internal/crefgen"
+	"github.com/dmarkham/fits/internal/testutil"
 )
 
 // C reference validation. These tests load the golden fixtures produced
 // by testdata/cref/cref.c (which links against libcfitsio) and diff the
 // Go port output against the real cfitsio implementation.
 //
-// The fixtures are checked into the repo so CI doesn't need a C
-// compiler or libcfitsio. To regenerate them locally:
+// The fixtures are committed so the tests need neither a C compiler nor
+// libcfitsio. The inputs are not committed: cref.c generates them with a
+// fixed-seed LCG and records their sha256; internal/crefgen regenerates
+// them and must reproduce that hash. cfitsio's quantized integers are an
+// exact digest (testutil.Values: sha256 over every value plus a sample).
+// To regenerate (and check reproducibility) locally:
 //
-//	cd compress/testdata/cref && make clean && make goldens
+//	make -C compress/testdata/cref goldens   # rewrite in place
+//	make -C compress/testdata/cref verify    # regenerate + byte-compare
 //
-// If the golden directory is missing these tests are skipped rather
-// than failing, so a fresh clone without the fixtures is still green.
+// A missing or extra golden is a test FAILURE, never a skip: a partial
+// deletion of the fixtures must not silently shrink the coverage.
 
 const cgoldenDir = "testdata/cref/golden"
 
@@ -33,6 +41,8 @@ type crefCase struct {
 	QLevel       float64 `json:"qlevel"`
 	DitherMethod int     `json:"dither_method"`
 	Row          int64   `json:"row"`
+	Fill         string  `json:"fill"`      // cref.c generator (internal/crefgen.Fill)
+	InSHA256     string  `json:"in_sha256"` // sha256 of the generated float32 LE input
 	Stats        struct {
 		NGood  int64   `json:"ngood"`
 		Min    float64 `json:"min"`
@@ -51,66 +61,36 @@ type crefCase struct {
 		IMinVal int32   `json:"iminval"`
 		IMaxVal int32   `json:"imaxval"`
 	} `json:"quantize"`
+	// Out is fits_quantize_float's idata (absent/null: not quantized).
+	Out testutil.Values[testutil.NullInt64] `json:"out"`
 }
 
-// loadCrefCase reads the input float32 array and the golden JSON metadata
-// for a test case. Returns nil slice + nil error + true to skip if the
-// fixture is missing.
-func loadCrefCase(t *testing.T, name string) ([]float32, *crefCase, bool) {
+// loadCrefCase reads the golden JSON of a case and regenerates its input
+// float32 array, which must hash to the input cfitsio was given. A
+// missing fixture or a drifted generator fails the test.
+func loadCrefCase(t *testing.T, name string) ([]float32, *crefCase) {
 	t.Helper()
 	jsonPath := filepath.Join(cgoldenDir, name+".out.json")
-	binPath := filepath.Join(cgoldenDir, name+".in.bin")
-
 	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil, true
-		}
-		t.Fatalf("read %s: %v", jsonPath, err)
+		t.Fatalf("committed golden missing (failure, not a skip): %v", err)
 	}
 	var c crefCase
 	if err := json.Unmarshal(jsonData, &c); err != nil {
 		t.Fatalf("parse %s: %v", jsonPath, err)
 	}
-
-	binData, err := os.ReadFile(binPath)
+	arr, err := crefgen.Fill(c.Fill, c.NX*c.NY)
 	if err != nil {
-		t.Fatalf("read %s: %v", binPath, err)
+		t.Fatal(err)
 	}
-	n := c.NX * c.NY
-	if int64(len(binData)) != n*4 {
-		t.Fatalf("%s: expected %d float32 bytes, got %d", binPath, n*4, len(binData))
+	if err := crefgen.Check(name, crefgen.LEFloat32(arr), c.InSHA256); err != nil {
+		t.Fatal(err)
 	}
-	arr := make([]float32, n)
-	for i := int64(0); i < n; i++ {
-		arr[i] = math.Float32frombits(binary.LittleEndian.Uint32(binData[i*4:]))
-	}
-	return arr, &c, false
+	return arr, &c
 }
 
-// loadCrefInt32Out reads the quantized int32 array for a case. Empty
-// file = cfitsio returned 0 (not quantized).
-func loadCrefInt32Out(t *testing.T, name string, n int64) []int32 {
-	t.Helper()
-	path := filepath.Join(cgoldenDir, name+".out.bin")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	if len(data) == 0 {
-		return nil
-	}
-	if int64(len(data)) != n*4 {
-		t.Fatalf("%s: expected %d int32 bytes, got %d", path, n*4, len(data))
-	}
-	out := make([]int32, n)
-	for i := int64(0); i < n; i++ {
-		out[i] = int32(binary.LittleEndian.Uint32(data[i*4:]))
-	}
-	return out
-}
-
-// crefAllCases is the canonical list maintained in sync with cref.c.
+// crefAllCases is the canonical list maintained in sync with cref.c
+// (`cref list` prints the same names).
 var crefAllCases = []string{
 	"gauss_64x64_q4_nodither",
 	"gauss_64x64_q4_dither1",
@@ -123,6 +103,79 @@ var crefAllCases = []string{
 	"gradient_64x64_q4_dither1",
 	"constant_16x16",
 	"tiny_6x1",
+	"runs3_64x64_q4_dither1",
+	"runs3_8x40_q4_nulls_dither2",
+	"runs3_stale_200x2_q4_dither1",
+	"gauss_64x64_q0_dither1",
+	"tiny_2x8",
+	"tiny_4x5_abs",
+	"tiny_2x2_abs",
+	"range_fsub_256x1",
+	"wide_center_64x1",
+	"center_fsum_64x1",
+	"margin_64x1",
+	"halfmargin_64x1",
+	"n5_one_9x3",
+	"n5_two_10x3",
+	"n5_zero_nulls_9x3",
+	"n1_short_nulls_5x3",
+	"one_good_3x3",
+	"clip_tie_27x1",
+	"abs_nulls_10x4",
+	"abs_nulls_10x4_dither1",
+	"all_null_4x4_q4_dither1",
+	"all_null_12x3_q4_nodither",
+	"all_null_4x4_abs_dither2",
+	"all_nan_10x10_q16_dither2",
+	"margin_far_64x1",
+}
+
+// TestCrefGoldensComplete fails when the committed quantizer goldens and
+// crefAllCases disagree in either direction (a golden deleted, or a case
+// added to cref.c without its golden being committed and listed here).
+func TestCrefGoldensComplete(t *testing.T) {
+	want := map[string]bool{}
+	for _, n := range crefAllCases {
+		want[n] = true
+		if _, err := os.Stat(filepath.Join(cgoldenDir, n+".out.json")); err != nil {
+			t.Errorf("golden %s.out.json missing: %v", n, err)
+		}
+	}
+	got, err := filepath.Glob(filepath.Join(cgoldenDir, "*.out.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(crefAllCases) {
+		t.Errorf("%d *.out.json goldens committed, crefAllCases lists %d", len(got), len(crefAllCases))
+	}
+	for _, p := range got {
+		n := strings.TrimSuffix(filepath.Base(p), ".out.json")
+		if !want[n] {
+			t.Errorf("golden %s is not in crefAllCases (untested)", n)
+		}
+	}
+}
+
+// TestCrefRealNaNsInputHasNaNs pins the fixture itself: the
+// gauss_64x64_q4_real_nans input must contain the raw NaNs (every 41st
+// pixel) so the NaN -> sentinel -> NULL_VALUE path is really exercised.
+// cref.c used to hash/write the input after the substitution, leaving
+// zero NaNs.
+func TestCrefRealNaNsInputHasNaNs(t *testing.T) {
+	arr, c := loadCrefCase(t, "gauss_64x64_q4_real_nans")
+	nan := 0
+	for i, v := range arr {
+		isNaN := math.IsNaN(float64(v))
+		if isNaN {
+			nan++
+		}
+		if isNaN != (i%41 == 0) {
+			t.Fatalf("pixel %d: NaN=%v, want NaN exactly at i%%41==0", i, isNaN)
+		}
+	}
+	if want := int((c.NX*c.NY + 40) / 41); nan != want {
+		t.Fatalf("%d NaNs in input, want %d", nan, want)
+	}
 }
 
 // TestReplaceSentinelWithNaNBits verifies that the lossless-path NaN
@@ -172,15 +225,9 @@ func TestSubstituteNaN32(t *testing.T) {
 // against live cfitsio output byte-for-byte. The noise functions do
 // a lot of float32 arithmetic, so bit-exact agreement is the bar.
 func TestImgStatsFloat32_CRef(t *testing.T) {
-	anyLoaded := false
 	for _, name := range crefAllCases {
 		t.Run(name, func(t *testing.T) {
-			arr, c, skip := loadCrefCase(t, name)
-			if skip {
-				t.Skipf("fixture not found — run `make -C compress/testdata/cref goldens`")
-				return
-			}
-			anyLoaded = true
+			arr, c := loadCrefCase(t, name)
 
 			// nullcheck==0 -> no nulls
 			// nullcheck==1 -> sentinel already in input, pass through
@@ -222,31 +269,31 @@ func TestImgStatsFloat32_CRef(t *testing.T) {
 			}
 		})
 	}
-	if !anyLoaded {
-		t.Skip("no cref fixtures available — regenerate via `make -C compress/testdata/cref goldens`")
-	}
 }
 
 // TestQuantizeFloat32_CRef validates fits_quantize_float bit-exactly
 // against cfitsio. Every non-constant case should produce identical
 // int32 output, identical bscale/bzero, and identical iminval/imaxval.
-// Constant / tiny cases should return quantized=false and leave idata
-// unused, matching the C quantize_return=0 marker (empty .out.bin).
+// Constant cases and ranges past the int32 margin must return
+// quantized=false, matching the C quantize_return=0 ("out": null). The
+// range cases pin cfitsio's float arithmetic: maxval - minval and
+// minval + maxval are float sums (range_fsub_256x1, center_fsum_64x1),
+// and the N_RESERVED_VALUES margins of both range tests (margin_64x1,
+// halfmargin_64x1, reached with a positive qlevel).
 func TestQuantizeFloat32_CRef(t *testing.T) {
-	anyLoaded := false
 	for _, name := range crefAllCases {
 		t.Run(name, func(t *testing.T) {
-			arr, c, skip := loadCrefCase(t, name)
-			if skip {
-				t.Skipf("fixture not found — run `make -C compress/testdata/cref goldens`")
-				return
-			}
-			anyLoaded = true
+			arr, c := loadCrefCase(t, name)
 
 			nullcheck := c.Nullcheck != 0
 			var nullvalue float32
 			if nullcheck {
-				nullvalue = -1e30
+				nullvalue = float32(c.NullValue)
+			}
+			// nullcheck==2: the input holds raw NaNs; the writer pipeline
+			// substitutes the sentinel before quantizing (as cref.c does).
+			if c.Nullcheck == 2 {
+				SubstituteNaN32(arr, nullvalue)
 			}
 
 			n := c.NX * c.NY
@@ -259,7 +306,9 @@ func TestQuantizeFloat32_CRef(t *testing.T) {
 				t.Fatalf("quantized=%v want %v", ok, wantOK)
 			}
 			if !ok {
-				// Nothing more to diff for the not-quantized cases.
+				if c.Out.Present() {
+					t.Fatalf("golden has quantized output but quantize returned 0")
+				}
 				return
 			}
 
@@ -278,28 +327,15 @@ func TestQuantizeFloat32_CRef(t *testing.T) {
 				t.Errorf("imaxval: got %d want %d", res.IMaxVal, c.Quantize.IMaxVal)
 			}
 
-			// Byte-for-byte compare against the golden int32 stream.
-			want := loadCrefInt32Out(t, name, n)
-			if want == nil {
-				t.Fatalf("empty golden .out.bin but quantize returned 1")
+			// Every quantized integer against cfitsio's (exact digest).
+			if !c.Out.Present() {
+				t.Fatalf("golden has no quantized output but quantize returned 1")
 			}
-			mismatches := 0
-			firstMis := -1
-			for i := int64(0); i < n; i++ {
-				if idata[i] != want[i] {
-					if mismatches == 0 {
-						firstMis = int(i)
-					}
-					mismatches++
-				}
+			got := make([]testutil.NullInt64, n)
+			for i := range got {
+				got[i] = testutil.NullInt64{V: int64(idata[i]), Valid: true}
 			}
-			if mismatches > 0 {
-				t.Errorf("%d/%d pixels differ (first at %d: got %d want %d)",
-					mismatches, n, firstMis, idata[firstMis], want[firstMis])
-			}
+			c.Out.Check(t, "idata vs fits_quantize_float", got)
 		})
-	}
-	if !anyLoaded {
-		t.Skip("no cref fixtures available — regenerate via `make -C compress/testdata/cref goldens`")
 	}
 }

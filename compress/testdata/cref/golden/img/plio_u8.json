@@ -1,0 +1,1 @@
+{"name": "plio_u8", "type": "u8", "naxes": [40, 25], "algo": "PLIO_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 1, "gen_seed": 5005, "in_sha256": "1396accc5c41bd17150e427c0a9caa9cecff31fa30357ff2ba318e4ee358a201"}

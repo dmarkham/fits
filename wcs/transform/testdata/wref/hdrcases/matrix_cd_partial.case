@@ -1,0 +1,22 @@
+# Partial CD matrix: CD1_1, CD2_1 and CD2_2 only; the missing CD1_2
+# defaults to 0. Off-diagonal, so PC and CD defaults agree here; the
+# diagonal default is pinned by matrix_cd_diag_missing. CDELT present and
+# ignored. Synthetic.
+NOTE pipeline: partial CD matrix
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CDELT1  = 5.0
+CDELT2  = 5.0
+CD1_1   = -0.001
+CD2_1   = 0.0002
+CD2_2   = 0.001

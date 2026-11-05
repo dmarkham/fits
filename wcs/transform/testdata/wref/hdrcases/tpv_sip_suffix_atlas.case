@@ -1,0 +1,73 @@
+# 'RA---TPV-SIP' (explicit suffix): the TPV solution of the real ATLAS
+# header (real_atlas_k2_tpv, its cards copied: CRPIX ~4000 px off the
+# 100x100 stamp) PLUS a SIP set that is NOT a copy of the TPV correction
+# (synthetic: 0.4-2 px over the stamp, a residual correction on top of
+# TPV). The suffix declares both, so both apply, SIP before the matrix and
+# TPV after it, as in wcslib 8.10, which accepts this CTYPE (its golden is
+# this case's). TestTPVSIPSuffixAppliesBoth checks the answer moves off
+# real_atlas_k2_tpv's by the SIP amount. No AP/BP: hdr2sky injects
+# identity AP/BP for wcslib, which inverts by iterating on A/B (as we do).
+NOTE pipeline: RA---TPV-SIP with a non-redundant SIP: SIP then TPV
+GRID 1 100 12 1 100 12
+PIX 50.5 50.5
+HEADER
+CTYPE1  = 'RA---TPV-SIP'
+CTYPE2  = 'DEC--TPV-SIP'
+CRPIX1  =              -3799.0
+CRPIX2  =               1852.0
+CRVAL1  =            272.84895
+CRVAL2  =              8.28673
+CD1_1   =  -0.0005172389232442
+CD1_2   =   8.768323883707E-06
+CD2_1   =    8.84243071444E-06
+CD2_2   =   0.0005171961669467
+PV1_0   =   2.172247402608E-13
+PV1_1   =      0.9999999999989
+PV1_2   =   8.547019713842E-12
+PV1_4   =   1.732758107952E-05
+PV1_5   =   2.291893113739E-05
+PV1_6   =   3.988039825779E-06
+PV1_7   =  -0.0006465683213014
+PV1_8   =  -5.326872236656E-06
+PV1_9   =  -0.0006335762897805
+PV1_10  =  -1.022284260944E-06
+PV2_0   =  -4.986662354562E-14
+PV2_2   =  -8.416590590396E-12
+PV2_1   =      0.9999999999991
+PV2_6   =   1.883925313334E-05
+PV2_5   =   5.608380547107E-07
+PV2_4   =   1.948199301454E-05
+PV2_10  =  -1.268989767674E-06
+PV2_9   =  -0.0006448985069562
+PV2_8   =  -4.337750661674E-07
+PV2_7   =  -0.0006489064539911
+PV1_12  =   3.225351893624E-07
+PV1_13  =   7.945185105527E-07
+PV1_14  =  -2.941640767804E-08
+PV1_15  =   1.058822218628E-06
+PV1_16  =   3.905016850559E-07
+PV1_17  =  -3.143883482666E-06
+PV1_18  =   1.420641960623E-07
+PV1_19  =  -8.322414657774E-06
+PV1_20  =   3.606625473241E-07
+PV1_21  =  -4.262232802183E-06
+PV1_22  =   3.562970026892E-08
+PV2_16  =   -8.60685540635E-07
+PV2_15  =   5.795264155287E-07
+PV2_14  =   1.061381063149E-06
+PV2_13  =   7.033242408929E-07
+PV2_12  =   1.104589358844E-06
+PV2_22  =   1.935996964426E-08
+PV2_21  =  -3.523011214328E-06
+PV2_20  =   5.831004923987E-08
+PV2_19  =  -8.309002201252E-06
+PV2_18  =   3.319013437658E-08
+PV2_17  =  -2.490758118647E-06
+A_ORDER =                    3
+B_ORDER =                    3
+A_2_0   =                1E-07
+A_1_1   =               -5E-08
+A_3_0   =                1E-11
+B_2_0   =               -5E-08
+B_0_2   =                2E-07
+B_1_2   =               -3E-12

@@ -1,0 +1,29 @@
+# A_ORDER = -1 (synthetic, from the round-3 verifier probe p38_neg_order).
+# wcslib 8.10 ignores A_ORDER and accepts the header (A has no coefficient,
+# so it applies B only). A negative polynomial order is meaningless; we
+# refuse it (PR #3 review item: validate SIP orders, no panic).
+# AP/BP are given so hdr2sky injects nothing.
+# EXPECT-GO-ERROR: A_ORDER = -1 is outside 0..9
+NOTE stricter: sip_neg_order
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = -1
+B_ORDER = 2
+B_0_2   = 2e-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

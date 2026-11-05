@@ -1,0 +1,18 @@
+# Defunct CD00i00j diagonal with CDELT present (synthetic): as CDi_j,
+# CDELT is ignored (wcslib altlin).
+NOTE legacy_cd00i00j_cdelt
+GRID -100 612 5 -100 612 5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CRVAL1  = 180.0
+CRVAL2  = 30.0
+CRPIX1  = 256.5
+CRPIX2  = 256.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CDELT1  = -0.001
+CDELT2  = 0.001
+CD001001= -0.0009
+CD002002= 0.0009

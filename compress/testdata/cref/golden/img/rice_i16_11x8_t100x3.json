@@ -1,0 +1,1 @@
+{"name": "rice_i16_11x8_t100x3", "type": "i16", "naxes": [11, 8], "algo": "RICE_1", "tile": [100, 3], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": true, "status": 0, "error": "", "kind": 0, "gen_seed": 5083, "in_sha256": "9b1da0a415ff974cb7e095a73f58a45dabbf2b07eb566820814a50f4637504d5"}

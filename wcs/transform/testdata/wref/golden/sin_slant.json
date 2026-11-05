@@ -1,0 +1,4 @@
+{"name": "sin_slant", "code": "SIN", "wcslib_version": "8.10", "zlib_version": "1.3.2",
+"pv": [[1, 0.2], [2, -0.3]],
+"prjset": {"phi0": 0, "theta0": 90, "x0": 0, "y0": 0, "r0": 57.29577951308232, "pv_after": [0, 0.2, -0.3, null]},
+"forward": 1095, "inverse": 1157, "roundtrip": 520, "payload": "sin_slant.bin", "payload_bytes": 58224}

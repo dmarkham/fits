@@ -1,0 +1,22 @@
+# AIT with a fiducial-point offset: PV1_0 = 1, PV1_1 = phi_0 = 20,
+# PV1_2 = theta_0 = 10 (Paper II sect. 2.5). Unlike CAR (pvlon_car_offset,
+# translation-invariant in phi), AIT is not, so phi_0 changes the answer:
+# ignoring PV1_1 gives a 1.55e4 arcsec error. Synthetic.
+NOTE pipeline: PVi_0..2 offset on a non-cylindrical projection (phi_0 matters)
+GRID 1 360 9 1 180 9
+PIX 180.5 90.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 360
+NAXIS2  = 180
+CTYPE1  = 'RA---AIT'
+CTYPE2  = 'DEC--AIT'
+CRVAL1  = 40.0
+CRVAL2  = 25.0
+CRPIX1  = 180.5
+CRPIX2  = 90.5
+CDELT1  = -0.5
+CDELT2  = 0.5
+PV1_0   = 1.0
+PV1_1   = 20.0
+PV1_2   = 10.0

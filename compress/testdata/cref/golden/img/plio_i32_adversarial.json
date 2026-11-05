@@ -1,0 +1,1 @@
+{"name": "plio_i32_adversarial", "type": "i32", "naxes": [40, 25], "algo": "PLIO_1", "tile": [], "qlevel": 0, "qmethod": 0, "seed": 0, "hscale": 0, "lossless_verified": false, "status": 413, "error": "data out of range for PLIO compression (0 - 2**24)", "kind": 0, "gen_seed": 5046, "in_sha256": "a800730bc108257fdc10c76b3a81f5c557bd4745a19dda6d43a77475a3208d25"}

@@ -1,0 +1,33 @@
+# A_ORDER = 10 (synthetic, from the round-3 verifier probe p02_order10).
+# wcslib 8.10 ignores A_ORDER and accepts the header (every coefficient
+# present has degree <= 2). 10 is above the SIP orders any implementation
+# we know evaluates (wcslib's TPD limit is 9); we refuse the declared order
+# rather than guess what was meant.
+# AP/BP are given so hdr2sky injects nothing.
+# EXPECT-GO-ERROR: A_ORDER = 10 is outside 0..9
+NOTE stricter: sip_order10
+GRID 1 1024 9 1 1024 9
+HEADER
+NAXIS   = 2
+NAXIS1  = 1024
+NAXIS2  = 1024
+CRVAL1  = 150.0
+CRVAL2  = 2.0
+CRPIX1  = 512.5
+CRPIX2  = 512.5
+CTYPE1  = 'RA---TAN'
+CTYPE2  = 'DEC--TAN'
+CD1_1   = -0.0002777
+CD1_2   = 0.0
+CD2_1   = 0.0
+CD2_2   = 0.0002777
+A_ORDER = 10
+B_ORDER = 2
+A_2_0   = 2e-5
+A_1_1   = 1e-5
+B_0_2   = 2e-5
+B_1_1   = -1e-5
+AP_ORDER= 1
+AP_0_0  = 0.0
+BP_ORDER= 1
+BP_0_0  = 0.0

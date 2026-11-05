@@ -1,0 +1,19 @@
+# Galactic CAR survey tile as astropy writes it (GLON-CAR / GLAT-CAR,
+# LONPOLE = 0, LATPOLE = 90, CRVAL2 = 0) away from l = 0. Synthetic.
+NOTE pipeline: GLON-CAR, LONPOLE = 0
+GRID 1 1000 9 1 500 9
+PIX 500.5 250.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 1000
+NAXIS2  = 500
+CTYPE1  = 'GLON-CAR'
+CTYPE2  = 'GLAT-CAR'
+CRVAL1  = 300.0
+CRVAL2  = 0.0
+CRPIX1  = 500.5
+CRPIX2  = 250.5
+CDELT1  = -0.02
+CDELT2  = 0.02
+LONPOLE = 0.0
+LATPOLE = 90.0

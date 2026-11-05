@@ -1,0 +1,77 @@
+{
+ "file": "comp_fz_f32_rice_nodith.fits",
+ "cfitsio": "4.7.0",
+ "nhdu": 2,
+ "hdus": [
+  {
+   "index": 0,
+   "type": "IMAGE",
+   "header_start": 0,
+   "data_start": 2880,
+   "data_end": 2880,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 6,
+   "cards": [
+    "SIMPLE  =                    T / file does conform to FITS standard",
+    "BITPIX  =                   16 / number of bits per data pixel",
+    "NAXIS   =                    0 / number of data axes",
+    "EXTEND  =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H"
+   ],
+   "image": {"bitpix": 16, "equivtype": 16, "compressed": false, "naxis": 0, "naxes": [], "npix": 0, "bscale": 1, "bzero": 0
+   },
+   "errors": []
+  },
+  {
+   "index": 1,
+   "type": "IMAGE",
+   "header_start": 2880,
+   "data_start": 5760,
+   "data_end": 8640,
+   "checksum": {"datasum": 0, "hdusum": 0},
+   "nkeys": 35,
+   "cards": [
+    "XTENSION= 'BINTABLE'           / binary table extension",
+    "BITPIX  =                    8 / 8-bit bytes",
+    "NAXIS   =                    2 / 2-dimensional binary table",
+    "NAXIS1  =                   24 / width of table in bytes",
+    "NAXIS2  =                   24 / number of rows in table",
+    "PCOUNT  =                  718 / size of special data area",
+    "GCOUNT  =                    1 / one data group (required keyword)",
+    "TFIELDS =                    3 / number of fields in each row",
+    "TTYPE1  = 'COMPRESSED_DATA'    / label for field   1",
+    "TFORM1  = '1PB(33) '           / data format of field: variable length array",
+    "TTYPE2  = 'ZSCALE  '           / label for field   2",
+    "TFORM2  = '1D      '           / data format of field: 8-byte DOUBLE",
+    "TTYPE3  = 'ZZERO   '           / label for field   3",
+    "TFORM3  = '1D      '           / data format of field: 8-byte DOUBLE",
+    "ZIMAGE  =                    T / extension contains compressed image",
+    "ZTILE1  =                   40 / size of tiles to be compressed",
+    "ZTILE2  =                    1 / size of tiles to be compressed",
+    "ZCMPTYPE= 'RICE_1  '           / compression algorithm",
+    "ZNAME1  = 'BLOCKSIZE'          / compression block size",
+    "ZVAL1   =                   32 / pixels per block",
+    "ZNAME2  = 'BYTEPIX '           / bytes per pixel (1, 2, 4, or 8)",
+    "ZVAL2   =                    4 / bytes per pixel (1, 2, 4, or 8)",
+    "EXTNAME = 'COMPRESSED_IMAGE'",
+    "ZSIMPLE =                    T / file does conform to FITS standard",
+    "ZBITPIX =                  -32 / number of bits per data pixel",
+    "ZNAXIS  =                    2 / number of data axes",
+    "ZNAXIS1 =                   40 / length of data axis 1",
+    "ZNAXIS2 =                   24 / length of data axis 2",
+    "ZEXTEND =                    T / FITS dataset may contain extensions",
+    "COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy",
+    "COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H",
+    "ZQUANTIZ= 'NO_DITHER'          / No dithering during quantization",
+    "HISTORY Image was compressed by CFITSIO using scaled integer quantization:",
+    "HISTORY   q = 4.000000 / quantized level scaling parameter",
+    "HISTORY 'NO_DITHER'          / No dithering during quantization"
+   ],
+   "image": {"bitpix": -32, "equivtype": -32, "compressed": true, "naxis": 2, "naxes": [40,24], "npix": 960, "bscale": 1, "bzero": 0,
+    "phys": {"n": 960, "sha256": "d5c5ef35d1f946f9bd1b9016b9366de8bc1c564f2928bdcaceb16306cfc0c3e6", "pool": "f64"}
+   },
+   "errors": []
+  }
+ ]
+}

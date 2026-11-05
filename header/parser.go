@@ -24,21 +24,31 @@ var ErrNoEnd = errors.New("fits/header: no END card found")
 // an ordered slice of Cards. The returned slice includes every keyword,
 // commentary, and COMMENT/HISTORY card but NOT the terminating END (the END
 // position is returned separately as endIndex, counted in 80-byte units from
-// the start of the input). If no END is found ErrNoEnd is returned.
+// the start of the input). If no END is found ErrNoEnd is returned. A card
+// with a malformed value does not fail the parse (see DecodeCard).
 //
-// ParseCards applies the CONTINUE long-string convention (§4.2.1.2): when a
-// string value ends in "&" and is immediately followed by a CONTINUE card,
-// the string is joined and the pair emitted as one logical Card. The joined
-// card retains the original bytes of the first card in Card.Raw; subsequent
-// CONTINUE cards are consumed and do not appear separately in the output.
-// Callers that need to round-trip continuation intact must re-serialize via
-// Encode, which re-emits CONTINUE cards as needed.
+// Long strings (the CONTINUE convention, FITS 4.0 §4.2.1.2) are joined the
+// way cfitsio's fits_read_key_longstr joins them: while the string decoded
+// so far ends in '&' and the next card starts with "CONTINUE" followed by
+// two blanks, the '&' is removed and that card's string (or its unquoted
+// value text) is appended; a CONTINUE card whose string is empty and that
+// has no comment ends the chain and the '&' stays. The joined comment is the
+// comments of the chain joined by one blank, except that no blank is added
+// after a card whose text fills all 80 columns (cfitsio truncates the joined
+// comment to 72 characters; this parser keeps all of it).
+//
+// The absorbed CONTINUE cards do not appear as separate Cards; Card.RawCards
+// returns them, and Encode re-emits them byte for byte, so an unmodified
+// header re-encodes to exactly the input. A CONTINUE card that does not
+// continue a string (no '&' before it, after a non-string card, or with a
+// value indicator) is kept as its own Card with Key "CONTINUE", TypeEmpty
+// and Comment = columns 9–80, as cfitsio reports it.
 func ParseCards(buf []byte) (cards []Card, endIndex int, err error) {
 	if len(buf)%CardWidth != 0 {
 		return nil, 0, &ParseError{Offset: 0, Msg: fmt.Sprintf("byte length %d not a multiple of %d", len(buf), CardWidth)}
 	}
 	nCards := len(buf) / CardWidth
-	cards = make([]Card, 0, nCards)
+	j := cardJoiner{cards: make([]Card, 0, nCards)}
 	for i := range nCards {
 		off := i * CardWidth
 		raw := buf[off : off+CardWidth]
@@ -47,36 +57,60 @@ func ParseCards(buf []byte) (cards []Card, endIndex int, err error) {
 			return nil, 0, &ParseError{Offset: off, Msg: decErr.Error()}
 		}
 		if c.IsEnd() {
-			return cards, i, nil
+			return j.cards, i, nil
 		}
-		// CONTINUE continuation of the previous string value.
-		if c.Key == "CONTINUE" {
-			if len(cards) == 0 {
-				return nil, 0, &ParseError{Offset: off, Msg: "CONTINUE with no preceding card"}
-			}
-			prev := &cards[len(cards)-1]
-			if prev.Type != TypeString {
-				return nil, 0, &ParseError{Offset: off, Msg: "CONTINUE following non-string card"}
-			}
-			prevStr, _ := prev.Value.(string)
-			// Only join if the previous string ended with '&'.
-			if !strings.HasSuffix(prevStr, "&") {
-				return nil, 0, &ParseError{Offset: off, Msg: "CONTINUE without '&' marker on previous card"}
-			}
-			contStr, _ := c.Value.(string)
-			prev.Value = strings.TrimSuffix(prevStr, "&") + contStr
-			if c.Comment != "" {
-				if prev.Comment == "" {
-					prev.Comment = c.Comment
-				} else {
-					prev.Comment = prev.Comment + " " + c.Comment
-				}
-			}
-			continue
-		}
-		cards = append(cards, c)
+		j.add(c, raw)
 	}
 	return nil, 0, ErrNoEnd
+}
+
+// cardJoiner collects decoded cards, joining CONTINUE cards into the long
+// string before them as fits_read_key_longstr does (see ParseCards).
+type cardJoiner struct {
+	cards []Card
+	// addDelim mirrors cfitsio's addCommDelim: whether the last physical
+	// card of the current chain was shorter than 80 columns.
+	addDelim bool
+}
+
+// add appends c, decoded from raw, or joins it into the previous card.
+func (j *cardJoiner) add(c Card, raw []byte) {
+	short := len(strings.TrimRight(string(raw), " ")) < CardWidth
+	if n := len(j.cards); n > 0 && string(raw[:10]) == "CONTINUE  " {
+		prev := &j.cards[n-1]
+		if s, ok := prev.Value.(string); ok && prev.Type == TypeString && strings.HasSuffix(s, "&") {
+			v, cm := continuation(raw)
+			if v != "" || cm != "" {
+				prev.Value = s[:len(s)-1] + v
+				if cm != "" {
+					if prev.Comment != "" && j.addDelim {
+						prev.Comment += " "
+					}
+					prev.Comment += cm
+				}
+				prev.cont = append(prev.cont, c.Raw)
+				j.addDelim = short
+				return
+			}
+		}
+	}
+	j.cards = append(j.cards, c)
+	j.addDelim = short
+}
+
+// continuation is cfitsio's ffgcnt for a card that starts "CONTINUE  ": the
+// card is read as if it were "D2345678= " + columns 11–80 and its value is
+// unquoted (ffc2s: a value without a leading quote is returned as is).
+func continuation(raw []byte) (value, comment string) {
+	t := strings.TrimRight("D2345678= "+string(raw[10:]), " ")
+	v, cm, ok := splitValue(t, 10)
+	if !ok {
+		return "", ""
+	}
+	if v != "" && v[0] == '\'' {
+		v = unquote(v)
+	}
+	return v, cm
 }
 
 // BlockCountFor returns the number of 2880-byte blocks required to hold the
@@ -86,4 +120,3 @@ func BlockCountFor(nCards int) int {
 	total := nCards + 1                    // +1 for END
 	return (total + cardsPerBlock - 1) / cardsPerBlock
 }
-

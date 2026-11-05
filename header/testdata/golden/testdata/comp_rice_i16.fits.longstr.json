@@ -1,0 +1,37 @@
+{
+ "file": "comp_rice_i16.fits",
+ "cfitsio": "4.7.0",
+ "hdus": [
+  {"index": 0, "keys": [
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 0}
+  ]},
+  {"index": 1, "keys": [
+   {"n": 1, "key": "XTENSION", "str": "BINTABLE", "comment": "binary table extension"},
+   {"n": 2, "key": "BITPIX", "u64": 8},
+   {"n": 3, "key": "NAXIS", "u64": 2},
+   {"n": 4, "key": "NAXIS1", "u64": 8},
+   {"n": 5, "key": "NAXIS2", "u64": 37},
+   {"n": 6, "key": "PCOUNT", "u64": 1406},
+   {"n": 7, "key": "GCOUNT", "u64": 1},
+   {"n": 8, "key": "TFIELDS", "u64": 1},
+   {"n": 9, "key": "TTYPE1", "str": "COMPRESSED_DATA", "comment": ""},
+   {"n": 10, "key": "TFORM1", "str": "1PB(38)", "comment": ""},
+   {"n": 12, "key": "ZTENSION", "str": "IMAGE", "comment": "Image extension"},
+   {"n": 13, "key": "ZBITPIX", "u64": 16},
+   {"n": 14, "key": "ZNAXIS", "u64": 2},
+   {"n": 15, "key": "ZNAXIS1", "u64": 40},
+   {"n": 16, "key": "ZNAXIS2", "u64": 37},
+   {"n": 17, "key": "ZPCOUNT", "u64": 0},
+   {"n": 18, "key": "ZGCOUNT", "u64": 1},
+   {"n": 19, "key": "ZTILE1", "u64": 40},
+   {"n": 20, "key": "ZTILE2", "u64": 1},
+   {"n": 21, "key": "ZCMPTYPE", "str": "RICE_1", "comment": "compression algorithm"},
+   {"n": 22, "key": "ZNAME1", "str": "BLOCKSIZE", "comment": "compression block size"},
+   {"n": 23, "key": "ZVAL1", "u64": 32},
+   {"n": 24, "key": "ZNAME2", "str": "BYTEPIX", "comment": "bytes per pixel (1, 2, 4, or 8)"},
+   {"n": 25, "key": "ZVAL2", "u64": 2},
+   {"n": 26, "key": "EXTNAME", "str": "IMG", "comment": "name of this binary table extension"}
+  ]}
+ ]
+}

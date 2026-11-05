@@ -1,0 +1,22 @@
+# Celestial axes swapped: CTYPE1 = DEC, CTYPE2 = RA (LonAxis = 2), with a
+# rotated CD matrix (synthetic, from audit probe h/swapped_axes.hdr).
+# NOTE on pixel order: hdr2sky drives the pixel axis that carries the
+# longitude with "x" (here pixel axis 2); the Go test maps that back to
+# PixelToSky(p1 = pixel axis 1, p2 = pixel axis 2).
+NOTE pipeline: swapped celestial axes (DEC on axis 1)
+GRID 1 512 9 1 512 9
+PIX 256.5 256.5
+HEADER
+NAXIS   = 2
+NAXIS1  = 512
+NAXIS2  = 512
+CTYPE1  = 'DEC--TAN'
+CTYPE2  = 'RA---TAN'
+CRVAL1  = 30.0
+CRVAL2  = 180.0
+CRPIX1  = 256.5
+CRPIX2  = 200.5
+CD1_1   = 0.0009
+CD1_2   = 0.0002
+CD2_1   = -0.0001
+CD2_2   = -0.001

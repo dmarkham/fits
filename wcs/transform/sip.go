@@ -2,17 +2,19 @@ package transform
 
 import (
 	"math"
-	"strconv"
 
 	"github.com/dmarkham/fits/header"
+	"github.com/dmarkham/fits/wcs"
 )
 
 // SIP — Simple Imaging Polynomial distortion (Shupe et al. 2005).
 //
-// SIP adds a polynomial correction between the linear CD matrix step and
-// the projection step of the WCS pipeline. It is the dominant distortion
-// convention for HST, Spitzer, and JWST image data, and is required to
-// correctly map pixels to sky for any of those missions.
+// SIP adds a polynomial correction to the pixel offset from CRPIX, before
+// the linear (CD or PC+CDELT) step of the WCS pipeline. HST, Spitzer, JWST
+// and astrometry.net headers use it; real headers of each are in
+// testdata/wref/hdrcases (real_*) and checked against wcslib. HST FLT
+// headers also carry lookup-table distortions (CPDISj/D2IMDISj) that this
+// package does not implement; New rejects such headers.
 //
 // # Header representation
 //
@@ -43,15 +45,16 @@ import (
 //
 // # Inverse direction
 //
-// If AP/BP are present, the inverse polynomial is applied directly.
-// Otherwise we solve the forward polynomial via Newton iteration.
+// The forward polynomial is inverted by Newton iteration, started from
+// AP/BP when present (they are only an approximate inverse), exactly as
+// wcslib disx2p does. See (*SIP).Inverse.
 //
 // # Parsing
 //
-// SIP coefficients are read from an image HDU's header outside of the
-// standard WCS keyword set. Because they are image-specific and not part
-// of Paper I, the wcs package does not parse them automatically. Instead,
-// ParseSIP reads them directly from a *header.Header.
+// wcs.Parse reads the SIP keywords into wcs.Header.SIP when the celestial
+// CTYPEs end in "-SIP", and New applies them automatically. ParseSIP reads
+// them directly from a *header.Header for callers that apply SIP
+// themselves.
 
 // SIPPoly holds a SIP polynomial as a 2D coefficient grid indexed by
 // (i, j), where Coeffs[i][j] is the coefficient of u^i * v^j. Order is
@@ -85,8 +88,8 @@ func (p *SIPPoly) evalWithDeriv(u, v float64) (val, dvdu, dvdv float64) {
 	uPow[0] = 1
 	vPow[0] = 1
 	for k := 1; k <= p.Order; k++ {
-		uPow[k] = uPow[k-1] * u
-		vPow[k] = vPow[k-1] * v
+		uPow[k] = float64(uPow[k-1] * u)
+		vPow[k] = float64(vPow[k-1] * v)
 	}
 	for i := 0; i <= p.Order; i++ {
 		for j := 0; j+i <= p.Order; j++ {
@@ -94,12 +97,12 @@ func (p *SIPPoly) evalWithDeriv(u, v float64) (val, dvdu, dvdv float64) {
 			if c == 0 {
 				continue
 			}
-			val += c * uPow[i] * vPow[j]
+			val += float64(c * uPow[i] * vPow[j])
 			if i >= 1 {
-				dvdu += c * float64(i) * uPow[i-1] * vPow[j]
+				dvdu += float64(c * float64(i) * uPow[i-1] * vPow[j])
 			}
 			if j >= 1 {
-				dvdv += c * uPow[i] * float64(j) * vPow[j-1]
+				dvdv += float64(c * uPow[i] * float64(j) * vPow[j-1])
 			}
 		}
 	}
@@ -115,46 +118,38 @@ type SIP struct {
 	BP *SIPPoly // may be nil
 }
 
-// ParseSIP extracts SIP coefficients from the given image header. Returns
-// nil, nil if the header does not declare SIP (i.e. CTYPE suffix is not
-// -SIP, or A_ORDER / B_ORDER is absent). An error indicates a malformed
-// SIP section.
+// ParseSIP extracts SIP coefficients from the given image header; it does
+// not look at CTYPE. It returns nil, nil only when the header carries no
+// SIP keyword at all, and an error (see wcs.ParseSIP) when any SIP keyword
+// is present but A_ORDER or B_ORDER is missing, for an order outside
+// 0..wcs.MaxSIPOrder (including negative orders), a non-numeric
+// coefficient, or a non-zero coefficient beyond its declared order.
+//
+// wcs.Parse already puts these coefficients in wcs.Header.SIP whenever the
+// primary description carries SIP keywords (with or without "-SIP" in
+// CTYPE, as wcslib does; not on a RA---TPV header without "-SIP", where
+// they are ignored as astropy ignores them, wcs.Header.SIPIgnored), and
+// New applies them; call ParseSIP only when applying SIP yourself.
 func ParseSIP(h *header.Header) (*SIP, error) {
-	aOrder, errA := h.Int("A_ORDER")
-	bOrder, errB := h.Int("B_ORDER")
-	if errA != nil || errB != nil {
-		return nil, nil
+	s, err := wcs.ParseSIP(h)
+	if err != nil {
+		return nil, err
 	}
-	sip := &SIP{
-		A: readSIPPoly(h, "A", int(aOrder)),
-		B: readSIPPoly(h, "B", int(bOrder)),
-	}
-	if apOrder, err := h.Int("AP_ORDER"); err == nil {
-		if bpOrder, err := h.Int("BP_ORDER"); err == nil {
-			sip.AP = readSIPPoly(h, "AP", int(apOrder))
-			sip.BP = readSIPPoly(h, "BP", int(bpOrder))
-		}
-	}
-	return sip, nil
+	return sipFromWCS(s), nil
 }
 
-// readSIPPoly reads a polynomial from the header given its prefix ("A",
-// "B", "AP", "BP") and its declared order.
-func readSIPPoly(h *header.Header, prefix string, order int) *SIPPoly {
-	p := &SIPPoly{
-		Order:  order,
-		Coeffs: make([][]float64, order+1),
+// sipFromWCS converts the parsed keywords into a *SIP, or nil.
+func sipFromWCS(s *wcs.SIP) *SIP {
+	if s == nil {
+		return nil
 	}
-	for i := 0; i <= order; i++ {
-		p.Coeffs[i] = make([]float64, order+1)
-		for j := 0; j+i <= order; j++ {
-			key := prefix + "_" + strconv.Itoa(i) + "_" + strconv.Itoa(j)
-			if v, err := h.Float(key); err == nil {
-				p.Coeffs[i][j] = v
-			}
+	poly := func(p *wcs.SIPPoly) *SIPPoly {
+		if p == nil {
+			return nil
 		}
+		return &SIPPoly{Order: p.Order, Coeffs: p.Coeffs}
 	}
-	return p
+	return &SIP{A: poly(s.A), B: poly(s.B), AP: poly(s.AP), BP: poly(s.BP)}
 }
 
 // Forward applies the SIP forward correction to a pixel offset (u, v)
@@ -166,47 +161,78 @@ func (s *SIP) Forward(u, v float64) (uOut, vOut float64) {
 	return u + du, v + dv
 }
 
-// Inverse applies the SIP inverse correction. If AP/BP are present, it
-// evaluates them directly. Otherwise it iterates Newton's method against
-// the forward polynomial using the analytic Jacobian.
-//
-// The forward map is F(u, v) = (u + A(u, v), v + B(u, v)), so the
-// Jacobian is
+// Inverse inverts the SIP forward map F(u, v) = (u + A(u, v), v + B(u, v))
+// for a corrected offset (u', v'), as wcslib disx2p does: AP/BP, when
+// present, give only the STARTING point (they are a fitted approximation,
+// not an exact inverse), and Newton iteration on A/B with the analytic
+// Jacobian
 //
 //	J = I + [∂A/∂u  ∂A/∂v]
 //	        [∂B/∂u  ∂B/∂v]
 //
-// Both partial derivatives are computed in a single walk over the
-// A/B coefficient tables, making each iteration cost the same as a
-// forward evaluation (vs. 3× cost for the old numerical version).
+// refines it to round-off (see newton2 for the convergence test). Without
+// AP/BP the start is (u', v'). ok is false when the iteration does not
+// converge (e.g. a point outside the region where the polynomial is
+// invertible); the returned (u, v) are then meaningless.
 func (s *SIP) Inverse(uPrime, vPrime float64) (u, v float64, ok bool) {
+	u0, v0 := uPrime, vPrime
 	if s.AP != nil && s.BP != nil {
-		du := s.AP.eval(uPrime, vPrime)
-		dv := s.BP.eval(uPrime, vPrime)
-		return uPrime + du, vPrime + dv, true
+		u0 += s.AP.eval(uPrime, vPrime)
+		v0 += s.BP.eval(uPrime, vPrime)
 	}
-	// Newton iteration with analytic Jacobian.
-	u, v = uPrime, vPrime
-	for range 50 {
+	return newton2(func(u, v float64) (fu, fv, j11, j12, j21, j22 float64) {
 		aVal, dAdu, dAdv := s.A.evalWithDeriv(u, v)
 		bVal, dBdu, dBdv := s.B.evalWithDeriv(u, v)
-		fu := u + aVal
-		fv := v + bVal
-		ru := uPrime - fu
-		rv := vPrime - fv
-		if math.Abs(ru) < 1e-13 && math.Abs(rv) < 1e-13 {
-			return u, v, true
-		}
-		j11 := 1 + dAdu
-		j12 := dAdv
-		j21 := dBdu
-		j22 := 1 + dBdv
-		det := j11*j22 - j12*j21
-		if det == 0 {
-			return 0, 0, false
-		}
-		u += (j22*ru - j12*rv) / det
-		v += (-j21*ru + j11*rv) / det
-	}
-	return u, v, true
+		return u + aVal, v + bVal, 1 + dAdu, dAdv, dBdu, 1 + dBdv
+	}, uPrime, vPrime, u0, v0, 1)
 }
+
+// newton2 solves F(x, y) = (tx, ty) by Newton iteration from (x0, y0). f
+// returns F and its Jacobian [[j11 j12] [j21 j22]].
+//
+// Convergence is RELATIVE to the size of the solution: the iteration
+// stops when the Newton step is at most newtonRelTol * max(|x|, |y|,
+// floor), i.e. a few tens of ULP of the answer (floor is the coordinate
+// scale below which an absolute test applies: 1 px for SIP). A fixed
+// absolute tolerance does not work here: 1e-13 px is already below one
+// ULP of a 2640 px offset, so such a test can never pass on a real
+// detector and used to be "passed" by returning ok after the last
+// iteration regardless. If the step stops shrinking while already at the
+// round-off level (newtonStallTol) that is also accepted. Anything else
+// -- a singular or non-finite Jacobian, a non-finite iterate, or
+// newtonMaxIter iterations without convergence -- returns ok = false.
+func newton2(f func(x, y float64) (fx, fy, j11, j12, j21, j22 float64), tx, ty, x0, y0, floor float64) (x, y float64, ok bool) {
+	x, y = x0, y0
+	prev := math.Inf(1)
+	for iter := 0; iter < newtonMaxIter; iter++ {
+		fx, fy, j11, j12, j21, j22 := f(x, y)
+		rx, ry := tx-fx, ty-fy
+		det := float64(j11*j22) - float64(j12*j21)
+		if det == 0 || math.IsNaN(det) || math.IsInf(det, 0) {
+			return x, y, false
+		}
+		dx := (float64(j22*rx) - float64(j12*ry)) / det
+		dy := (float64(-j21*rx) + float64(j11*ry)) / det
+		x += dx
+		y += dy
+		if math.IsNaN(x) || math.IsNaN(y) || math.IsInf(x, 0) || math.IsInf(y, 0) {
+			return x, y, false
+		}
+		step := math.Max(math.Abs(dx), math.Abs(dy))
+		scale := math.Max(math.Max(math.Abs(x), math.Abs(y)), floor)
+		if step <= float64(newtonRelTol*scale) {
+			return x, y, true
+		}
+		if iter >= 2 && step >= prev && step <= float64(newtonStallTol*scale) {
+			return x, y, true
+		}
+		prev = step
+	}
+	return x, y, false
+}
+
+const (
+	newtonMaxIter  = 100
+	newtonRelTol   = 1e-14 // ~45 ULP of the solution
+	newtonStallTol = 1e-11 // round-off plateau accepted only below this
+)
