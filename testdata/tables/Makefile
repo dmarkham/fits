@@ -6,6 +6,8 @@
 #                     (astropy; PYTHON or FITS_ASTROPY_PYTHON picks the venv),
 #                     strarray_astropy.fits with gen_strarray.py and
 #                     astropy_only/astropy_special.fits with gen_special.py
+#                     (anet_*.fits are cut from downloaded astrometry.net
+#                     index files by extract_anet.py --src DIR, not here)
 #   make goldens   -> (re)write golden/<file>.json for every *.fits here
 #                     with the shared cfitsio harness ../cfref/cfref, and
 #                     the cfitsio + astropy goldens of refused/*.fits

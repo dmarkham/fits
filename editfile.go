@@ -247,7 +247,7 @@ func (w *Writer) CopyHDUWithHeader(h HDU, hdr *header.Header) error {
 	if err != nil {
 		return fmt.Errorf("fits: CopyHDUWithHeader: %w", err)
 	}
-	newRec, err := extractStructural(b, rec.index)
+	newRec, err := structuralOfEdited(b, rec.index)
 	if err != nil {
 		return fmt.Errorf("fits: CopyHDUWithHeader: %w", err)
 	}

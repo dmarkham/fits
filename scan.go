@@ -231,9 +231,10 @@ func isStructuralKey(k string) bool {
 //
 // Only structural cards are decoded (see structuralKeys); a malformed
 // structural card is an error. NAXISn cards with n > NAXIS are ignored, as
-// cfitsio ignores them; each NAXISn for n <= NAXIS must be present once.
+// cfitsio ignores them; each NAXISn for n <= NAXIS must be present.
 // A second SIMPLE, XTENSION, BITPIX, NAXIS, NAXISn (n <= NAXIS), PCOUNT,
-// GCOUNT or TFIELDS card is a *DuplicateKeywordError.
+// GCOUNT or TFIELDS card with a different value is a
+// *DuplicateKeywordError; repeated with the same value it is accepted.
 // A primary HDU with GROUPS = T and NAXIS1 = 0 is random groups (kind
 // kindRandomGroups): sized per FITS 4.0 eq. 4 so later HDUs are found, and
 // refused with ErrRandomGroups by (*File).HDU.
@@ -257,7 +258,7 @@ func extractStructural(buf []byte, hduIdx int) (*hduRecord, error) {
 	// has no single reading. A repeat of the same value reads the same
 	// either way and is accepted (astrometry.net 5200-series index files
 	// written by QFITS repeat BITPIX..TFIELDS in every kdtree header).
-	seen := map[string]any{}
+	seen := map[string]string{}
 	dupAxis := 0 // first NAXISn seen twice with different values (checked against NAXIS below)
 	for i := range nCards {
 		off := i * header.CardWidth
