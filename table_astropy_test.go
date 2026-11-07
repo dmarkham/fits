@@ -1,10 +1,12 @@
 package fits
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -94,10 +96,30 @@ type astropyExpectation struct {
 	// wholeCell: rAw columns astropy reads as one string per cell (it does
 	// not split substring arrays); checked against the raw cell.
 	wholeCell map[string]bool
-	why       string
+	// rawBytes: rA columns that hold binary data (astrometry.net index
+	// files pack integers and doubles into A columns). astropy returns
+	// such a column as bytes when a cell is not ASCII, each cell with its
+	// trailing NULs dropped (numpy) and trailing ASCII whitespace stripped
+	// (chararray), dumped as the Python repr, and as str when every cell
+	// decodes; checked against the raw cell, and so is our read.
+	rawBytes map[string]bool
+	why      string
 }
 
+// anetRawBytes are the astrometry.net index columns that hold packed
+// binary data in A columns (the quads and every kdtree array).
+var anetRawBytes = map[string]bool{
+	"quads": true, "kdtree_lr_codes": true, "kdtree_split_codes": true, "kdtree_range_codes": true,
+	"kdtree_data_codes": true, "kdtree_lr_stars": true, "kdtree_split_stars": true,
+	"kdtree_range_stars": true, "kdtree_data_stars": true,
+}
+
+const anetWhy = "astrometry.net stores packed integers and doubles in A columns; astropy returns the non-ASCII ones as bytes, compared against the raw cells (checkAstropyRawBytes)"
+
 var astropyExpect = map[string]astropyExpectation{
+	"tables/anet_5205-00.fits": {rawBytes: anetRawBytes, why: anetWhy},
+	"tables/anet_5206-38.fits": {rawBytes: anetRawBytes, why: anetWhy},
+	"tables/anet_4107.fits":    {rawBytes: anetRawBytes, why: anetWhy},
 	"tables/cf_vla_p.fits": {patched: []string{"TFORM2 1PX -> 1PB"}, unscaledVLA: map[string]bool{"VJSC": true, "VU": true},
 		why: "astropy 8.0.2 rejects TFORM 1PX (VerifyError: Invalid column format) and mis-scales P columns with TSCAL/TZERO (first row only, wrapped); every other column is compared"},
 	"tables/cf_vla_q.fits": {patched: []string{"TFORM2 1QX -> 1QB"}, unscaledVLA: map[string]bool{"VJSC": true, "VU": true},
@@ -250,6 +272,11 @@ func TestTablesMatchAstropy(t *testing.T) {
 					checkAstropyUnscaled(t, s, ac)
 					continue
 				}
+				if exp.rawBytes[ac.Name] {
+					seenErr["raw:"+ac.Name] = true
+					checkAstropyRawBytes(t, f, ac)
+					continue
+				}
 				checkAstropyColumn(t, s.name, f, ac, used)
 			}
 			for name := range exp.wholeCell {
@@ -260,6 +287,11 @@ func TestTablesMatchAstropy(t *testing.T) {
 			for name := range exp.unscaledVLA {
 				if !seenErr["unscaled:"+name] {
 					t.Errorf("column %s: not in the astropy golden; drop the unscaledVLA expectation", name)
+				}
+			}
+			for name := range exp.rawBytes {
+				if !seenErr["raw:"+name] {
+					t.Errorf("column %s: not in the astropy golden; drop the rawBytes expectation", name)
 				}
 			}
 			for name := range exp.colErrors {
@@ -303,6 +335,83 @@ func checkAstropyWholeCell(t *testing.T, f *File, ac astropyCol) {
 			t.Errorf("%s row %d: astropy %q, the whole cell is %q: astropy now splits rAw; drop the wholeCell expectation", ac.Name, r, got, want)
 		}
 	}
+}
+
+// checkAstropyRawBytes pins a rawBytes expectation against the raw cell
+// bytes: astropy's cell is the raw cell without trailing NULs and ASCII
+// whitespace, as the repr of a bytes object when the column did not
+// decode as ASCII and as the string otherwise, whose rstrip also takes
+// the separators \x1c..\x1f (astropy 8.0.2 / numpy 2.4.6, checked on
+// every cell of the fixtures); ours is the FITS string
+// of the cell (cut at the first NUL, trailing blanks removed, §7.3.3.1).
+func checkAstropyRawBytes(t *testing.T, f *File, ac astropyCol) {
+	t.Helper()
+	bt := mustBinTable(t, f, ac.HDU)
+	c, err := bt.column(ac.Col)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arr, err := ReadStringArrayColumn(bt, c.Index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(arr) != len(ac.Rows) {
+		t.Fatalf("%s: %d rows, astropy %d", ac.Name, len(arr), len(ac.Rows))
+	}
+	for r, raw := range ac.Rows {
+		got := astropyRow(t, raw, "str")
+		row, err := bt.RowBytes(int64(r))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cell := row[c.byteOffset : c.byteOffset+c.byteSize]
+		// bytes.rstrip strips ASCII whitespace; str.rstrip also the
+		// separators \x1c..\x1f (Unicode whitespace).
+		noNUL := bytes.TrimRight(cell, "\x00")
+		want := string(bytes.TrimRight(noNUL, " \t\n\r\x0b\x0c\x1c\x1d\x1e\x1f"))
+		if len(got) == 1 && (strings.HasPrefix(got[0], "b'") || strings.HasPrefix(got[0], "b\"")) {
+			want = pyBytesRepr(bytes.TrimRight(noNUL, " \t\n\r\x0b\x0c"))
+		}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("%s row %d: astropy %q, the raw cell %q gives %q: astropy changed; review the rawBytes expectation", ac.Name, r, got, cell, want)
+		}
+		if len(arr[r]) != 1 || arr[r][0] != cellString(cell) {
+			t.Errorf("%s row %d: we read %q, the raw cell %q is the string %q", ac.Name, r, arr[r], cell, cellString(cell))
+		}
+	}
+}
+
+// pyBytesRepr is Python's repr of a bytes object: single quotes unless
+// the bytes hold a single quote and no double quote; backslash, the
+// quote, \t \n \r escaped by name, every other byte outside 0x20..0x7e as
+// \xNN.
+func pyBytesRepr(b []byte) string {
+	q := byte('\'')
+	if bytes.IndexByte(b, '\'') >= 0 && bytes.IndexByte(b, '"') < 0 {
+		q = '"'
+	}
+	var sb strings.Builder
+	sb.WriteByte('b')
+	sb.WriteByte(q)
+	for _, c := range b {
+		switch {
+		case c == q || c == '\\':
+			sb.WriteByte('\\')
+			sb.WriteByte(c)
+		case c == '\t':
+			sb.WriteString("\\t")
+		case c == '\n':
+			sb.WriteString("\\n")
+		case c == '\r':
+			sb.WriteString("\\r")
+		case c < 0x20 || c >= 0x7f:
+			fmt.Fprintf(&sb, "\\x%02x", c)
+		default:
+			sb.WriteByte(c)
+		}
+	}
+	sb.WriteByte(q)
+	return sb.String()
 }
 
 // checkAstropyUnscaled pins the astropy bug behind an unscaledVLA

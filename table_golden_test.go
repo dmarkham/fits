@@ -36,8 +36,8 @@ func tableSamples(t *testing.T) []tableSample {
 	dir := testutil.TestdataPath(t, "tables")
 	fits, _ := filepath.Glob(filepath.Join(dir, "*.fits"))
 	sort.Strings(fits)
-	if len(fits) != 39 {
-		t.Fatalf("testdata/tables has %d samples, want the 39 committed ones (see PROVENANCE.md)", len(fits))
+	if len(fits) != 42 {
+		t.Fatalf("testdata/tables has %d samples, want the 42 committed ones (see PROVENANCE.md)", len(fits))
 	}
 	for _, p := range fits {
 		b := filepath.Base(p)

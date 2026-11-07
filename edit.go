@@ -2,6 +2,7 @@ package fits
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -196,15 +197,15 @@ func planHeader(rec *hduRecord) (pendingHeader, bool, error) {
 	if err != nil {
 		return pendingHeader{}, false, err
 	}
-	newRec, err := extractStructural(newBytes, rec.index)
-	if err != nil {
-		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: edited header: %w", rec.index, err)
-	}
 	// Compare with the structure the on-disk header declares (records made
 	// by the writers do not fill in every structural field).
 	oldRec, err := extractStructural(rec.rawHeader, rec.index)
 	if err != nil {
 		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: on-disk header: %w", rec.index, err)
+	}
+	newRec, err := structuralOfEdited(newBytes, rec.index)
+	if err != nil {
+		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: edited header: %w; structural changes need EditFile", rec.index, err)
 	}
 	if err := sameStructure(oldRec, newRec); err != nil {
 		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: %w; structural changes need EditFile", rec.index, err)
@@ -341,6 +342,22 @@ func sameStructure(rec, newRec *hduRecord) error {
 		return fmt.Errorf("ZIMAGE changed")
 	}
 	return nil
+}
+
+// structuralOfEdited is extractStructural for a header that was edited
+// through header.Header. A *DuplicateKeywordError there has one more
+// likely cause than in a file: the header on disk repeats a structural
+// keyword with one value (accepted at Open; QFITS-written kdtree headers
+// do), and Set or Delete, which act on the first card of a repeated
+// keyword, changed that card only. The error says so, since the user
+// never saw two cards.
+func structuralOfEdited(buf []byte, hduIdx int) (*hduRecord, error) {
+	rec, err := extractStructural(buf, hduIdx)
+	var dup *DuplicateKeywordError
+	if errors.As(err, &dup) {
+		return nil, fmt.Errorf("%w (Set and Delete change the first card of a keyword the header repeats; the other card keeps its value)", err)
+	}
+	return rec, err
 }
 
 // CloseAndFlush flushes pending header mutations (ModeEdit; see Flush) and
