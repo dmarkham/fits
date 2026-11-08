@@ -3,7 +3,6 @@ package fits
 import (
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -36,8 +35,8 @@ func tableSamples(t *testing.T) []tableSample {
 	dir := testutil.TestdataPath(t, "tables")
 	fits, _ := filepath.Glob(filepath.Join(dir, "*.fits"))
 	sort.Strings(fits)
-	if len(fits) != 39 {
-		t.Fatalf("testdata/tables has %d samples, want the 39 committed ones (see PROVENANCE.md)", len(fits))
+	if len(fits) != 42 {
+		t.Fatalf("testdata/tables has %d samples, want the 42 committed ones (see PROVENANCE.md)", len(fits))
 	}
 	for _, p := range fits {
 		b := filepath.Base(p)
@@ -48,11 +47,7 @@ func tableSamples(t *testing.T) []tableSample {
 
 func loadGoldenFile(t *testing.T, path string) *testutil.CfrefFile {
 	t.Helper()
-	testutil.RequireFile(t, path)
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	b := testutil.MustReadGolden(t, path)
 	cf, err := testutil.DecodeCfref(b)
 	if err != nil {
 		t.Fatalf("decode %s: %v", path, err)
@@ -64,11 +59,11 @@ func loadGoldenFile(t *testing.T, path string) *testutil.CfrefFile {
 func TestTableGoldensCoverSamples(t *testing.T) {
 	dir := testutil.TestdataPath(t, "tables")
 	fits, _ := filepath.Glob(filepath.Join(dir, "*.fits"))
-	gold, _ := filepath.Glob(filepath.Join(dir, "golden", "*.json"))
+	gold := testutil.GlobGoldens(filepath.Join(dir, "golden", "*.json"))
 	have := map[string]bool{}
 	for _, f := range fits {
 		have[filepath.Base(f)] = true
-		testutil.RequireFile(t, filepath.Join(dir, "golden", filepath.Base(f)+".json"))
+		testutil.RequireGolden(t, filepath.Join(dir, "golden", filepath.Base(f)+".json"))
 	}
 	for _, g := range gold {
 		if n := strings.TrimSuffix(filepath.Base(g), ".json"); !have[n] {

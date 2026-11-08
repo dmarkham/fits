@@ -6,8 +6,11 @@ shared cfitsio harness (`../cfref/cfref dump`, see `../cfref/PROVENANCE.md`
 for what it records) and stored compact: `compact_json.py` (plain Python)
 drops the whitespace between tokens and keeps every token byte for byte,
 so the stored file is Go's `json.Compact` of the harness output
-(`TestTableGoldensReproduce` compares exactly that). No golden value comes
-from the Go code.
+(`TestTableGoldensReproduce` compares exactly that). A golden over 64 KB
+(`GZIP_OVER` in the Makefile) is committed as `golden/<sample>.json.gz`
+(`gzip -9n`; `testutil.ReadGolden` reads both forms, `make verify`
+compares the decompressed bytes): the repository size budget. No golden
+value comes from the Go code.
 
 ## Tool versions
 
@@ -23,6 +26,7 @@ from the Go code.
 ```sh
 make -C testdata/cfref                      # build the cfitsio harness
 make -C testdata/tables samples             # rewrite the generated samples
+python3 testdata/tables/extract_anet.py --src <downloads>   # anet_*.fits from the real index files
 make -C testdata/tables goldens             # rewrite golden/*.json
 make -C testdata/tables tfloat-goldens      # rewrite golden_tfloat/*.json (cf_tfloat.c)
 make -C testdata/tables astropy-goldens     # rewrite golden_astropy/*.json
@@ -104,6 +108,38 @@ Source: `astropy/io/fits/tests/data/<name>` of astropy 8.0.2
 
 Each file is byte-identical to astropy 8.0.2's copy (checked with `cmp`
 against the venv's `astropy/io/fits/tests/data/`).
+
+### Cut down from real astrometry.net index files (`extract_anet.py`)
+
+The 5200-series index files (Gaia-DR2 based, the LITE builds KStars
+installs) carry two kdtree HDUs (`AN_FILE = 'CKDT'` and `'SKDT'`) whose
+headers, written by ESO-QFITS, repeat `BITPIX`, `NAXIS`, `NAXIS1`,
+`NAXIS2`, `PCOUNT`, `GCOUNT` and `TFIELDS` (and `TFORM1`, `TTYPE1`,
+`ORIGIN`, `DATE`, `ENDIAN`, `KDT_*`), every repeat with the same value.
+v1.2.2 refused them (`DuplicateKeywordError`); cfitsio opens them.
+index-4107 (Tycho-2, 2013) has the same layout without the repeats and is
+the control. `extract_anet.py --src DIR` (standard library only) checks
+each source against its pinned sha256 and keeps every HDU header byte for
+byte; a table of more than 8 rows is cut to its first 8 rows (every
+`NAXIS2` card rewritten in its 20-column value field, comment kept; the
+data unit truncated and zero-padded). The kdtree headers with the repeats
+have `NAXIS2 = 0` and are copied untouched. Checked by
+`TestAstrometryIndexFilesMatchCfitsio` (framing and the repeated cards
+against the cfref golden) and, like every sample here, by the cell
+comparisons. The sources are downloads: the script reproduces the samples
+only with them (checked by hand), so the samples are pinned here by
+sha256.
+
+| file | source (sha256) | sample sha256 | contents |
+|------|-----------------|---------------|----------|
+| anet_5205-00.fits | `https://portal.nersc.gov/project/cosmo/temp/dstn/index-5200/LITE/index-5205-00.fits` (`2b1732c0d80ff0fd871c83f102ea8c0ce7edea69e117c90c0864d50dd0e631bf`, 12810240 bytes) | `df12f9c0617f53b3e9d5919d5af5c08483cd36daafcd99416d8e79fe41c0337d` | 13 HDUs: empty primary, `quads` 16A, CKDT kdtree (header `0A`, `4A`, `2A`, `8A`, `8A` arrays), SKDT kdtree (`0A`, `4A`, `4A`, `8A`, `12A`), `sweep` 1B. The A columns hold packed little-endian integers and doubles (astrometry.net's convention), so fitsverify reports 53 "non-ASCII text" errors, 8 "BITPIX/NAXIS/NAXIS1/NAXIS2 duplicated or out of order" errors and 34 duplicated-keyword warnings |
+| anet_5206-38.fits | `https://portal.nersc.gov/project/cosmo/temp/dstn/index-5200/LITE/index-5206-38.fits` (`1b171a956636155e6fa89b607baa1db3e45dd1f3cde73caa706aba0120ce7222`, 6410880 bytes) | `193a598505cf363b9ba8e9955a97334da209a46c4878aa3a870a9c94074dd895` | the same layout, HEALPix 38 of the 5206 series (fitsverify as above) |
+| anet_4107.fits | `http://data.astrometry.net/4100/index-4107.fits` (`0bfe80012338923d1a7db3a0660a00f67a79c9e8ca51563619001c32d6cb94d7`, 164995200 bytes) | `d5c384fbc5ebd91c8b9855e74be1801c7848be6f9df78f338e55550e8c560614` | 14 HDUs: as above without the repeated keywords, plus a `TAGALONG` table `1E 1E 1E 1E`; fitsverify: 51 "non-ASCII text" errors, 16 "TUNITn has a null value" errors and warnings |
+
+The astropy goldens of these files hold the non-ASCII `A` cells as the
+repr of Python bytes (astropy returns a column as bytes when it does not
+decode); `TestTablesMatchAstropy` compares them with the raw cells
+(`rawBytes` expectation, `checkAstropyRawBytes`).
 
 ## float32 reads: cfitsio TFLOAT goldens (`golden_tfloat/`)
 

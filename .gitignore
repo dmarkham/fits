@@ -27,3 +27,6 @@ __pycache__/
 # `make -C testdata/cfref`.
 /testdata/cfref/cfref
 /testdata/cfref/verify.out/
+# FITS standard PDFs and the cfitsio source: local reference only, not
+# shipped (download URLs and sha256 in docs/VALIDATION.md).
+/reference/
