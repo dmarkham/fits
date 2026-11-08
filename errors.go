@@ -115,10 +115,14 @@ var ErrDuplicateKeyword = errors.New("fits: duplicate structural keyword")
 
 // DuplicateKeywordError reports a header that carries a structural keyword
 // (SIMPLE, XTENSION, BITPIX, NAXIS, NAXISn for n <= NAXIS, PCOUNT, GCOUNT,
-// TFIELDS) more than once. cfitsio reads BITPIX, NAXIS and NAXISn by card
-// position and takes the last PCOUNT/GCOUNT of an image, so such a file has
-// no single reading; Open refuses it instead of guessing the element size
-// or the HDU length.
+// TFIELDS) more than once with different values. FITS 4.0 §4.1.2.3: the
+// mandatory keywords must not appear more than once, and "if a keyword
+// does appear multiple times with different values, then the value is
+// indeterminate"; cfitsio reads BITPIX, NAXIS and NAXISn by card position
+// and takes the last PCOUNT/GCOUNT of an image, so such a file has no
+// single reading, and Open refuses it instead of guessing the element
+// size or the HDU length. A keyword repeated with the same value reads
+// the same either way and is accepted.
 type DuplicateKeywordError struct {
 	HDU     int
 	Keyword string

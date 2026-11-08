@@ -2,6 +2,7 @@ package fits
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -196,15 +197,15 @@ func planHeader(rec *hduRecord) (pendingHeader, bool, error) {
 	if err != nil {
 		return pendingHeader{}, false, err
 	}
-	newRec, err := extractStructural(newBytes, rec.index)
-	if err != nil {
-		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: edited header: %w", rec.index, err)
-	}
 	// Compare with the structure the on-disk header declares (records made
 	// by the writers do not fill in every structural field).
 	oldRec, err := extractStructural(rec.rawHeader, rec.index)
 	if err != nil {
 		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: on-disk header: %w", rec.index, err)
+	}
+	newRec, err := structuralOfEdited(newBytes, rec.rawHeader, rec.index)
+	if err != nil {
+		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: edited header: %w; structural changes need EditFile", rec.index, err)
 	}
 	if err := sameStructure(oldRec, newRec); err != nil {
 		return pendingHeader{}, false, fmt.Errorf("fits: HDU %d: %w; structural changes need EditFile", rec.index, err)
@@ -341,6 +342,34 @@ func sameStructure(rec, newRec *hduRecord) error {
 		return fmt.Errorf("ZIMAGE changed")
 	}
 	return nil
+}
+
+// structuralOfEdited is extractStructural for a header that was edited
+// through header.Header, with onDisk the header it replaces. A
+// *DuplicateKeywordError there has one more cause than in a file: when
+// the header on disk already repeats that keyword with one value
+// (accepted at Open; QFITS-written kdtree headers do), Set or Delete,
+// which act on the first card of a repeated keyword, changed that card
+// only. The error says so in that case, since the user never saw two
+// cards; a repeat the edit itself introduced (Add) is reported as is.
+func structuralOfEdited(buf, onDisk []byte, hduIdx int) (*hduRecord, error) {
+	rec, err := extractStructural(buf, hduIdx)
+	var dup *DuplicateKeywordError
+	if errors.As(err, &dup) && cardCount(onDisk, dup.Keyword) > 1 {
+		return nil, fmt.Errorf("%w (the header on disk repeats it with one value; Set and Delete change its first card only)", err)
+	}
+	return rec, err
+}
+
+// cardCount is the number of cards named key in raw header bytes.
+func cardCount(raw []byte, key string) int {
+	n := 0
+	for off := 0; off+header.CardWidth <= len(raw); off += header.CardWidth {
+		if strings.TrimRight(string(raw[off:off+8]), " ") == key {
+			n++
+		}
+	}
+	return n
 }
 
 // CloseAndFlush flushes pending header mutations (ModeEdit; see Flush) and

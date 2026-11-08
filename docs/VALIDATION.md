@@ -167,7 +167,7 @@ arm64 under qemu.
 | `CopyTo` of a file with bytes after its last HDU drops them, and of a last data unit without its final padding writes the padding as zeros (the only two ways the output differs from the input) | `TestCopyToDropsTrailingBytesAndPads` | `testdata/testprog.std`; cfitsio's padded `f32_plain.fits` | `testdata/testprog.std`, `testdata/images/cfwrite/f32_plain.fits` | exact | 1 |
 | Empty / non-FITS input: `ErrEmptyFile`, `ErrNotFITS` (checked before the END scan, also for a file starting with XTENSION) | `TestEmptyFile`, `TestNotFITS`, `TestReadNonexistent` | FITS 4.0 §3, §4.4.1.1 | — | exact | 1 |
 | Truncated data unit: `*ErrTruncatedData` with HDU / declared / present bytes; missing BITPIX / NAXIS / NAXISn on a primary or extension, PCOUNT / GCOUNT / TFIELDS on a BINTABLE or TABLE extension, or a non-string XTENSION: `*ErrMissingRequiredKeyword` with HDU and keyword; an IMAGE extension may omit PCOUNT/GCOUNT (cfitsio accepts it) | `TestRefusedFramingMatchesCfitsio`, `TestFramingToleranceMatchesCfitsio` | cfitsio 4.7.0 status for each file (`imgref open`): open refused 222/223/224, move to the extension refused 222/224/228/229/230, read fails 107/108; IMAGE without PCOUNT/GCOUNT read by cfitsio | `testdata/images/refused/*.fits`, `testdata/images/golden/refused__*.open.json`, `testdata/images/framing/img_no_pcount.fits`, `testdata/images/framing/img_no_gcount.fits` | exact | 1 |
-| A second SIMPLE, XTENSION, BITPIX, NAXIS, NAXISn (n <= NAXIS, also when a duplicated stray NAXISn with n > NAXIS follows it), PCOUNT, GCOUNT or TFIELDS card is refused at Open with `*DuplicateKeywordError` / `ErrDuplicateKeyword` naming HDU and keyword, through every open path (cfitsio opens these files: it reads BITPIX/NAXIS/NAXISn by position and an image's PCOUNT/GCOUNT last, so a stray second BITPIX would change the element size) | `TestDuplicateStructuralKeywordsRefused` | cfitsio 4.7.0 cfref dump of each file (documented difference: cfitsio opens it) | `testdata/images/duplicate/*.fits`, `testdata/images/golden/duplicate__*.json` | exact | 1 |
+| A second SIMPLE, XTENSION, BITPIX, NAXIS, NAXISn (n <= NAXIS, also when a duplicated stray NAXISn with n > NAXIS follows it), PCOUNT, GCOUNT or TFIELDS card with a different value is refused at Open with `*DuplicateKeywordError` / `ErrDuplicateKeyword` naming HDU and keyword, through every open path (cfitsio opens these files: it reads BITPIX/NAXIS/NAXISn by position and an image's PCOUNT/GCOUNT last, so a stray second BITPIX would change the element size); the same keyword repeated with the same value opens and frames the HDUs as declared (FITS 4.0 §4.1.2.3: a mandatory keyword must not repeat, and a keyword repeated "with different values" has an indeterminate value; fitsverify flags every repeat); a repeat is compared with its type (8 and 8.0 differ), XTENSION trimmed and upper-cased (astrometry.net 5200-series index files written by ESO-QFITS repeat BITPIX..TFIELDS in every kdtree header: the cut-down real index-5205-00, index-5206-38 and the control index-4107 frame byte-identically to cfitsio 4.7.0 fits_get_hduaddrll and read every cell as cfitsio and astropy do); a structural edit of such a header through Header.Set (first card only) is refused by Flush / CopyHDUWithHeader with the cause named and nothing written | `TestDuplicateStructuralKeywordsRefused`, `TestDuplicateStructuralKeywordsSameValue`, `TestDuplicateStructuralKeywordsDifferentValueInTable`, `TestDuplicateStructuralValueComparison`, `TestAstrometryIndexFilesMatchCfitsio`, `TestTablesMatchCfitsio`, `TestTablesMatchAstropy`, `TestEditOfRepeatedStructuralKeywordNamesTheCause` | FITS 4.0 §4.1.2.3; cfitsio 4.7.0 cfref dump of each file (documented difference: cfitsio opens the different-value files); astropy 8.0.2 | `testdata/images/duplicate/*.fits`, `testdata/images/golden/duplicate__*.json`, `testdata/tables/anet_*.fits` (`testdata/tables/extract_anet.py`, sha256-pinned), `testdata/tables/golden/anet_*.json.gz`, `testdata/tables/golden_astropy/anet_*.json` | exact | 1 |
 | Legacy `XTENSION = 'A3DTABLE'` and `'3DTABLE'` read as a binary table, `'IUEIMAGE'` as an IMAGE extension (cfitsio's legacy names) | `TestA3DTABLEIsABinaryTable`, `TestTablesMatchCfitsio`, `TestTablesMatchAstropy`, `TestHDUAddressesMatchCfitsio`, `TestFramingToleranceMatchesCfitsio` | cfitsio 4.7.0 golden (BINARY_TBL / IMAGE_HDU); astropy 8.0.2 (A3DTABLE only; it does not know 3DTABLE) | `testdata/tables/cf_bintable_a3dtable.fits`, `testdata/tables/cf_bintable_3dtable.fits`, `testdata/images/framing/xtension_iueimage.fits` | exact | 1 |
 | Out-of-range `HDU(i)`, missing `HDUByName`, every `ReadSubset` bound/stride/length check, `WriteImage`/`AppendImage` length (`ErrShapeMismatch`) and shape checks refuse without writing | `TestValidationBranchesRefuse` | the documented contract (a mutant reading block padding as data is caught) | — | exact | 1 |
 | Context: `OpenContext`, `OpenForEditContext`, `EditFileContext` (before anything is touched and per HDU of the scan), `CreateContext`, `ReadPixelsContext` (checked once before the read) | `TestContextFunctions`, `TestReadPixelsCompressedContextCanceled`, `TestReadPixelsCompressedContextCanceledBetweenTiles` | `context.Canceled` | `testdata/testprog.std` | exact | 1 |
@@ -415,7 +415,8 @@ Each is documented in the function doc and asserted by a test.
   without a status (BITPIX 64 scaled value exactly 2^63, which cfitsio
   stores as INT64_MIN via an undefined cast; -2^63 with BZERO 1000; a
   finite value scaled to ±Inf on float BITPIX); a header
-  with a duplicate structural keyword is refused (cfitsio opens it);
+  with a structural keyword repeated with a different value is refused
+  (cfitsio opens it; the same value repeated opens);
   `WriteImage` refuses scaling cards cfitsio would read differently from
   the card (cfitsio's writer refuses only BSCALE 0); float32 reads beyond range give ±Inf (cfitsio ±FLT_MAX);
   `ReadPixelsMasked` treats ±Inf as valid; truncated XTENSION header is an
@@ -788,8 +789,9 @@ equivalent on the code) but no sample sits on the deciding input:
   Its FITS loader rescales float data whose maximum exceeds 10, so ±Inf
   input is given as the markers ±7 and turned into ±Inf by siril-cli's
   pixel math before the command (`gen_golden.py`, checked bit for bit).
-- realhdr/make_cases.py and extract_kpno.py reproduce their outputs only with
-  the downloaded sources (checked by hand; the outputs are sha256-pinned).
+- realhdr/make_cases.py, extract_kpno.py and testdata/tables/extract_anet.py
+  reproduce their outputs only with the downloaded sources (checked by hand;
+  the outputs are sha256-pinned).
 
 ### Equivalent mutants: no input can tell them apart (closed by argument)
 
@@ -828,6 +830,17 @@ test. Each is shown equivalent here; none is an open gap.
   conversion of 2^31 is MinInt32, and are killed by `TestCrossArch_arm64`.
 - Syntactic no-ops: `+ 0`, and `f64(D*HP)` for `f64(float32(D*HP))` with
   float32 operands (the product is already float32).
+
+## Reference documents (not in the repository)
+
+The FITS standard PDFs the comments cite live in `reference/`, which is
+ignored by git (as the cfitsio source clone next to them always was); no
+test reads them. Verbatim copies of NASA's files:
+
+| document | URL | sha256 |
+|----------|-----|--------|
+| FITS Standard 4.0 (`reference/fits_standard_v4.0.pdf`, 1,140,821 bytes) | https://fits.gsfc.nasa.gov/standard40/fits_standard40aa-le.pdf | `5624dca15659caf54c56127b4df9af05fd930c8f6d997fcb4bea2b1a5c1bc573` |
+| FITS Standard 3.0 (`reference/fits_standard_v3.0.pdf`, 703,100 bytes) | https://fits.gsfc.nasa.gov/standard30/fits_standard30aa.pdf | `475434ffbd06a7205ae3d243278eddf912f81d51a5456bc433345737d8fc6979` |
 
 ## Regenerating the goldens
 
@@ -908,6 +921,7 @@ not committed). Details: `testdata/imaging/PROVENANCE.md`.
 ```sh
 make -C testdata/cfref              # cfitsio harness
 make -C testdata/tables samples     # generated samples (gen_tables.c, gen_theap.py, gen_gaia.py)
+python3 testdata/tables/extract_anet.py --src <downloads>   # anet_*.fits from the real astrometry.net index files
 make -C testdata/tables goldens     # golden/*.json (compact), refused/*.json
 make -C testdata/tables verify
 ```

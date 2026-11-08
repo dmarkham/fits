@@ -186,7 +186,7 @@ const (
 	sizeMaxTotal    = 25_000_000
 )
 
-var sizeExempt = map[string]bool{"reference/fits_standard_v4.0.pdf": true}
+var sizeExempt = map[string]bool{}
 
 // TestRepositorySizeBudget measures every file git tracks (its size in the
 // working tree) against the budget above. The tracked list is read from

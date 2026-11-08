@@ -5,7 +5,6 @@ package fits
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -27,7 +26,7 @@ func TestTableGoldensReproduce(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: cfref dump: %v", s.name, err)
 		}
-		want, err := os.ReadFile(s.golden)
+		want, err := testutil.ReadGolden(s.golden)
 		if err != nil {
 			t.Fatal(err)
 		}

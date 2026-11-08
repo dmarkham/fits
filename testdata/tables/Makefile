@@ -6,9 +6,14 @@
 #                     (astropy; PYTHON or FITS_ASTROPY_PYTHON picks the venv),
 #                     strarray_astropy.fits with gen_strarray.py and
 #                     astropy_only/astropy_special.fits with gen_special.py
+#                     (anet_*.fits are cut from downloaded astrometry.net
+#                     index files by extract_anet.py --src DIR, not here)
 #   make goldens   -> (re)write golden/<file>.json for every *.fits here
-#                     with the shared cfitsio harness ../cfref/cfref, and
-#                     the cfitsio + astropy goldens of refused/*.fits
+#                     with the shared cfitsio harness ../cfref/cfref (a
+#                     golden over GZIP_OVER bytes is committed as
+#                     golden/<file>.json.gz: gzip -9n; testutil.ReadGolden
+#                     reads both, verify compares the decompressed bytes),
+#                     and the cfitsio + astropy goldens of refused/*.fits
 #   make tfloat-goldens -> (re)write golden_tfloat/<file>.json, cfitsio's
 #                     float32 (TFLOAT) read of every numeric column of every
 #                     *.fits here (cf_tfloat.c)
@@ -33,6 +38,9 @@ CFREF   := ../cfref/cfref
 # The cfitsio goldens are stored compact (no whitespace between tokens,
 # every token byte for byte): compact_json.py is plain Python.
 COMPACT := python3 compact_json.py
+# A cfitsio golden larger than this is committed gzipped (the repository
+# size budget, TestRepositorySizeBudget).
+GZIP_OVER := 65536
 
 CF_SAMPLES := cf_bintable_fixed.fits cf_bintable_uint64.fits cf_vla_p.fits \
               cf_vla_q.fits cf_ascii.fits cf_ascii_implied.fits \
@@ -99,7 +107,10 @@ goldens: $(CFREF)
 	  echo "cfref dump $$f | compact > golden/$$f.json"; \
 	  $(CFREF) dump $$f > golden/$$f.json.raw; \
 	  $(COMPACT) < golden/$$f.json.raw > golden/$$f.json.tmp; rm -f golden/$$f.json.raw; \
-	  mv golden/$$f.json.tmp golden/$$f.json; \
+	  rm -f golden/$$f.json golden/$$f.json.gz; \
+	  if [ $$(wc -c < golden/$$f.json.tmp) -gt $(GZIP_OVER) ]; then \
+	    gzip -9n golden/$$f.json.tmp && mv golden/$$f.json.tmp.gz golden/$$f.json.gz; \
+	  else mv golden/$$f.json.tmp golden/$$f.json; fi; \
 	done
 
 .PHONY: verify
@@ -129,7 +140,8 @@ verify: gen_tables.out cf_tfloat.out $(CFREF)
 	@set -e; for f in $(sort $(wildcard *.fits)); do \
 	  $(CFREF) dump $$f > verify.out/$$f.raw; \
 	  $(COMPACT) < verify.out/$$f.raw > verify.out/$$f.json; \
-	  cmp golden/$$f.json verify.out/$$f.json; \
+	  if [ -f golden/$$f.json.gz ]; then gzip -dc golden/$$f.json.gz | cmp - verify.out/$$f.json; \
+	  else cmp golden/$$f.json verify.out/$$f.json; fi; \
 	done; echo "verify: goldens reproduce byte-for-byte"
 	@set -e; for f in $(sort $(wildcard *.fits)); do \
 	  ./cf_tfloat.out $$f > verify.out/$$f.tfloat.json; \
